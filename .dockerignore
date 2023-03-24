@@ -1,0 +1,10 @@
+.git
+.gitignore
+.dockerignore
+Dockerfile
+__pycache__
+.pytest_cache
+etc/*.conf
+etc/*.yaml
+etc/*.yml
+*.json
