@@ -19,6 +19,7 @@ from bss.models import SipStatusSchema as SIPStatus
 from bss.models import CDRInfoSchema as CDRInfo
 from bss.models import CallInfoSchema as CallInfo
 from report_error import WebTritErrorException
+import threading
 import uuid
 import datetime
 import random
@@ -44,45 +45,18 @@ class OTP:
     expires_at: datetime
 
 
-class FakeSessionStorage(SessionStorage):
+class InMemorySessionStorage(SessionStorage):
     """Store sessions in a class variable. Suitable only
     for demo / development. Implement a real persistent
-    session storage for your application."""
+    session storage for your application using something like
+    memcached."""
 
     fake_session_db: dict = {}
 
-    def __refresh_token_index(self, id: str) -> str:
-        """Change the value of refresh token so it still will
-        be unique, but cannot match any of the access tokens."""
-        if hasattr(id, "__root__"):
-            id = id.__root__
-        return "R" + id
-
-    def get_session(self, access_token="", refresh_token: str = None) -> SessionInfo:
-        """Retrieve a session"""
-
-        if refresh_token:
-            refr_id = self.__refresh_token_index(refresh_token)
-            return FakeSessionStorage.fake_session_db.get(refr_id, None)
-        return FakeSessionStorage.fake_session_db.get(access_token, None)
-
-    def store_session(self, session: SessionInfo):
-        """Store a session in the database"""
-
-        FakeSessionStorage.fake_session_db[session.access_token] = session
-        # also add the possibility to find the session by its refresh token
-        FakeSessionStorage.fake_session_db[
-            self.__refresh_token_index(session.refresh_token)
-        ] = session
-
-    def delete_session(self, access_token: str, refresh_token: str = None) -> bool:
-        """Remove a session from the database"""
-
-        if refresh_token:
-            FakeSessionStorage.fake_session_db.pop(refresh_token, None)
-        session = FakeSessionStorage.fake_session_db.pop(access_token, None)
-
-        return True if session else False
+    def __init__(self, config):
+        """Initialize the object and set storage to be in-memory"""
+        super().__init__(config)
+        self.sessions = InMemorySessionStorage.fake_session_db
 
 
 class MadeUpThings(faker.Faker):
@@ -134,6 +108,7 @@ class ExampleBSSConnector(BSSConnector):
             "time_zone": "Europe/Kyiv",
         }
     }
+    otp_db_lock = threading.Lock()
     fake_otp_db: dict = {}
 
     def __init__(self, *args, **kwargs):
@@ -141,7 +116,7 @@ class ExampleBSSConnector(BSSConnector):
         # for generation of fake names, etc.
         self.fake = MadeUpThings()
         # store sessions in a global variable
-        self.storage = FakeSessionStorage()
+        self.storage = InMemorySessionStorage(config = self.config)
 
     def create_session(self, user_id: str) -> SessionInfo:
         session = SessionInfo(
@@ -229,7 +204,8 @@ class ExampleBSSConnector(BSSConnector):
             expires_at=datetime.datetime.now() + datetime.timedelta(minutes=10),
         )
         # memorize it
-        ExampleBSSConnector.fake_otp_db[otp_id] = otp
+        with ExampleBSSConnector.otp_db_lock:
+            ExampleBSSConnector.fake_otp_db[otp_id] = otp
 
         return OtpCreateResponseSchema(
             # OTP sender's address so the user can find it easier

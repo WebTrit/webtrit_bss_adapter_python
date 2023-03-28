@@ -18,4 +18,5 @@ def verify_attribute_in_json(attr: Attr, attr_dict: dict):
 def verify_attribute_value(attr: Attr, value):
     assert isinstance(value, attr.type)  # same type
     if attr.expected:
-        assert value == attr.expected
+        expected_value = attr.expected() if callable(attr.expected) else attr.expected
+        assert value == expected_value

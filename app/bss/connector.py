@@ -1,5 +1,6 @@
 import os
 import importlib
+
 from datetime import datetime
 from abc import ABC, abstractmethod
 from bss.models import (
@@ -25,38 +26,18 @@ from bss.models import ContactInfoSchema as ContactInfo
 from bss.models import HistoryResponseSchema as Calls
 from bss.models import ErrorSchema as ErrorMsg
 from bss.models import SupportedEnum as Capabilities
+
+from bss.sessions import SessionStorage, SessionInfo
 from app_config import AppConfig
+from report_error import WebTritErrorException
 
 
-class SessionInfo(SessionApprovedResponseSchema):
-    """Info about a session, initiated by WebTrit core on behalf of user"""
-
-    def still_active(self, timestamp=datetime.now()) -> bool:
-        """Check whether the session has not yet expired"""
-
-        return self.expires_at > timestamp
-
-
-class SessionStorage:
-    """A class that provides access to stored session data (which can
-    be stored in some SQL/no-SQL database, external REST services, etc.)"""
-
-    def get_session(self, access_token="", refresh_token: str = None) -> SessionInfo:
-        """Retrieve a session"""
-        raise NotImplementedError("Override this method in your sub-class")
-
-    def store_session(self, session: SessionInfo):
-        """Store a session in the database"""
-        raise NotImplementedError("Override this method in your sub-class")
-
-    def delete_session(self, access_token: str, refresh_token: str = None):
-        """Remove a session from the database"""
-        raise NotImplementedError("Override this method in your sub-class")
 
 
 class BSSConnector(ABC):
     def __init__(self, config: AppConfig):
         self.config = config
+        self.storage = SessionStorage(config)
 
     def initialize(self) -> bool:
         """Initialize some session-related data, e.g. open a connection
@@ -101,21 +82,58 @@ class BSSConnector(ABC):
         """Verify that the OTP code, provided by the user, is correct."""
         raise NotImplementedError("Override this method in your sub-class")
 
-    @abstractmethod
     def validate_session(self, access_token: str) -> SessionInfo:
         """Validate that the supplied API token is still valid."""
-        raise NotImplementedError("Override this method in your sub-class")
 
-    @abstractmethod
+        session = self.storage.get_session(access_token=access_token)
+
+        if session:
+            if not session.still_active():
+                # remove it from the DB
+                self.storage.delete_session(
+                    access_token=access_token, refresh_token=session.refresh_token
+                )
+                # raise an error
+                raise WebTritErrorException(
+                    status_code=401,
+                    code=42,
+                    error_message="Access token expired",
+                )
+
+            return session
+
+        raise WebTritErrorException(
+            status_code=401,
+            code=42,
+            error_message="Invalid access token",
+        )
+
     def refresh_session(self, user_id: str, refresh_token: str) -> SessionInfo:
         """Extend the API session be exchanging the refresh token for
         a new API access token."""
-        raise NotImplementedError("Override this method in your sub-class")
+        session = self.storage.get_session(refresh_token=refresh_token)
+        if not session:
+            raise WebTritErrorException(
+                status_code=401,
+                code=42,
+                error_message="Invalid refresh token",
+            )
+        # everything is in order, create a new session
+        session = self.create_session(user_id)
+        self.storage.store_session(session)
+        return session
 
-    @abstractmethod
     def close_session(self, access_token: str) -> bool:
         """Close the API session and logout the user."""
-        raise NotImplementedError("Override this method in your sub-class")
+        session = self.storage.get_session(access_token)
+        if session:
+            return self.storage.delete_session(access_token)
+
+        raise WebTritErrorException(
+            status_code=401,
+            code=42,
+            error_message="Error closing the session",
+        )
 
     @abstractmethod
     def retrieve_user(self, session: SessionInfo, user_id: str) -> EndUser:
@@ -152,18 +170,20 @@ class BSSConnector(ABC):
 def initialize_bss_connector(root_package, config) -> BSSConnector:
     """Create an instance of BSS connector - of the type specified in the config"""
     bss_module_path = config.get_conf_val(
-        "BSS", "Connector", "Path", default="connectors"
+        "BSS", "Connector", "Path", default="bss.connectors"
     )
     bss_module_name = config.get_conf_val(
-        "BSS", "Connector", "Module", default="example"
+ #       "BSS", "Connector", "Module", default="bss.connectors.freepbx"
+         "BSS", "Connector", "Module", default="bss.connectors.example"
+#                "BSS", "Connector", "Module", default="example"
     )
     bss_class_name = config.get_conf_val(
-        "BSS", "Connector", "Class", default="ExampleBSSConnector"
+        "BSS", "Connector", "Class", default="ExampleBSSConnector"       
+#        "BSS", "Connector", "Class", default="ExampleBSSConnector"
     )
 
     full_path = os.path.join(bss_module_path, bss_module_name)
-    full_path = ".example"
-    bss_module = importlib.import_module(full_path, package=root_package)
+    bss_module = importlib.import_module(bss_module_name, package=root_package)
     bss_class = getattr(bss_module, bss_class_name)
     connector = bss_class(config = config)
     connector.initialize()

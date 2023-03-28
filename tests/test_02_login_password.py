@@ -1,6 +1,6 @@
 import requests
 import pytest
-import datetime
+from utils4testing import Attr, verify_attribute_in_json
 
 
 def test_failed_login(api_url, login_path):
@@ -23,25 +23,22 @@ def test_login(api_url, login_path, username, password):
 
 # required response attributes
 @pytest.mark.parametrize(
-    "attr, expected",
+    "name, type_, expected",
     [
-        ("access_token", ""),
-        ("expires_at", ""),
-        ("refresh_token", None),
-        ("user_id", pytest.lazy_fixture("username")),
+        ("access_token", str, None),
+        ("expires_at", str, None),
+        ("refresh_token", str, None),
+        ("user_id", str, pytest.lazy_fixture("username")),
     ],
 )
-def test_login_attr(api_url, login_path, attr, expected):
+def test_login_attr(api_url, login_path, name, type_, expected):
     global response
     body = response.json()
 
     # if the value is provided - ensure it matches
-    if expected:
-        assert attr in body
-        assert body[attr]  # not empty
-        assert type(expected) == type(body[attr])  # same type
-        assert body[attr] == expected
-
+    attr = Attr(name=name, type=type_, expected=expected, mandatory=True)
+    print('attr = ', attr)
+    verify_attribute_in_json(attr, body)
 
 response2 = None
 
@@ -60,21 +57,18 @@ def test_refresh(api_url, login_path):
 
 # required response attributes
 @pytest.mark.parametrize(
-    "attr, expected",
+    "name, type_, expected",
     [
-        ("access_token", ""),
-        ("expires_at", ""),
-        ("refresh_token", None),
-        ("user_id", pytest.lazy_fixture("username")),
+        ("access_token", str, None),
+        ("expires_at", str, None),
+        ("refresh_token", str, None),
+        ("user_id", str, pytest.lazy_fixture("username")),
     ],
 )
-def test_refresh_attr(api_url, login_path, attr, expected):
+def test_refresh_attr(api_url, login_path,  name, type_, expected):
     global response2
     body = response2.json()
 
     # if the value is provided - ensure it matches
-    if expected:
-        assert attr in body
-        assert body[attr]  # not empty
-        assert type(expected) == type(body[attr])  # same type
-        assert body[attr] == expected
+    attr = Attr(name=name, type=type_, expected=expected, mandatory=True)
+    verify_attribute_in_json(attr, body)
