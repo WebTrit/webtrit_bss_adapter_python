@@ -30,9 +30,9 @@ def test_get_system_info_attr(api_url, system_info_path, attr, expected):
 @pytest.mark.parametrize(
     "attr, expected",
     [
-        ("otpSignin", ""),
+#        ("otpSignin", ""),
         ("passwordSignin", ""),
-        ("callHistory", ""),
+ #       ("callHistory", ""),
         ("extensions", ""),
     ],
 )

@@ -10,6 +10,10 @@ from typing import Dict, List, Optional
 
 from pydantic import BaseModel, EmailStr, Field, conint
 
+class Health(BaseModel):
+    status: Optional[str] = Field(
+        None, description="A response from the server.", example="OK"
+    )
 
 class BalanceType(Enum):
     unknown = "unknown"

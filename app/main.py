@@ -29,6 +29,7 @@ from bss.models import (
     ContactsResponseSchema,
     HistoryResponseSchema,
     UserInfoResponseSchema,
+    Health
 )
 
 API_VERSION_PREFIX = "/api/v1"
@@ -37,7 +38,9 @@ my_project_path = os.path.dirname(__file__)
 sys.path.append(my_project_path)
 
 config = AppConfig()
-logging.basicConfig(level=logging.DEBUG)
+if config.get_conf_val("Debug", default = "False").upper() == "TRUE":
+    logging.basicConfig(level=logging.DEBUG)
+
 app = FastAPI(
     description="""Adapter that translates API requests from WebTrit core
         to a hosted PBX system. It enables to authenticate users,
@@ -50,6 +53,18 @@ security = HTTPBearer()
 router = APIRouter(route_class=RouteWithLogging)
 
 bss = initialize_bss_connector(bss.connectors.__name__, config)
+
+@app.get(
+    "/health-check",
+    response_model=Health,
+)
+def health_check(
+    
+) -> Health:
+    """
+    Confirm the service is running
+    """
+    return Health(status = 'OK')
 
 
 @router.post(

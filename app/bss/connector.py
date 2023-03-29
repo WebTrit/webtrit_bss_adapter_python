@@ -1,7 +1,7 @@
 import os
 import importlib
-
-from datetime import datetime
+import logging
+import sys
 from abc import ABC, abstractmethod
 from bss.models import (
     # ContactsResponseSchema,
@@ -170,21 +170,23 @@ class BSSConnector(ABC):
 def initialize_bss_connector(root_package, config) -> BSSConnector:
     """Create an instance of BSS connector - of the type specified in the config"""
     bss_module_path = config.get_conf_val(
-        "BSS", "Connector", "Path", default="bss.connectors"
+        "BSS", "Connector", "Path"
     )
     bss_module_name = config.get_conf_val(
- #       "BSS", "Connector", "Module", default="bss.connectors.freepbx"
          "BSS", "Connector", "Module", default="bss.connectors.example"
-#                "BSS", "Connector", "Module", default="example"
     )
     bss_class_name = config.get_conf_val(
         "BSS", "Connector", "Class", default="ExampleBSSConnector"       
-#        "BSS", "Connector", "Class", default="ExampleBSSConnector"
     )
+    if bss_module_path:
+        # allow to include modules from a directory, other than
+        # python's default location and the directory where main.py resides
+        sys.path.append(bss_module_path)
 
-    full_path = os.path.join(bss_module_path, bss_module_name)
     bss_module = importlib.import_module(bss_module_name, package=root_package)
+    logging.info(f"Loaded module: {bss_module_name}")
     bss_class = getattr(bss_module, bss_class_name)
     connector = bss_class(config = config)
     connector.initialize()
+    logging.info(f"Initialized BSS connector: {bss_class_name}")
     return connector

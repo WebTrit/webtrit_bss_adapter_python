@@ -64,23 +64,11 @@ class HTTPAPIConnector(ABC):
         except requests.exceptions.RequestException as e:
             logging.debug(f"Request error: {e}")
             return None
-        
-    def login(self):
 
-        res = self.send_rest_request('POST', self.access_token_path(),
-                                     headers = {'Content-Type': 'application/x-www-form-urlencoded'},
-                                     data = {   'client_id': self.api_user,
-                                                'client_secret': self.api_password,
-                                                'scope': '',
-                                                'grant_type': 'client_credentials' },
-                                     auto_login = False)
-        if res and self.extract_access_token(res):
-            # store it globally
-            HTTPAPIConnector.access_token = self.extract_access_token(res)
-            return
-        
-        logging.debug(f"Could not find an access token in the response {res}")
-        raise ValueError("Could not find an access token in the response")
+    @abstractmethod        
+    def login(self):
+        """Override this method in your sub-class"""
+        pass
 
 
 

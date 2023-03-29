@@ -67,14 +67,13 @@ class AppConfig(dict):
 
         val = self
         for x in path:
-            var_name = var_name + "_" + x if var_name is not None else x
             if val is None or not isinstance(val, dict):
                 # no such element
                 val = None
                 break
-            val = self.get_case_insensitive(val, x, None)
+            val = self.get_case_insensitive(val, x, None )
 
-        var_name = var_name.upper()
+        var_name = "_".join(path).upper()
         override_val = os.environ.get(var_name, None)
         if override_val is not None:
             val = override_val

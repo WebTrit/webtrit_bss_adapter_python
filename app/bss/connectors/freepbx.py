@@ -1,34 +1,38 @@
 from bss.connector import (
     BSSConnector,
-    Calls,
+    SessionStorage,
     SessionInfo,
     EndUser,
     Contacts,
+    Calls,
     ContactInfo,
     Capabilities,
 )
 from bss.models import (
     NumbersSchema,
-    SipInfoSchema,
-    SipStatusSchema,
-    ServerSchema,
     OtpCreateResponseSchema,
     OtpVerifyRequestSchema,
+    OtpSentType,
+    SipInfoSchema,
+    SipStatusSchema,
+    ServerSchema    
 )
-import uuid
+
+from bss.models import SipStatusSchema as SIPStatus
+from bss.models import CDRInfoSchema as CDRInfo
+from bss.models import CallInfoSchema as CallInfo
 from report_error import WebTritErrorException
 from bss.http_api import HTTPAPIConnector
 from bss.sessions import FileSessionStorage
 from app_config import AppConfig
 
+import uuid
 import datetime
 import logging
 
 import re
 
 VERSION = "0.0.1"
-
-
 
 class FreePBXAPI(HTTPAPIConnector):
     def __init__(self, api_server: str, api_user: str,
@@ -42,10 +46,11 @@ class FreePBXAPI(HTTPAPIConnector):
 
     def extract_access_token(self, response: dict) -> str:
         return response.get('access_token', None)
+    
     def access_token_path(self) -> str:
         return "/admin/api/api/token"
     
-    def get_extension(self, user_id: str) -> str:
+    def get_extension(self, user_id: str):
         """Get the extension info"""
         query = """query { 
             fetchExtension(extensionId: <extid>) {
@@ -70,7 +75,7 @@ class FreePBXAPI(HTTPAPIConnector):
             return user.get('data', {}).get('fetchExtension', None)
         return None
 
-    def get_all_extensions(self) -> str:
+    def get_all_extensions(self):
         """Get the extension info"""
         query = """{
     fetchAllExtensions {
@@ -107,10 +112,28 @@ class FreePBXAPI(HTTPAPIConnector):
             return users.get('data', {}).get('fetchAllExtensions', {}).get('extension', [])
   
         return None
+    
+    def login(self):
+        res = self.send_rest_request('POST', self.access_token_path(),
+                                     headers = {'Content-Type': 'application/x-www-form-urlencoded'},
+                                     data = {   'client_id': self.api_user,
+                                                'client_secret': self.api_password,
+                                                'scope': '',
+                                                'grant_type': 'client_credentials' },
+                                     auto_login = False)
+        if res and self.extract_access_token(res):
+            # store it globally
+            HTTPAPIConnector.access_token = self.extract_access_token(res)
+            return
+        
+        logging.debug(f"Could not find an access token in the response {res}")
+        raise ValueError("Could not find an access token in the response")
+
 
 class FreePBXConnector(BSSConnector):
     """Supply to WebTrit core the required information about
-    VoIP users in FreePBX system"""
+    VoIP users using a built-in list of users. Suitable
+    for development / testing"""
 
     def __init__(self, config: AppConfig):
         super().__init__(config)
@@ -125,7 +148,6 @@ class FreePBXConnector(BSSConnector):
                                      api_user = api_user,
                                      api_password = api_password)
         self.storage = FileSessionStorage(config)
-
 
     def create_session(self, user_id: str) -> SessionInfo:
         session = SessionInfo(
@@ -188,8 +210,71 @@ class FreePBXConnector(BSSConnector):
             error_message="User authentication error",
         )
 
+    def generate_otp(self, user_id: str) -> OtpCreateResponseSchema:
+        pass
+
+    def validate_otp(self, otp: OtpVerifyRequestSchema) -> SessionInfo:
+        pass
+
+    def validate_session(self, access_token: str) -> SessionInfo:
+        """Validate that the supplied API token is still valid."""
+
+        session = self.storage.get_session(access_token=access_token)
+
+        if session:
+            if not session.still_active():
+                # remove it from the DB
+                self.storage.delete_session(
+                    access_token=access_token, refresh_token=session.refresh_token
+                )
+                # raise an error
+                raise WebTritErrorException(
+                    status_code=401,
+                    code=42,
+                    error_message="Access token expired",
+                )
+
+            return session
+
+        raise WebTritErrorException(
+            status_code=401,
+            code=42,
+            error_message="Invalid access token",
+        )
+
+    def refresh_session(self, user_id: str, refresh_token: str) -> SessionInfo:
+        """Extend the API session be exchanging the refresh token for
+        a new API access token."""
+        session = self.storage.get_session(refresh_token=refresh_token)
+        if not session:
+            raise WebTritErrorException(
+                status_code=401,
+                code=42,
+                error_message="Invalid refresh token",
+            )
+        # everything is in order, create a new session
+        session = self.create_session(user_id)
+        self.storage.store_session(session)
+        return session
+
+    def close_session(self, access_token: str) -> bool:
+        """Close the API session and logout the user."""
+        session = self.storage.get_session(access_token)
+        if session:
+            return self.storage.delete_session(access_token)
+
+        raise WebTritErrorException(
+            status_code=401,
+            code=42,
+            error_message="Error closing the session",
+        )
+
     def freepbx_ext_to_webtrit_user(self, ext: dict,
                                     produce_user_info = True):
+        """Convert the data returned by FreePBX API into an object:
+        * EndUser (info about the user who is logging in)
+        * ContactInfo (info about other extensions in the PBX)
+        """
         ext_info = ext.get('user', {})
         parts = ext_info.get('name', '').split()
         firstname = parts[0]
@@ -241,6 +326,7 @@ class FreePBXConnector(BSSConnector):
             status_code=404, code=42, error_message="User not found"
         )
 
+
     def retrieve_contacts(self, session: SessionInfo, user_id: str) -> Contacts:
         """List of other extensions in the PBX"""
 
@@ -254,25 +340,13 @@ class FreePBXConnector(BSSConnector):
 
         return Contacts( __root__ = contacts)
 
-    def generate_otp(self, user_id: str) -> OtpCreateResponseSchema:
+    def retrieve_calls(self, session: SessionInfo, user_id: str, **kwargs) -> Calls:
         pass
 
-    def validate_otp(self, otp: OtpVerifyRequestSchema) -> SessionInfo:
-        pass
-    
-    def retrieve_calls(
-        self,
-        session: SessionInfo,
-        user_id: str,
-        page: None,
-        items_per_page: None,
-        date_from: None,
-        date_to: None,
-    ) -> Calls:
-        pass
-
-
+    # call recording is not supported in this example
     def retrieve_call_recording(
         self, session: SessionInfo, call_recording: str
     ) -> bytes:
+        """Get the media file for a previously recorded call."""
+        # not yet implemented
         pass

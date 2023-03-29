@@ -85,7 +85,7 @@ class FileSessionStorage(SessionStorage):
         # to make the sessions survive a restart of a container - 
         # ensure that /var/db/ (or whichever
         # location you choose) is mounted as a volume to the container
-        file_name = config.get_conf_val('SessionStorageFile',
-                            default = '/temp/var/db/sessions.db')
+        file_name = config.get_conf_val('Sessions', 'StorageFile',
+                            default = '/var/db/sessions.db')
         logging.debug(f"Using file {file_name} for session storage")
         self.sessions = shelve.open(file_name)
