@@ -167,7 +167,7 @@ class BSSConnector(ABC):
 
 
 # initialize BSS connector
-def initialize_bss_connector(root_package, config) -> BSSConnector:
+def initialize_bss_connector(root_package: str, config: AppConfig) -> BSSConnector:
     """Create an instance of BSS connector - of the type specified in the config"""
     bss_module_path = config.get_conf_val(
         "BSS", "Connector", "Path"
@@ -183,9 +183,19 @@ def initialize_bss_connector(root_package, config) -> BSSConnector:
         # python's default location and the directory where main.py resides
         sys.path.append(bss_module_path)
 
-    bss_module = importlib.import_module(bss_module_name, package=root_package)
+    try:
+        bss_module = importlib.import_module(bss_module_name, package=root_package)
+    except ImportError as e:
+        logging.error(f"Error importing module '{bss_module_name}': {e}")
+        raise
+
     logging.info(f"Loaded module: {bss_module_name}")
-    bss_class = getattr(bss_module, bss_class_name)
+    try:
+        bss_class = getattr(bss_module, bss_class_name)
+    except AttributeError as e:
+        logging.error(f"Error finding class '{bss_class_name}' in module '{bss_module_name}': {e}")
+        raise
+
     connector = bss_class(config = config)
     connector.initialize()
     logging.info(f"Initialized BSS connector: {bss_class_name}")

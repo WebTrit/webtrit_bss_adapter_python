@@ -2,6 +2,7 @@ import threading
 from datetime import datetime, timedelta
 import shelve
 import logging
+import uuid
 from app_config import AppConfig
 from bss.models import SessionApprovedResponseSchema
 
@@ -42,6 +43,17 @@ class SessionStorage:
             return self.sessions.get(refr_id, None)
         return self.sessions.get(access_token, None)
 
+    def create_session(self, user_id: str) -> SessionInfo:
+        session = SessionInfo(
+            user_id=user_id,
+            session_id=str(uuid.uuid1()),
+            access_token=str(uuid.uuid1()),
+            refresh_token=str(uuid.uuid1()),
+            expires_at=datetime.now() + timedelta(days=1),
+        )
+
+        return session
+    
     def __store_session(self, session: SessionInfo):
         self.sessions[session.access_token] = session
         # also add the possibility to find the session by its refresh token

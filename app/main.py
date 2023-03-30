@@ -58,9 +58,7 @@ bss = initialize_bss_connector(bss.connectors.__name__, config)
     "/health-check",
     response_model=Health,
 )
-def health_check(
-    
-) -> Health:
+def health_check() -> Health:
     """
     Confirm the service is running
     """

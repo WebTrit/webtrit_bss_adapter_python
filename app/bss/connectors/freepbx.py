@@ -149,17 +149,6 @@ class FreePBXConnector(BSSConnector):
                                      api_password = api_password)
         self.storage = FileSessionStorage(config)
 
-    def create_session(self, user_id: str) -> SessionInfo:
-        session = SessionInfo(
-            user_id=user_id,
-            session_id=str(uuid.uuid1()),
-            access_token=str(uuid.uuid1()),
-            refresh_token=str(uuid.uuid1()),
-            expires_at=datetime.datetime.now() + datetime.timedelta(days=1),
-        )
-
-        return session
-
     @classmethod
     def name(cls) -> str:
         return "FreePBX connector"
@@ -192,7 +181,7 @@ class FreePBXConnector(BSSConnector):
         if user:
             if user.get("user", {}).get("extPassword", None) == password:
                 # everything is in order, create a session
-                session = self.create_session(user_id)
+                session = self.storage.create_session(user_id)
                 self.storage.store_session(session)
                 return session
 

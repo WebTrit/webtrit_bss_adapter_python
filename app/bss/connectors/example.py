@@ -18,7 +18,9 @@ from bss.models import (
 from bss.models import SipStatusSchema as SIPStatus
 from bss.models import CDRInfoSchema as CDRInfo
 from bss.models import CallInfoSchema as CallInfo
+from bss.sessions import FileSessionStorage
 from report_error import WebTritErrorException
+from app_config import AppConfig
 import threading
 import uuid
 import datetime
@@ -45,25 +47,8 @@ class OTP:
     expires_at: datetime
 
 
-class InMemorySessionStorage(SessionStorage):
-    """Store sessions in a class variable. Suitable only
-    for demo / development. Implement a real persistent
-    session storage for your application using something like
-    memcached."""
-
-    fake_session_db: dict = {}
-
-    def __init__(self, config):
-        """Initialize the object and set storage to be in-memory"""
-        super().__init__(config)
-        self.sessions = InMemorySessionStorage.fake_session_db
-
-
 class MadeUpThings(faker.Faker):
     """Auto-generate names, phone numbers, etc. for demo purposes"""
-
-    # def __init__(self):
-    #     pass
 
     def random_phone_number(self) -> str:
         return re.sub(r"\D", "", self.phone_number())
@@ -111,23 +96,14 @@ class ExampleBSSConnector(BSSConnector):
     otp_db_lock = threading.Lock()
     fake_otp_db: dict = {}
 
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
+    def __init__(self, config: AppConfig, *args, **kwargs):
+        super().__init__(config, *args, **kwargs)
+        self.config = config
         # for generation of fake names, etc.
         self.fake = MadeUpThings()
         # store sessions in a global variable
-        self.storage = InMemorySessionStorage(config = self.config)
+        self.storage = FileSessionStorage(config = self.config)
 
-    def create_session(self, user_id: str) -> SessionInfo:
-        session = SessionInfo(
-            user_id=user_id,
-            session_id=str(uuid.uuid1()),
-            access_token=str(uuid.uuid1()),
-            refresh_token=str(uuid.uuid1()),
-            expires_at=datetime.datetime.now() + datetime.timedelta(days=1),
-        )
-
-        return session
 
     @classmethod
     def name(cls) -> str:
@@ -161,7 +137,7 @@ class ExampleBSSConnector(BSSConnector):
         if user:
             if user["password"] == password:
                 # everything is in order, create a session
-                session = self.create_session(user_id)
+                session = self.storage.create_session(user_id)
                 self.storage.store_session(session)
                 return session
 
@@ -187,7 +163,7 @@ class ExampleBSSConnector(BSSConnector):
         # the code that the user should provide to prove that
         # he/she is who he/she claims to be
         code = random.randrange(100000, 999999)
-        code_for_tests = os.environ.get("PERMANENT_OTP_CODE", None)
+        code_for_tests = self.config.get_conf_val("PERMANENT_OTP_CODE")
         if code_for_tests:
             # while running automated tests, we have to produce the
             # same OTP as configured in the test suite. make sure
@@ -241,7 +217,7 @@ class ExampleBSSConnector(BSSConnector):
             )
 
         # everything is in order, create a session
-        session = self.create_session(original.user_id)
+        session = self.storage.create_session(original.user_id)
         self.storage.store_session(session)
         return session
 
@@ -282,7 +258,7 @@ class ExampleBSSConnector(BSSConnector):
                 error_message="Invalid refresh token",
             )
         # everything is in order, create a new session
-        session = self.create_session(user_id)
+        session = self.storage.create_session(user_id)
         self.storage.store_session(session)
         return session
 
