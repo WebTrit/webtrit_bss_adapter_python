@@ -22,11 +22,12 @@ from bss.models import SipStatusSchema as SIPStatus
 from bss.models import CDRInfoSchema as CDRInfo
 from bss.models import CallInfoSchema as CallInfo
 from report_error import WebTritErrorException
-from bss.http_api import HTTPAPIConnector
+from bss.http_api import HTTPAPIConnectorWithLogin
+
 from bss.sessions import FileSessionStorage
 from app_config import AppConfig
 
-import uuid
+
 import datetime
 import logging
 
@@ -34,11 +35,11 @@ import re
 
 VERSION = "0.0.1"
 
-class FreePBXAPI(HTTPAPIConnector):
+class FreePBXAPI(HTTPAPIConnectorWithLogin):
     def __init__(self, api_server: str, api_user: str,
-                 api_password: str, api_token: str = None,
+                 api_password: str,
                  **kwargs):
-        super().__init__(api_server, api_user, api_password, api_token)
+        super().__init__(api_server, api_user, api_password)
         if 'graphql_path' in kwargs:
             self.graphql_path = kwargs['graphql_path']
         else:
@@ -70,7 +71,7 @@ class FreePBXAPI(HTTPAPIConnector):
         """
         query = query.replace('<extid>', user_id)
         user = self.send_rest_request('POST', self.graphql_path,
-                                    json = query, graphql = True)
+                                        json = {'query': query})
         if user:
             return user.get('data', {}).get('fetchExtension', None)
         return None
@@ -107,7 +108,7 @@ class FreePBXAPI(HTTPAPIConnector):
 }
         """
         users = self.send_rest_request('POST', self.graphql_path,
-                                    json = query, graphql = True)
+                                    json = {'query': query})
         if users:
             return users.get('data', {}).get('fetchAllExtensions', {}).get('extension', [])
   
@@ -120,15 +121,26 @@ class FreePBXAPI(HTTPAPIConnector):
                                                 'client_secret': self.api_password,
                                                 'scope': '',
                                                 'grant_type': 'client_credentials' },
-                                     auto_login = False)
+                                    turn_off_login = True)
         if res and self.extract_access_token(res):
             # store it globally
-            HTTPAPIConnector.access_token = self.extract_access_token(res)
-            return
+            self.access_token = self.extract_access_token(res)
+            return True
         
         logging.debug(f"Could not find an access token in the response {res}")
         raise ValueError("Could not find an access token in the response")
-
+    
+    def add_auth_info(self, url: str, request_params: dict) -> dict:
+        """Change the parameters of requests.request call to add
+        there required authentication information (into headers,
+        basic auth, etc.)"""
+        if self.access_token:
+            headers = request_params.get('headers', {}).copy()
+            # override the auth header
+            new_headers = { **headers, **{ 'Authorization': 'Bearer ' + self.access_token } }
+            return { **request_params, **{ 'headers': new_headers } }
+        
+        return request_params
 
 class FreePBXConnector(BSSConnector):
     """Supply to WebTrit core the required information about
