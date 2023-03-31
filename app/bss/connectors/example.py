@@ -221,59 +221,6 @@ class ExampleBSSConnector(BSSConnector):
         self.storage.store_session(session)
         return session
 
-    def validate_session(self, access_token: str) -> SessionInfo:
-        """Validate that the supplied API token is still valid."""
-
-        session = self.storage.get_session(access_token=access_token)
-
-        if session:
-            if not session.still_active():
-                # remove it from the DB
-                self.storage.delete_session(
-                    access_token=access_token, refresh_token=session.refresh_token
-                )
-                # raise an error
-                raise WebTritErrorException(
-                    status_code=401,
-                    code=42,
-                    error_message="Access token expired",
-                )
-
-            return session
-
-        raise WebTritErrorException(
-            status_code=401,
-            code=42,
-            error_message="Invalid access token",
-        )
-
-    def refresh_session(self, user_id: str, refresh_token: str) -> SessionInfo:
-        """Extend the API session be exchanging the refresh token for
-        a new API access token."""
-        session = self.storage.get_session(refresh_token=refresh_token)
-        if not session:
-            raise WebTritErrorException(
-                status_code=401,
-                code=42,
-                error_message="Invalid refresh token",
-            )
-        # everything is in order, create a new session
-        session = self.storage.create_session(user_id)
-        self.storage.store_session(session)
-        return session
-
-    def close_session(self, access_token: str) -> bool:
-        """Close the API session and logout the user."""
-        session = self.storage.get_session(access_token)
-        if session:
-            return self.storage.delete_session(access_token)
-
-        raise WebTritErrorException(
-            status_code=401,
-            code=42,
-            error_message="Error closing the session",
-        )
-
     def retrieve_user(self, session: SessionInfo, user_id: str) -> EndUser:
         """Obtain user's information - most importantly, his/her SIP credentials."""
 

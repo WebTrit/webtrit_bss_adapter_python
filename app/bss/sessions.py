@@ -44,12 +44,13 @@ class SessionStorage:
         return self.sessions.get(access_token, None)
 
     def create_session(self, user_id: str) -> SessionInfo:
+        expiration = datetime.now() + timedelta(days=1) 
+        expiration = expiration.replace(microsecond=0)
         session = SessionInfo(
             user_id=user_id,
-            session_id=str(uuid.uuid1()),
             access_token=str(uuid.uuid1()),
             refresh_token=str(uuid.uuid1()),
-            expires_at=datetime.now() + timedelta(days=1),
+            expires_at=expiration,
         )
 
         return session

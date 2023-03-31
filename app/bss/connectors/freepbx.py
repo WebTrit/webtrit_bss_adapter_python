@@ -50,65 +50,64 @@ class FreePBXAPI(HTTPAPIConnectorWithLogin):
     
     def access_token_path(self) -> str:
         return "/admin/api/api/token"
-    
-    def get_extension(self, user_id: str):
-        """Get the extension info"""
-        query = """query { 
+
+    query_ext = """{ 
             fetchExtension(extensionId: <extid>) {
-                status
-                message
-                id
-                extensionId
-            
+                status message id extensionId
                 user {
-                    password
-                    extPassword
-                    name
-                    sipname
+                    password extPassword name sipname
                 }
             }
-        }
-        """
-        query = query.replace('<extid>', user_id)
+        }"""
+    query_voicemail = """{
+            fetchVoiceMail (extensionId: <extid>) {
+                status message name password email
+            }
+        }"""
+
+    def get_extension(self, user_id: str):
+        """Get the extension info"""
+
+        query = self.query_ext.replace('<extid>', user_id)
         user = self.send_rest_request('POST', self.graphql_path,
                                         json = {'query': query})
         if user:
-            return user.get('data', {}).get('fetchExtension', None)
+            # found such extension, but the extension data does not
+            # contain the email or the password :-( so we have to
+            # retrieve it from the voicemail data
+            query = self.query_voicemail.replace('<extid>', user_id)
+            vm = self.send_rest_request('POST', self.graphql_path,
+                                        json = {'query': query})
+            if vm:
+                user_data = user.get('data', {}).get('fetchExtension', {})
+                user_data['vm'] = vm.get('data', {}).get('fetchVoiceMail', {})
+                # merge the data
+                return user_data
+            
         return None
+    
+    query_all_extensions = """{
+            fetchAllExtensions {
+                status
+                message
+                totalCount
+                extension {
+                    id
+                    extensionId
+                    user {
+                    name password outboundCid ringtimer sipname password extPassword
+                    }
+                    coreDevice {
+                    deviceId dial devicetype description emergencyCid
+                    }
+                }
+            }
+        }"""
 
     def get_all_extensions(self):
         """Get the extension info"""
-        query = """{
-    fetchAllExtensions {
-        status
-        message
-        totalCount
-        extension {
-            id
-            extensionId
-            user {
-              name
-              password
-              outboundCid
-              ringtimer
-              noanswer
-              sipname
-              password
-              extPassword
-            }
-              coreDevice {
-              deviceId
-              dial
-              devicetype
-              description
-              emergencyCid
-            }
-        }
-    }
-}
-        """
         users = self.send_rest_request('POST', self.graphql_path,
-                                    json = {'query': query})
+                                    json = {'query': self.query_all_extensions})
         if users:
             return users.get('data', {}).get('fetchAllExtensions', {}).get('extension', [])
   
@@ -191,7 +190,7 @@ class FreePBXConnector(BSSConnector):
 
         user = self.api_client.get_extension(user_id)
         if user:
-            if user.get("user", {}).get("extPassword", None) == password:
+            if user.get("vm", {}).get("password", None) == password:
                 # everything is in order, create a session
                 session = self.storage.create_session(user_id)
                 self.storage.store_session(session)
@@ -217,58 +216,6 @@ class FreePBXConnector(BSSConnector):
     def validate_otp(self, otp: OtpVerifyRequestSchema) -> SessionInfo:
         pass
 
-    def validate_session(self, access_token: str) -> SessionInfo:
-        """Validate that the supplied API token is still valid."""
-
-        session = self.storage.get_session(access_token=access_token)
-
-        if session:
-            if not session.still_active():
-                # remove it from the DB
-                self.storage.delete_session(
-                    access_token=access_token, refresh_token=session.refresh_token
-                )
-                # raise an error
-                raise WebTritErrorException(
-                    status_code=401,
-                    code=42,
-                    error_message="Access token expired",
-                )
-
-            return session
-
-        raise WebTritErrorException(
-            status_code=401,
-            code=42,
-            error_message="Invalid access token",
-        )
-
-    def refresh_session(self, user_id: str, refresh_token: str) -> SessionInfo:
-        """Extend the API session be exchanging the refresh token for
-        a new API access token."""
-        session = self.storage.get_session(refresh_token=refresh_token)
-        if not session:
-            raise WebTritErrorException(
-                status_code=401,
-                code=42,
-                error_message="Invalid refresh token",
-            )
-        # everything is in order, create a new session
-        session = self.create_session(user_id)
-        self.storage.store_session(session)
-        return session
-
-    def close_session(self, access_token: str) -> bool:
-        """Close the API session and logout the user."""
-        session = self.storage.get_session(access_token)
-        if session:
-            return self.storage.delete_session(access_token)
-
-        raise WebTritErrorException(
-            status_code=401,
-            code=42,
-            error_message="Error closing the session",
-        )
 
     def freepbx_ext_to_webtrit_user(self, ext: dict,
                                     produce_user_info = True):

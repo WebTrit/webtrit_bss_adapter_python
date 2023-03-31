@@ -31,9 +31,6 @@ from bss.sessions import SessionStorage, SessionInfo
 from app_config import AppConfig
 from report_error import WebTritErrorException
 
-
-
-
 class BSSConnector(ABC):
     def __init__(self, config: AppConfig):
         self.config = config
@@ -119,7 +116,7 @@ class BSSConnector(ABC):
                 error_message="Invalid refresh token",
             )
         # everything is in order, create a new session
-        session = self.create_session(user_id)
+        session = self.storage.create_session(user_id)
         self.storage.store_session(session)
         return session
 
