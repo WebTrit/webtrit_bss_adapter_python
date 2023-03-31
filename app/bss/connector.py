@@ -31,6 +31,7 @@ from bss.sessions import SessionStorage, SessionInfo
 from app_config import AppConfig
 from report_error import WebTritErrorException
 
+
 class BSSConnector(ABC):
     def __init__(self, config: AppConfig):
         self.config = config
@@ -166,14 +167,12 @@ class BSSConnector(ABC):
 # initialize BSS connector
 def initialize_bss_connector(root_package: str, config: AppConfig) -> BSSConnector:
     """Create an instance of BSS connector - of the type specified in the config"""
-    bss_module_path = config.get_conf_val(
-        "BSS", "Connector", "Path"
-    )
+    bss_module_path = config.get_conf_val("BSS", "Connector", "Path")
     bss_module_name = config.get_conf_val(
-         "BSS", "Connector", "Module", default="bss.connectors.example"
+        "BSS", "Connector", "Module", default="bss.connectors.example"
     )
     bss_class_name = config.get_conf_val(
-        "BSS", "Connector", "Class", default="ExampleBSSConnector"       
+        "BSS", "Connector", "Class", default="ExampleBSSConnector"
     )
     if bss_module_path:
         # allow to include modules from a directory, other than
@@ -190,10 +189,12 @@ def initialize_bss_connector(root_package: str, config: AppConfig) -> BSSConnect
     try:
         bss_class = getattr(bss_module, bss_class_name)
     except AttributeError as e:
-        logging.error(f"Error finding class '{bss_class_name}' in module '{bss_module_name}': {e}")
+        logging.error(
+            f"Error finding class '{bss_class_name}' in module '{bss_module_name}': {e}"
+        )
         raise
 
-    connector = bss_class(config = config)
+    connector = bss_class(config=config)
     connector.initialize()
     logging.info(f"Initialized BSS connector: {bss_class_name}")
     return connector

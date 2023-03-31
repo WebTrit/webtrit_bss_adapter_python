@@ -42,6 +42,7 @@ logging.getLogger("faker.factory").setLevel(logging.ERROR)
 @dataclass
 class OTP:
     """One-time password for user authentication"""
+
     otp_expected_code: str
     user_id: str
     expires_at: datetime
@@ -102,8 +103,7 @@ class ExampleBSSConnector(BSSConnector):
         # for generation of fake names, etc.
         self.fake = MadeUpThings()
         # store sessions in a global variable
-        self.storage = FileSessionStorage(config = self.config)
-
+        self.storage = FileSessionStorage(config=self.config)
 
     @classmethod
     def name(cls) -> str:

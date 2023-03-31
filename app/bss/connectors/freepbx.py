@@ -15,7 +15,7 @@ from bss.models import (
     OtpSentType,
     SipInfoSchema,
     SipStatusSchema,
-    ServerSchema    
+    ServerSchema,
 )
 
 from bss.models import SipStatusSchema as SIPStatus
@@ -35,19 +35,18 @@ import re
 
 VERSION = "0.0.1"
 
+
 class FreePBXAPI(HTTPAPIConnectorWithLogin):
-    def __init__(self, api_server: str, api_user: str,
-                 api_password: str,
-                 **kwargs):
+    def __init__(self, api_server: str, api_user: str, api_password: str, **kwargs):
         super().__init__(api_server, api_user, api_password)
-        if 'graphql_path' in kwargs:
-            self.graphql_path = kwargs['graphql_path']
+        if "graphql_path" in kwargs:
+            self.graphql_path = kwargs["graphql_path"]
         else:
-            self.graphql_path = '/admin/api/api/gql'
+            self.graphql_path = "/admin/api/api/gql"
 
     def extract_access_token(self, response: dict) -> str:
-        return response.get('access_token', None)
-    
+        return response.get("access_token", None)
+
     def access_token_path(self) -> str:
         return "/admin/api/api/token"
 
@@ -68,24 +67,24 @@ class FreePBXAPI(HTTPAPIConnectorWithLogin):
     def get_extension(self, user_id: str):
         """Get the extension info"""
 
-        query = self.query_ext.replace('<extid>', user_id)
-        user = self.send_rest_request('POST', self.graphql_path,
-                                        json = {'query': query})
+        query = self.query_ext.replace("<extid>", user_id)
+        user = self.send_rest_request("POST", self.graphql_path, json={"query": query})
         if user:
             # found such extension, but the extension data does not
             # contain the email or the password :-( so we have to
             # retrieve it from the voicemail data
-            query = self.query_voicemail.replace('<extid>', user_id)
-            vm = self.send_rest_request('POST', self.graphql_path,
-                                        json = {'query': query})
+            query = self.query_voicemail.replace("<extid>", user_id)
+            vm = self.send_rest_request(
+                "POST", self.graphql_path, json={"query": query}
+            )
             if vm:
-                user_data = user.get('data', {}).get('fetchExtension', {})
-                user_data['vm'] = vm.get('data', {}).get('fetchVoiceMail', {})
+                user_data = user.get("data", {}).get("fetchExtension", {})
+                user_data["vm"] = vm.get("data", {}).get("fetchVoiceMail", {})
                 # merge the data
                 return user_data
-            
+
         return None
-    
+
     query_all_extensions = """{
             fetchAllExtensions {
                 status
@@ -106,40 +105,52 @@ class FreePBXAPI(HTTPAPIConnectorWithLogin):
 
     def get_all_extensions(self):
         """Get the extension info"""
-        users = self.send_rest_request('POST', self.graphql_path,
-                                    json = {'query': self.query_all_extensions})
+        users = self.send_rest_request(
+            "POST", self.graphql_path, json={"query": self.query_all_extensions}
+        )
         if users:
-            return users.get('data', {}).get('fetchAllExtensions', {}).get('extension', [])
-  
+            return (
+                users.get("data", {}).get("fetchAllExtensions", {}).get("extension", [])
+            )
+
         return None
-    
+
     def login(self):
-        res = self.send_rest_request('POST', self.access_token_path(),
-                                     headers = {'Content-Type': 'application/x-www-form-urlencoded'},
-                                     data = {   'client_id': self.api_user,
-                                                'client_secret': self.api_password,
-                                                'scope': '',
-                                                'grant_type': 'client_credentials' },
-                                    turn_off_login = True)
+        res = self.send_rest_request(
+            "POST",
+            self.access_token_path(),
+            headers={"Content-Type": "application/x-www-form-urlencoded"},
+            data={
+                "client_id": self.api_user,
+                "client_secret": self.api_password,
+                "scope": "",
+                "grant_type": "client_credentials",
+            },
+            turn_off_login=True,
+        )
         if res and self.extract_access_token(res):
             # store it globally
             self.access_token = self.extract_access_token(res)
             return True
-        
+
         logging.debug(f"Could not find an access token in the response {res}")
         raise ValueError("Could not find an access token in the response")
-    
+
     def add_auth_info(self, url: str, request_params: dict) -> dict:
         """Change the parameters of requests.request call to add
         there required authentication information (into headers,
         basic auth, etc.)"""
         if self.access_token:
-            headers = request_params.get('headers', {}).copy()
+            headers = request_params.get("headers", {}).copy()
             # override the auth header
-            new_headers = { **headers, **{ 'Authorization': 'Bearer ' + self.access_token } }
-            return { **request_params, **{ 'headers': new_headers } }
-        
+            new_headers = {
+                **headers,
+                **{"Authorization": "Bearer " + self.access_token},
+            }
+            return {**request_params, **{"headers": new_headers}}
+
         return request_params
+
 
 class FreePBXConnector(BSSConnector):
     """Supply to WebTrit core the required information about
@@ -148,16 +159,18 @@ class FreePBXConnector(BSSConnector):
 
     def __init__(self, config: AppConfig):
         super().__init__(config)
-        api_server = config.get_conf_val('FreePBX', 'API_Server',
-                            default = 'http://127.0.0.1')
-        api_user = config.get_conf_val('FreePBX', 'API_User')
-        api_password = config.get_conf_val('FreePBX', 'API_Secret')
-        self.sip_server = config.get_conf_val('FreePBX', 'SIP_Server',
-                                         default = '167.172.185.158')
+        api_server = config.get_conf_val(
+            "FreePBX", "API_Server", default="http://127.0.0.1"
+        )
+        api_user = config.get_conf_val("FreePBX", "API_User")
+        api_password = config.get_conf_val("FreePBX", "API_Secret")
+        self.sip_server = config.get_conf_val(
+            "FreePBX", "SIP_Server", default="167.172.185.158"
+        )
         # store sessions in a global variable
-        self.api_client = FreePBXAPI(api_server = api_server,
-                                     api_user = api_user,
-                                     api_password = api_password)
+        self.api_client = FreePBXAPI(
+            api_server=api_server, api_user=api_user, api_password=api_password
+        )
         self.storage = FileSessionStorage(config)
 
     @classmethod
@@ -175,9 +188,9 @@ class FreePBXConnector(BSSConnector):
             # log in user with username / password
             Capabilities.passwordSignin,
             # log in user using one-time-password generated on the BSS side
-            #Capabilities.otpSignin,
+            # Capabilities.otpSignin,
             # obtain user's call history
-            #Capabilities.callHistory,
+            # Capabilities.callHistory,
             # obtain the list of other extensions in the PBX
             Capabilities.extensions,
             # download call recordings - currently not supported
@@ -216,52 +229,44 @@ class FreePBXConnector(BSSConnector):
     def validate_otp(self, otp: OtpVerifyRequestSchema) -> SessionInfo:
         pass
 
-
-    def freepbx_ext_to_webtrit_user(self, ext: dict,
-                                    produce_user_info = True):
+    def freepbx_ext_to_webtrit_user(self, ext: dict, produce_user_info=True):
         """Convert the data returned by FreePBX API into an object:
         * EndUser (info about the user who is logging in)
         * ContactInfo (info about other extensions in the PBX)
         """
-        ext_info = ext.get('user', {})
-        parts = ext_info.get('name', '').split()
+        ext_info = ext.get("user", {})
+        parts = ext_info.get("name", "").split()
         firstname = parts[0]
-        lastname = ' '.join(parts[1:])
-        outbound_id = ext_info.get('outboundCid',
-                                   f"<{ext.get('extensionId', '')}>")
-        match = re.search(r'<(\d+)>', outbound_id)
+        lastname = " ".join(parts[1:])
+        outbound_id = ext_info.get("outboundCid", f"<{ext.get('extensionId', '')}>")
+        match = re.search(r"<(\d+)>", outbound_id)
         if match:
             main_number = match.group(1)
         else:
-            main_number = ext.get('extensionId', '')
+            main_number = ext.get("extensionId", "")
         data = {
-            'firstname': firstname,
-            'lastname': lastname,
-            'email': ext_info.get('email', None),
-
-            }
+            "firstname": firstname,
+            "lastname": lastname,
+            "email": ext_info.get("email", None),
+        }
         if produce_user_info:
-            data['sip'] = SipInfoSchema(
-                            login = ext.get('extensionId', ''),
-                            password = ext_info.get('extPassword', ''),
-                            sip_server = ServerSchema(
-                                host = self.sip_server,
-                                port = 5060
-                            )
-                        )
+            data["sip"] = SipInfoSchema(
+                login=ext.get("extensionId", ""),
+                password=ext_info.get("extPassword", ""),
+                sip_server=ServerSchema(host=self.sip_server, port=5060),
+            )
             return EndUser(**data)
         else:
-            data['sip'] = SipStatusSchema(
+            data["sip"] = SipStatusSchema(
                 # TODO: fix it
-                display_name = ext.get('extensionId', ''),
-                status = "registered"
+                display_name=ext.get("extensionId", ""),
+                status="registered",
             )
-            data['numbers'] = NumbersSchema(
-                            ext = ext.get('extensionId', ''),
-                            main = main_number
-                        )
+            data["numbers"] = NumbersSchema(
+                ext=ext.get("extensionId", ""), main=main_number
+            )
             return ContactInfo(**data)
-    
+
     def retrieve_user(self, session: SessionInfo, user_id: str) -> EndUser:
         """Obtain user's information - most importantly, his/her SIP credentials."""
 
@@ -274,19 +279,18 @@ class FreePBXConnector(BSSConnector):
             status_code=404, code=42, error_message="User not found"
         )
 
-
     def retrieve_contacts(self, session: SessionInfo, user_id: str) -> Contacts:
         """List of other extensions in the PBX"""
 
         ext_list = self.api_client.get_all_extensions()
 
         contacts = [
-            self.freepbx_ext_to_webtrit_user(x, produce_user_info = False)
+            self.freepbx_ext_to_webtrit_user(x, produce_user_info=False)
             for x in ext_list
-            if x.get('extensionId', '') != user_id
+            if x.get("extensionId", "") != user_id
         ]
 
-        return Contacts( __root__ = contacts)
+        return Contacts(__root__=contacts)
 
     def retrieve_calls(self, session: SessionInfo, user_id: str, **kwargs) -> Calls:
         pass
