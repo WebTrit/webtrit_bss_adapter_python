@@ -29,7 +29,6 @@ import logging
 import faker
 
 import re
-import os
 from dataclasses import dataclass
 
 VERSION = "0.0.1"

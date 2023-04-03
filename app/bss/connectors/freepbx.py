@@ -21,17 +21,17 @@ from bss.models import (
 from bss.models import SipStatusSchema as SIPStatus
 from bss.models import CDRInfoSchema as CDRInfo
 from bss.models import CallInfoSchema as CallInfo
-from report_error import WebTritErrorException
-from bss.http_api import HTTPAPIConnectorWithLogin
-
 from bss.sessions import FileSessionStorage
+from report_error import WebTritErrorException
 from app_config import AppConfig
 
-
-import datetime
 import logging
+from bss.http_api import HTTPAPIConnectorWithLogin
+from typing import Union, List, Dict
+
 
 import re
+from dataclasses import dataclass
 
 VERSION = "0.0.1"
 
@@ -44,76 +44,11 @@ class FreePBXAPI(HTTPAPIConnectorWithLogin):
         else:
             self.graphql_path = "/admin/api/api/gql"
 
-    def extract_access_token(self, response: dict) -> str:
-        return response.get("access_token", None)
-
     def access_token_path(self) -> str:
         return "/admin/api/api/token"
-
-    query_ext = """{ 
-            fetchExtension(extensionId: <extid>) {
-                status message id extensionId
-                user {
-                    password extPassword name sipname
-                }
-            }
-        }"""
-    query_voicemail = """{
-            fetchVoiceMail (extensionId: <extid>) {
-                status message name password email
-            }
-        }"""
-
-    def get_extension(self, user_id: str):
-        """Get the extension info"""
-
-        query = self.query_ext.replace("<extid>", user_id)
-        user = self.send_rest_request("POST", self.graphql_path, json={"query": query})
-        if user:
-            # found such extension, but the extension data does not
-            # contain the email or the password :-( so we have to
-            # retrieve it from the voicemail data
-            query = self.query_voicemail.replace("<extid>", user_id)
-            vm = self.send_rest_request(
-                "POST", self.graphql_path, json={"query": query}
-            )
-            if vm:
-                user_data = user.get("data", {}).get("fetchExtension", {})
-                user_data["vm"] = vm.get("data", {}).get("fetchVoiceMail", {})
-                # merge the data
-                return user_data
-
-        return None
-
-    query_all_extensions = """{
-            fetchAllExtensions {
-                status
-                message
-                totalCount
-                extension {
-                    id
-                    extensionId
-                    user {
-                    name password outboundCid ringtimer sipname password extPassword
-                    }
-                    coreDevice {
-                    deviceId dial devicetype description emergencyCid
-                    }
-                }
-            }
-        }"""
-
-    def get_all_extensions(self):
-        """Get the extension info"""
-        users = self.send_rest_request(
-            "POST", self.graphql_path, json={"query": self.query_all_extensions}
-        )
-        if users:
-            return (
-                users.get("data", {}).get("fetchAllExtensions", {}).get("extension", [])
-            )
-
-        return None
+    
+    def extract_access_token(self, response: dict) -> str:
+        return response.get("access_token", None)
 
     def login(self):
         res = self.send_rest_request(
@@ -143,20 +78,90 @@ class FreePBXAPI(HTTPAPIConnectorWithLogin):
         if self.access_token:
             headers = request_params.get("headers", {}).copy()
             # override the auth header
-            new_headers = {
-                **headers,
-                **{"Authorization": "Bearer " + self.access_token},
-            }
-            return {**request_params, **{"headers": new_headers}}
+            new_headers = headers | {"Authorization": "Bearer " + self.access_token}
+
+            return  request_params | {"headers": new_headers}
 
         return request_params
+    # GraphQL query to get a specific extension
+    query_ext = """{ 
+            fetchExtension(extensionId: <extid>) {
+                status message id extensionId
+                user {
+                    password extPassword name sipname
+                }
+            }
+        }"""
+    # GraphQL query to get a specific extension's voicemail data
+    query_voicemail = """{
+            fetchVoiceMail (extensionId: <extid>) {
+                status message name password email
+            }
+        }"""
+
+    def get_extension(self, user_id: str) -> Dict:
+        """Get the extension info"""
+
+        query = self.query_ext.replace("<extid>", user_id)
+        user = self.send_rest_request("POST", self.graphql_path, json={"query": query})
+        if user:
+            # found such extension, but the extension data does not
+            # contain the email or the password :-( so we have to
+            # retrieve it from the voicemail data
+            user_data = user.get("data", {}).get("fetchExtension", {})
+            query = self.query_voicemail.replace("<extid>", user_id)
+            vm = self.send_rest_request(
+                "POST", self.graphql_path, json={"query": query}
+            )
+            if vm:
+                # append the data from the voicemail part
+                user_data["vm"] = vm.get("data", {}).get("fetchVoiceMail", {})
+
+            return user_data
+
+        return None
+    
+    # GraphQL query to get all extensions
+    query_all_extensions = """{
+            fetchAllExtensions {
+                status
+                message
+                totalCount
+                extension {
+                    id
+                    extensionId
+                    user {
+                        name password outboundCid ringtimer sipname password extPassword
+                    }
+                    coreDevice {
+                        deviceId dial devicetype description emergencyCid
+                    }
+                }
+            }
+        }"""
+
+    def get_all_extensions(self) -> List[Dict]:
+        """Get all extensions defined in the PBX"""
+        reply = self.send_rest_request(
+            "POST", self.graphql_path, json={"query": self.query_all_extensions}
+        )
+        if reply:
+            return reply.get("data", {}). \
+                                get("fetchAllExtensions", {}). \
+                                    get("extension", [])
+
+        return []
+    
+
 
 
 class FreePBXConnector(BSSConnector):
-    """Supply to WebTrit core the required information about
-    VoIP users using a built-in list of users. Suitable
-    for development / testing"""
-
+    """Connect WebTrit and FreePBX. Authenticate a user using his/her
+    data in FreePBX, retrieve user's SIP credentials to be used by
+    WebTrit and return a list of other configured extenstions (to
+    be provided as 'Cloud PBX' contacts).
+    Currently does not support OTP login, CDRs and call recording retrieval."""
+    
     def __init__(self, config: AppConfig):
         super().__init__(config)
         api_server = config.get_conf_val(
@@ -229,10 +234,57 @@ class FreePBXConnector(BSSConnector):
     def validate_otp(self, otp: OtpVerifyRequestSchema) -> SessionInfo:
         pass
 
-    def freepbx_ext_to_webtrit_user(self, ext: dict, produce_user_info=True):
-        """Convert the data returned by FreePBX API into an object:
-        * EndUser (info about the user who is logging in)
-        * ContactInfo (info about other extensions in the PBX)
+    def retrieve_user(self, session: SessionInfo, user_id: str) -> EndUser:
+        """Obtain user's information - most importantly, his/her SIP credentials."""
+
+        user = self.api_client.get_extension(user_id)
+        if user:
+            return self.freepbx_to_webtrit_obj(user, produce_user_info=True)
+
+        # no such session
+        raise WebTritErrorException(
+            status_code=404, code=42, error_message="User not found"
+        )
+
+    def retrieve_contacts(self, session: SessionInfo, user_id: str) -> Contacts:
+        """List of other extensions in the PBX"""
+
+        ext_list = self.api_client.get_all_extensions()
+
+        contacts = [
+            self.freepbx_to_webtrit_obj(x, produce_user_info=False)
+            for x in ext_list
+            if x.get("extensionId", "") != user_id
+        ]
+
+        return Contacts(__root__=contacts)
+
+    def retrieve_calls(self, session: SessionInfo, user_id: str, **kwargs) -> Calls:
+        pass
+
+    # call recording is not supported in this example
+    def retrieve_call_recording(
+        self, session: SessionInfo, call_recording: str
+    ) -> bytes:
+        """Get the media file for a previously recorded call."""
+        # not yet implemented
+        pass
+
+    def freepbx_to_webtrit_obj(self, ext: dict, produce_user_info=True) -> dict:
+        """Convert the JSON data returned by FreePBX API into an dictionary
+        that can be used to crate a WebTrit object (either EndUser or ContactInfo)):
+
+            Args:
+                * ext (dict): A dictionary (representing JSON structure,
+                    returned by the FreePBX API), which contains the
+                    extension's information.
+                * produce_user_info (bool, optional): A flag to indicate
+                    whether to generate data for EndUser (info about a
+                    specific extension, includes SIP credentials, etc.) 
+                    or ContactInfo (basic info about other extensions in PBX)
+
+            Returns:
+                dict: data to be passed to object's constructor
         """
         ext_info = ext.get("user", {})
         parts = ext_info.get("name", "").split()
@@ -266,39 +318,3 @@ class FreePBXConnector(BSSConnector):
                 ext=ext.get("extensionId", ""), main=main_number
             )
             return ContactInfo(**data)
-
-    def retrieve_user(self, session: SessionInfo, user_id: str) -> EndUser:
-        """Obtain user's information - most importantly, his/her SIP credentials."""
-
-        user = self.api_client.get_extension(user_id)
-        if user:
-            return self.freepbx_ext_to_webtrit_user(user)
-
-        # no such session
-        raise WebTritErrorException(
-            status_code=404, code=42, error_message="User not found"
-        )
-
-    def retrieve_contacts(self, session: SessionInfo, user_id: str) -> Contacts:
-        """List of other extensions in the PBX"""
-
-        ext_list = self.api_client.get_all_extensions()
-
-        contacts = [
-            self.freepbx_ext_to_webtrit_user(x, produce_user_info=False)
-            for x in ext_list
-            if x.get("extensionId", "") != user_id
-        ]
-
-        return Contacts(__root__=contacts)
-
-    def retrieve_calls(self, session: SessionInfo, user_id: str, **kwargs) -> Calls:
-        pass
-
-    # call recording is not supported in this example
-    def retrieve_call_recording(
-        self, session: SessionInfo, call_recording: str
-    ) -> bytes:
-        """Get the media file for a previously recorded call."""
-        # not yet implemented
-        pass
