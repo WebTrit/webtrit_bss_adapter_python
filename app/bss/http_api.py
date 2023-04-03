@@ -5,21 +5,47 @@ from abc import ABC, abstractmethod
 class HTTPAPIConnector(ABC):
     """Extract data from a remote server via REST/GRAPHQL or other HTTP-based API"""
 
-    def __init__(self, api_server: str, api_user: str,
+    def __init__(self, api_server: str,
+                 api_user: str,
                  api_password: str):
+        """Create a new API connector object.
+        
+        Args:
+            api_server (str): The hostname/port portion of the URL where
+                requests will be sent, e.g. http://1.2.3.4:8080
+            api_user (str):  Username (client ID) of the API user
+            api_password (str): Password (client secret) of the API user
+        """
+
         self.api_server = api_server
         self.api_user = api_user
         self.api_password = api_password
 
     def have_to_login(self) -> bool:
-        """Return True if we need to log in to the server
-        before running actual API requests."""
+        """Override it in your class, return True if we need to log in
+        to the server before running actual API requests. This will trigger
+        calling a login() methid (which you also need to write) before
+        issuing a first request.
+        """
         return False
 
     def add_auth_info(self, url: str, request_params: dict) -> dict:
         """Change the parameters of requests.request call to add
         there required authentication information (into headers,
-        basic auth, etc.)"""
+        basic auth, etc.). The
+        requests.request(method, url, **params_returned)
+        
+        Args:
+            url (str): The URL the request is being sent to (in case if auth
+                info differs for various paths)
+            request_params (dict): The current set of parameters for the
+                requests.request call. Most likely you will need include
+                "headers" key, as well as others like "json" or "data"
+
+        Returns:
+            dict: the modified set of parameters for requests.request. You can
+                add new keys (or remove the ones which are already there.
+        """
         pass
 
     def send_rest_request(self,
@@ -51,7 +77,7 @@ class HTTPAPIConnector(ABC):
             response = requests.request(method, url, **params_final)
             logging.debug(f"Received {response.status_code} {response.text}")
             response.raise_for_status()
-            return response.json()
+            return self.decode_response(response)
 
         except requests.exceptions.Timeout:
             logging.debug(f"Connection to {self.api_server} timed out")
@@ -60,10 +86,17 @@ class HTTPAPIConnector(ABC):
             logging.debug(f"Request error: {e}")
             return None
 
+    def decode_response(self, response) -> dict:
+        """Decode the JSON response from the server into a dict.
+        This is a default implementation that simply returns the
+        result of response.json() - but you can override this method
+        to do your own custom parsing of the response."""
+        return response.json()
 
     @abstractmethod        
     def login(self) -> bool:
-        """Override this method in your sub-class"""
+        """Override this method in your sub-class to provide the ability
+        to get a session access token from the remote server."""
         pass
 
 

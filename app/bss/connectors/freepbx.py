@@ -12,15 +12,11 @@ from bss.models import (
     NumbersSchema,
     OtpCreateResponseSchema,
     OtpVerifyRequestSchema,
-    OtpSentType,
     SipInfoSchema,
-    SipStatusSchema,
     ServerSchema,
 )
 
 from bss.models import SipStatusSchema as SIPStatus
-from bss.models import CDRInfoSchema as CDRInfo
-from bss.models import CallInfoSchema as CallInfo
 from bss.sessions import FileSessionStorage
 from report_error import WebTritErrorException
 from app_config import AppConfig
@@ -29,9 +25,7 @@ import logging
 from bss.http_api import HTTPAPIConnectorWithLogin
 from typing import Union, List, Dict
 
-
 import re
-from dataclasses import dataclass
 
 VERSION = "0.0.1"
 
@@ -74,15 +68,30 @@ class FreePBXAPI(HTTPAPIConnectorWithLogin):
     def add_auth_info(self, url: str, request_params: dict) -> dict:
         """Change the parameters of requests.request call to add
         there required authentication information (into headers,
-        basic auth, etc.)"""
-        if self.access_token:
-            headers = request_params.get("headers", {}).copy()
-            # override the auth header
-            new_headers = headers | {"Authorization": "Bearer " + self.access_token}
+        basic auth, etc.). The
+        requests.request(method, url, **params_returned)
+        
+        Args:
+            url (str): The URL the request is being sent to (in case if auth
+                info differs for various paths)
+            request_params (dict): The current set of parameters for the
+                requests.request call. Most likely you will need include
+                "headers" key, as well as others like "json" or "data"
 
-            return  request_params | {"headers": new_headers}
+        Returns:
+            dict: the modified set of parameters for requests.request. You can
+                add new keys (or remove the ones which are already there.
+        """
+        if self.access_token:
+            if "headers" in request_params:
+                headers = request_params["headers"]
+            else:
+                request_params["headers"] = headers = {}
+            # override the auth header
+            headers["Authorization"] = "Bearer " + self.access_token
 
         return request_params
+
     # GraphQL query to get a specific extension
     query_ext = """{ 
             fetchExtension(extensionId: <extid>) {
@@ -172,7 +181,7 @@ class FreePBXConnector(BSSConnector):
         self.sip_server = config.get_conf_val(
             "FreePBX", "SIP_Server", default="167.172.185.158"
         )
-        # store sessions in a global variable
+
         self.api_client = FreePBXAPI(
             api_server=api_server, api_user=api_user, api_password=api_password
         )
@@ -299,8 +308,17 @@ class FreePBXConnector(BSSConnector):
         data = {
             "firstname": firstname,
             "lastname": lastname,
-            "email": ext_info.get("email", None),
+            "email": ext.get("vm", {}).get("email", None),
+            "numbers": NumbersSchema(
+                ext=ext.get("extensionId", ""),
+                main=main_number
+            )
         }
+        if firstname and lastname:
+            display_name = lastname + ', ' + firstname 
+        else:
+            display_name = 'Ext ' + ext.get("extensionId", "???")
+
         if produce_user_info:
             data["sip"] = SipInfoSchema(
                 login=ext.get("extensionId", ""),
@@ -309,12 +327,12 @@ class FreePBXConnector(BSSConnector):
             )
             return EndUser(**data)
         else:
-            data["sip"] = SipStatusSchema(
-                # TODO: fix it
-                display_name=ext.get("extensionId", ""),
+            data["sip"] = SIPStatus(
+                display_name=display_name,
+                # TODO: find out whether we can get the real
+                # registration status via API - for now all extensions
+                # are assumed to be registered
                 status="registered",
             )
-            data["numbers"] = NumbersSchema(
-                ext=ext.get("extensionId", ""), main=main_number
-            )
+
             return ContactInfo(**data)
