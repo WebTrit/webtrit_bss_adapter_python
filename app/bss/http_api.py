@@ -1,5 +1,6 @@
 import logging
 import requests
+from datetime import datetime, timedelta
 from abc import ABC, abstractmethod    
 
 class HTTPAPIConnector(ABC):
@@ -93,35 +94,59 @@ class HTTPAPIConnector(ABC):
         to do your own custom parsing of the response."""
         return response.json()
 
-    @abstractmethod        
     def login(self) -> bool:
-        """Override this method in your sub-class to provide the ability
-        to get a session access token from the remote server."""
-        pass
+        """Here we assume no login is required, so it always succeeds.
+        Override this method in your sub-class to provide the ability
+        to do a proper login and get a session access token from
+        the remote server."""
+        return True
 
 
 class HTTPAPIConnectorWithLogin(HTTPAPIConnector):
     """Use HTTP-based API that requires to login first
     to obtain an access token for this session"""
-
+    REFRESH_TOKEN_IN_ADVANCE = 10 # minutes
     def __init__(self, api_server: str, api_user: str,
-                 api_password: str, api_token: str = None):
+                api_password: str, api_token: str = None,
+                api_token_expires_at: datetime = None):
         super().__init__(api_server, api_user, api_password)
         # we have the token already, no need to login
         self.access_token = api_token
+        self.access_token_expires_at = api_token_expires_at
+        self.refresh_token = None
 
     def have_to_login(self) -> bool:
         """Return True if we need to log in to the server
         before running actual API requests."""
+        if self.access_token and self.access_token_expires_at:
+            # token has an expiration date
+            if datetime.now() > self.access_token_expires_at:
+                # the token has expired
+                self.access_token = None
+                if self.refresh_token:
+                    # try to refresh the token
+                    logging.debug("The access token expired, attempting to re-fresh it")
+                    self.refresh()
+                else:
+                    logging.debug("The access token expired, logging in again")
+                    self.login()
+            elif self.access_token_expires_at - datetime.now() < \
+                timedelta(minutes=self.REFRESH_TOKEN_IN_ADVANCE):
+                # proactiveluy refresh the token a bit before the expiration time
+                logging.debug("The access token will expire soon " + 
+                    f"{self.access_token_expires_at.isoformat()}, refreshing it")
+                self.refresh()               
+
         return False if self.access_token else True
-    
-    def get_access_token(self):
-        return self.access_token
-    
+  
    # redefine these in your sub-class
     @abstractmethod
-    def extract_access_token(self, response: dict) -> str:
-        """Extract the access token from the response"""
+    def extract_access_token(self, response: dict) -> bool:
+        """Extract the access token and other data (expiration time,
+        refresh token, etc.) from the response and store in the object.
+        
+        Returns:
+        True if success"""
         pass
 
     @abstractmethod
@@ -129,6 +154,16 @@ class HTTPAPIConnectorWithLogin(HTTPAPIConnector):
         """The path to the endpoint where the access token is requested"""
         pass
 
+    @abstractmethod        
+    def login(self) -> bool:
+        """Override this method in your sub-class to provide the ability
+        to get a session access token from the remote server."""
+        pass
 
+    @abstractmethod        
+    def refresh(self) -> bool:
+        """Override this method in your sub-class to provide the ability
+        to exchange a refresh token for a new session access token."""
+        pass
 
 

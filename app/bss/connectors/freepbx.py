@@ -1,6 +1,5 @@
 from bss.connector import (
     BSSConnector,
-    SessionStorage,
     SessionInfo,
     EndUser,
     Contacts,
@@ -20,7 +19,7 @@ from bss.models import SipStatusSchema as SIPStatus
 from bss.sessions import FileSessionStorage
 from report_error import WebTritErrorException
 from app_config import AppConfig
-
+from datetime import datetime, timedelta
 import logging
 from bss.http_api import HTTPAPIConnectorWithLogin
 from typing import Union, List, Dict
@@ -41,30 +40,58 @@ class FreePBXAPI(HTTPAPIConnectorWithLogin):
     def access_token_path(self) -> str:
         return "/admin/api/api/token"
     
-    def extract_access_token(self, response: dict) -> str:
-        return response.get("access_token", None)
+    def extract_access_token(self, response: dict) -> bool:
+        """Extract the access token and other data (expiration time,
+        refresh token, etc.) from the response and store in the object.
+        
+        Returns:
+        True if success"""
+        self.access_token = response.get("access_token", None)
+        expires_in = response.get("expires_in", None)
+        if expires_in:
+            self.access_token_expires_at = datetime.now() + timedelta(seconds=expires_in)
+        else:
+            self.access_token_expires_at = None
+        self.refresh_token = response.get("refresh_token", None)
+        logging.debug(f"Got access token {self.access_token} expires at " + \
+                      f"{self.access_token_expires_at} refresh token {self.refresh_token}")
+        return True if self.access_token else False
 
-    def login(self):
-        res = self.send_rest_request(
-            "POST",
-            self.access_token_path(),
-            headers={"Content-Type": "application/x-www-form-urlencoded"},
-            data={
+    def login(self, data: dict = None):
+        if data is None:
+            # populate the data properly
+            data = {
                 "client_id": self.api_user,
                 "client_secret": self.api_password,
                 "scope": "",
                 "grant_type": "client_credentials",
-            },
+            }
+
+        res = self.send_rest_request(
+            "POST",
+            self.access_token_path(),
+            headers={"Content-Type": "application/x-www-form-urlencoded"},
+            data=data,
             turn_off_login=True,
         )
         if res and self.extract_access_token(res):
-            # store it globally
-            self.access_token = self.extract_access_token(res)
+            # access token was extracted and stored
+
             return True
 
         logging.debug(f"Could not find an access token in the response {res}")
         raise ValueError("Could not find an access token in the response")
 
+    def refresh(self):
+        """Rerfresh access token"""
+        return self.login(data={
+                "client_id": self.api_user,
+                "client_secret": self.api_password,
+                "scope": "",
+                "refresh_token": self.refresh_token,
+                "grant_type": "refresh_token",
+            })
+    
     def add_auth_info(self, url: str, request_params: dict) -> dict:
         """Change the parameters of requests.request call to add
         there required authentication information (into headers,

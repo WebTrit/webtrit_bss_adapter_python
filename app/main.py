@@ -38,8 +38,19 @@ my_project_path = os.path.dirname(__file__)
 sys.path.append(my_project_path)
 
 config = AppConfig()
+
+# set logging
 if config.get_conf_val("Debug", default = "False").upper() == "TRUE":
-    logging.basicConfig(level=logging.DEBUG)
+    log_level = logging.DEBUG
+else:
+    log_level = logging.INFO
+logging.basicConfig(level=log_level, format='[%(asctime)s] %(levelname)s: %(message)s')
+
+# Propagate the root logger configuration to all child loggers
+logging.getLogger().setLevel(log_level)
+logging.getLogger().handlers = logging.getLogger().handlers
+logging.getLogger().propagate = True
+
 
 app = FastAPI(
     description="""Adapter that translates API requests from WebTrit core
