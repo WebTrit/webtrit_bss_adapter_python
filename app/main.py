@@ -44,7 +44,10 @@ if config.get_conf_val("Debug", default = "False").upper() == "TRUE":
     log_level = logging.DEBUG
 else:
     log_level = logging.INFO
-logging.basicConfig(level=log_level, format='[%(asctime)s] %(levelname)s: %(message)s')
+if not os.environ.get('PORT'):
+    # we are running locally so it is useful to add timestamps
+    # since when running in GCP, logs already have timestamps
+    logging.basicConfig(level=log_level, format='[%(asctime)s] %(levelname)s: %(message)s')
 
 # Propagate the root logger configuration to all child loggers
 logging.getLogger().setLevel(log_level)
