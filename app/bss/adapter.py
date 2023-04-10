@@ -32,7 +32,7 @@ from app_config import AppConfig
 from report_error import WebTritErrorException
 
 
-class BSSConnector(ABC):
+class BSSAdapter(ABC):
     def __init__(self, config: AppConfig):
         self.config = config
         self.storage = SessionStorage(config)
@@ -164,15 +164,15 @@ class BSSConnector(ABC):
         raise NotImplementedError("Override this method in your sub-class")
 
 
-# initialize BSS connector
-def initialize_bss_connector(root_package: str, config: AppConfig) -> BSSConnector:
-    """Create an instance of BSS connector - of the type specified in the config"""
-    bss_module_path = config.get_conf_val("BSS", "Connector", "Path")
+# initialize BSS Adapter
+def initialize_bss_adapter(root_package: str, config: AppConfig) -> BSSAdapter:
+    """Create an instance of BSS adapter - of the type specified in the config"""
+    bss_module_path = config.get_conf_val("BSS", "Adapter", "Path")
     bss_module_name = config.get_conf_val(
-        "BSS", "Connector", "Module", default="bss.connectors.example"
+        "BSS", "Adapter", "Module", default="bss.adapters.example"
     )
     bss_class_name = config.get_conf_val(
-        "BSS", "Connector", "Class", default="ExampleBSSConnector"
+        "BSS", "Adapter", "Class", default="ExampleBSSAdapter"
     )
     if bss_module_path:
         # allow to include modules from a directory, other than
@@ -194,7 +194,7 @@ def initialize_bss_connector(root_package: str, config: AppConfig) -> BSSConnect
         )
         raise
 
-    connector = bss_class(config=config)
-    connector.initialize()
-    logging.info(f"Initialized BSS connector: {bss_class_name}")
-    return connector
+    adapter = bss_class(config=config)
+    adapter.initialize()
+    logging.info(f"Initialized BSS adapter: {bss_class_name}")
+    return adapter

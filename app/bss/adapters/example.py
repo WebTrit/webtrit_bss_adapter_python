@@ -1,6 +1,5 @@
-from bss.connector import (
-    BSSConnector,
-    SessionStorage,
+from bss.adapter import (
+    BSSAdapter,
     SessionInfo,
     EndUser,
     Contacts,
@@ -63,7 +62,7 @@ class MadeUpThings(faker.Faker):
         return x[random.randint(0, len(x) - 1)]
 
 
-class ExampleBSSConnector(BSSConnector):
+class ExampleBSSAdapter(BSSAdapter):
     """Supply to WebTrit core the required information about
     VoIP users using a built-in list of users. Suitable
     for development / testing"""
@@ -106,7 +105,7 @@ class ExampleBSSConnector(BSSConnector):
 
     @classmethod
     def name(cls) -> str:
-        return "Example BSS connector"
+        return "Example BSS adapter"
 
     @classmethod
     def version(cls) -> str:
@@ -132,7 +131,7 @@ class ExampleBSSConnector(BSSConnector):
         """Authenticate user with username and password and obtain an API token for
         further requests."""
 
-        user = ExampleBSSConnector.fake_user_db.get(user_id, None)
+        user = ExampleBSSAdapter.fake_user_db.get(user_id, None)
         if user:
             if user["password"] == password:
                 # everything is in order, create a session
@@ -179,8 +178,8 @@ class ExampleBSSConnector(BSSConnector):
             expires_at=datetime.datetime.now() + datetime.timedelta(minutes=10),
         )
         # memorize it
-        with ExampleBSSConnector.otp_db_lock:
-            ExampleBSSConnector.fake_otp_db[otp_id] = otp
+        with ExampleBSSAdapter.otp_db_lock:
+            ExampleBSSAdapter.fake_otp_db[otp_id] = otp
 
         return OtpCreateResponseSchema(
             # OTP sender's address so the user can find it easier
@@ -193,7 +192,7 @@ class ExampleBSSConnector(BSSConnector):
         """Verify that the OTP code, provided by the user, is correct."""
 
         otp_id = otp.otp_id.__root__
-        original = ExampleBSSConnector.fake_otp_db.get(otp_id, None)
+        original = ExampleBSSAdapter.fake_otp_db.get(otp_id, None)
         if not original:
             raise WebTritErrorException(
                 status_code=401,
@@ -223,7 +222,7 @@ class ExampleBSSConnector(BSSConnector):
     def retrieve_user(self, session: SessionInfo, user_id: str) -> EndUser:
         """Obtain user's information - most importantly, his/her SIP credentials."""
 
-        user = ExampleBSSConnector.fake_user_db.get(user_id, None)
+        user = ExampleBSSAdapter.fake_user_db.get(user_id, None)
         if user:
             return EndUser(**user)
 

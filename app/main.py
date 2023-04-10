@@ -12,8 +12,8 @@ from pydantic import conint
 from datetime import datetime
 from report_error import WebTritErrorException
 from app_config import AppConfig
-import bss.connectors
-from bss.connector import initialize_bss_connector, Capabilities
+import bss.adapters
+from bss.adapter import initialize_bss_adapter, Capabilities
 from request_trace import RouteWithLogging
 
 from bss.models import (
@@ -66,7 +66,7 @@ app = FastAPI(
 security = HTTPBearer()
 router = APIRouter(route_class=RouteWithLogging)
 
-bss = initialize_bss_connector(bss.connectors.__name__, config)
+bss = initialize_bss_adapter(bss.adapters.__name__, config)
 
 @app.get(
     "/health-check",
