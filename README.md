@@ -1,4 +1,4 @@
-# A connector between WebTrit and external VoIP system or PBX
+# An adapter between WebTrit and external VoIP system or PBX
 ## Overview
 This is an application that serves as a mapper of API requests
 from WebTrit cloud back-end to a 3rd-party system (e.g. hosted PBX)
@@ -30,5 +30,16 @@ pytest --server http://1.2.3.4 tests
 * Apply http://1.2.3.4 in the configuration of your WebTrit instance, so it
 sends requests to your API
 
-to an external
-An example API adapter (Python/FastAPI) that allows to connect WebTrit to an external VoIP system and BSS
+### Creating your own adapter
+* Create your own module xyz in bss/adapters/ folder (use example.py as a template) and define a class (inherited from BSSAdapter) called XYZAdapter
+* set BSS_ADAPTER_MODULE environment variable to bss.connectors.xyz
+* set BSS_ADAPTER_CLASS environment variable to the name XYZAdapter
+* set additional variables as needed (e.g. path to the REST API of your VoIP system)
+* start the app ```
+cd app
+uvicorn main:app --port 8000
+```
+* test it: ```
+pip install pytest-lazy-fixture
+pytest --server http://<your-server-ip-and-port> --user user1 --password xyz tests
+```
