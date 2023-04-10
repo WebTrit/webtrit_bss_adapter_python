@@ -1,6 +1,5 @@
-import threading
 from datetime import datetime, timedelta
-import shelve
+from bss.dbs import FileStoredKeyValue
 import logging
 import uuid
 from app_config import AppConfig
@@ -17,16 +16,14 @@ class SessionInfo(SessionApprovedResponseSchema):
 class SessionStorage:
     """A class that provides access to stored session data (which can
     be stored in some SQL/no-SQL database, external REST services, etc.)"""
-    session_db_lock = threading.Lock()
 
     def __init__(self, config: AppConfig):
         """Initialize the object using the provided configuration"""
         self.config = config
-        # your sub-class should initialize the storage and assign it to self.sessions
-        self.sessions = None
-        # for simple in-memory storage or file-based storage it is better
-        # to ensure only one thread will do a modification at any time
-        self.get_lock_when_changing = True
+        # your sub-class should initialize the storage and 
+        # assign it to self.sessions, otherwise you get the
+        # in-memory storage
+        self.sessions = {}
 
     def __refresh_token_index(self, id: str) -> str:
         """Change the value of refresh token so it still will
@@ -63,18 +60,13 @@ class SessionStorage:
 
     def store_session(self, session: SessionInfo):
         """Store a session in the database"""
-
-        if self.get_lock_when_changing:
-            with self.session_db_lock:
-                self.__store_session(session)
-        else:
-            self.__store_session(session)
+        self.__store_session(session)
 
     def __delete_session(self, access_token: str, refresh_token: str = None) -> bool:
         """Remove a session from the database"""
 
         if refresh_token:
-            self.sessions.pop(refresh_token, None)
+            del self.sessions[refresh_token]
         session = self.sessions.pop(access_token, None)
 
         return True if session else False
@@ -82,17 +74,14 @@ class SessionStorage:
     def delete_session(self, access_token: str, refresh_token: str = None) -> bool:
         """Remove a session from the database"""
 
-        if self.get_lock_when_changing:
-            with self.session_db_lock:
-                return self.__delete_session(access_token, refresh_token)
-        else:  
-            return self.__delete_session(access_token, refresh_token)
+        return self.__delete_session(access_token, refresh_token)
 
 
 class FileSessionStorage(SessionStorage):
-    """Store sessions in a class variable. Suitable only
-    for demo / development. Implement a real persistent
-    session storage for your application."""
+    """Store sessions in local file. Suitable only
+    for demo / development. Implement a real persistent & scalable
+    session storage for your application, or use a class like
+    FirestoreSessionStorage below."""
     def __init__(self, config: AppConfig):
         super().__init__(config)
         # to make the sessions survive a restart of a container - 
@@ -101,4 +90,5 @@ class FileSessionStorage(SessionStorage):
         file_name = config.get_conf_val('Sessions', 'StorageFile',
                             default = '/var/db/sessions.db')
         logging.debug(f"Using file {file_name} for session storage")
-        self.sessions = shelve.open(file_name)
+        self.sessions = FileStoredKeyValue(file_name)
+

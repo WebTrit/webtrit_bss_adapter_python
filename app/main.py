@@ -13,7 +13,7 @@ from datetime import datetime
 from report_error import WebTritErrorException
 from app_config import AppConfig
 import bss.adapters
-from bss.adapter import initialize_bss_adapter, Capabilities
+from bss.adapters import initialize_bss_adapter, Capabilities
 from request_trace import RouteWithLogging
 
 from bss.models import (
@@ -60,7 +60,7 @@ app = FastAPI(
         to a hosted PBX system. It enables to authenticate users,
         obtain their SIP credentials, etc.""",
     title="Sample adapter for connecting WebTrit to a BSS",
-    version="v0.1.5",
+    version="v0.1.7",
     #    servers=[{'url': '/api/v1', 'variables': {}}],
 )
 security = HTTPBearer()

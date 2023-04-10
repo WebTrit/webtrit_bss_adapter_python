@@ -1,5 +1,5 @@
-from bss.connector import (
-    BSSConnector,
+from bss.adapters import (
+    BSSAdapter,
     SessionInfo,
     EndUser,
     Contacts,
@@ -11,18 +11,21 @@ from bss.models import (
     NumbersSchema,
     OtpCreateResponseSchema,
     OtpVerifyRequestSchema,
+    OtpSentType,
     SipInfoSchema,
     ServerSchema,
 )
 
 from bss.models import SipStatusSchema as SIPStatus
+from bss.models import CDRInfoSchema as CDRInfo
+from bss.models import CallInfoSchema as CallInfo
 from bss.sessions import FileSessionStorage
 from report_error import WebTritErrorException
 from app_config import AppConfig
-from datetime import datetime, timedelta
-import logging
 from bss.http_api import HTTPAPIConnectorWithLogin
 from typing import Union, List, Dict
+from datetime import datetime, timedelta
+import logging
 
 import re
 
@@ -190,8 +193,7 @@ class FreePBXAPI(HTTPAPIConnectorWithLogin):
     
 
 
-
-class FreePBXConnector(BSSConnector):
+class FreePBXAdapter(BSSAdapter):
     """Connect WebTrit and FreePBX. Authenticate a user using his/her
     data in FreePBX, retrieve user's SIP credentials to be used by
     WebTrit and return a list of other configured extenstions (to
@@ -216,7 +218,7 @@ class FreePBXConnector(BSSConnector):
 
     @classmethod
     def name(cls) -> str:
-        return "FreePBX connector"
+        return "FreePBX adapter"
 
     @classmethod
     def version(cls) -> str:

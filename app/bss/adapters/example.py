@@ -1,11 +1,13 @@
-from bss.adapter import (
+from bss.adapters import (
     BSSAdapter,
+    BSSAdapterExternalDB,
     SessionInfo,
     EndUser,
     Contacts,
     Calls,
     ContactInfo,
     Capabilities,
+    OTP
 )
 from bss.models import (
     NumbersSchema,
@@ -13,14 +15,14 @@ from bss.models import (
     OtpVerifyRequestSchema,
     OtpSentType,
 )
-
+from bss.dbs import TiedKeyValue
 from bss.models import SipStatusSchema as SIPStatus
 from bss.models import CDRInfoSchema as CDRInfo
 from bss.models import CallInfoSchema as CallInfo
 from bss.sessions import FileSessionStorage
 from report_error import WebTritErrorException
 from app_config import AppConfig
-import threading
+
 import uuid
 import datetime
 import random
@@ -28,7 +30,7 @@ import logging
 import faker
 
 import re
-from dataclasses import dataclass
+
 
 VERSION = "0.0.1"
 
@@ -37,13 +39,7 @@ VERSION = "0.0.1"
 logging.getLogger("faker.factory").setLevel(logging.ERROR)
 
 
-@dataclass
-class OTP:
-    """One-time password for user authentication"""
 
-    otp_expected_code: str
-    user_id: str
-    expires_at: datetime
 
 
 class MadeUpThings(faker.Faker):
@@ -62,16 +58,23 @@ class MadeUpThings(faker.Faker):
         return x[random.randint(0, len(x) - 1)]
 
 
-class ExampleBSSAdapter(BSSAdapter):
+class ExampleBSSAdapter(BSSAdapterExternalDB):
     """Supply to WebTrit core the required information about
     VoIP users using a built-in list of users. Suitable
     for development / testing"""
 
-    # Change the data below to suite your needs during the development.
-    # DO NOT USE THIS IN PRODUCTION!
-
-    fake_user_db: dict = {
-        "john": {
+    def __init__(self, config: AppConfig, *args, **kwargs):
+        super().__init__(config, *args, **kwargs)
+        self.config = config
+        # for generation of fake names, etc.
+        self.fake = MadeUpThings()
+        # store sessions in a local file
+        self.session_db = FileSessionStorage(self.config)
+        # retrieve user data from the in-memory variable
+        self.user_db = TiedKeyValue()
+        # Change the data below to suite your needs during the development.
+        # DO NOT USE THIS IN PRODUCTION!
+        self.user_db["john"] = {
             "password": "qwerty",
             "firstname": "John",
             "lastname": "Doe",
@@ -91,17 +94,8 @@ class ExampleBSSAdapter(BSSAdapter):
             },
             "time_zone": "Europe/Kyiv",
         }
-    }
-    otp_db_lock = threading.Lock()
-    fake_otp_db: dict = {}
+        self.otp_db = TiedKeyValue()
 
-    def __init__(self, config: AppConfig, *args, **kwargs):
-        super().__init__(config, *args, **kwargs)
-        self.config = config
-        # for generation of fake names, etc.
-        self.fake = MadeUpThings()
-        # store sessions in a global variable
-        self.storage = FileSessionStorage(config=self.config)
 
     @classmethod
     def name(cls) -> str:
@@ -127,109 +121,7 @@ class ExampleBSSAdapter(BSSAdapter):
             # SupportedEnum.recordings
         ]
 
-    def authenticate(self, user_id: str, password: str = None) -> SessionInfo:
-        """Authenticate user with username and password and obtain an API token for
-        further requests."""
 
-        user = ExampleBSSAdapter.fake_user_db.get(user_id, None)
-        if user:
-            if user["password"] == password:
-                # everything is in order, create a session
-                session = self.storage.create_session(user_id)
-                self.storage.store_session(session)
-                return session
-
-            raise WebTritErrorException(
-                status_code=401,
-                code=42,
-                error_message="Invalid password",
-            )
-
-        # something is wrong. your code should return a more descriptive
-        # error message to simplify the process of fixing the problem
-        raise WebTritErrorException(
-            status_code=401,
-            code=42,
-            error_message="User authentication error",
-        )
-
-    def generate_otp(self, user_id: str) -> OtpCreateResponseSchema:
-        """Request that the remote hosted PBX system / BSS generates a new
-        one-time-password (OTP) and sends it to the user via the
-        configured communication channel (e.g. SMS)"""
-
-        # the code that the user should provide to prove that
-        # he/she is who he/she claims to be
-        code = random.randrange(100000, 999999)
-        code_for_tests = self.config.get_conf_val("PERMANENT_OTP_CODE")
-        if code_for_tests:
-            # while running automated tests, we have to produce the
-            # same OTP as configured in the test suite. make sure
-            # this env var is NOT set in production!
-            code = int(code_for_tests)
-        # so we can see it and use during debug
-        logging.info(f"OTP code {code}")
-
-        otp_id = str(uuid.uuid1())
-
-        otp = OTP(
-            user_id=user_id,
-            otp_expected_code="{:06d}".format(code),
-            expires_at=datetime.datetime.now() + datetime.timedelta(minutes=10),
-        )
-        # memorize it
-        with ExampleBSSAdapter.otp_db_lock:
-            ExampleBSSAdapter.fake_otp_db[otp_id] = otp
-
-        return OtpCreateResponseSchema(
-            # OTP sender's address so the user can find it easier
-            otp_sent_from="sample@webtrit.com",
-            otp_id=otp_id,
-            otp_sent_type=OtpSentType.email,
-        )
-
-    def validate_otp(self, otp: OtpVerifyRequestSchema) -> SessionInfo:
-        """Verify that the OTP code, provided by the user, is correct."""
-
-        otp_id = otp.otp_id.__root__
-        original = ExampleBSSAdapter.fake_otp_db.get(otp_id, None)
-        if not original:
-            raise WebTritErrorException(
-                status_code=401,
-                code=42,
-                error_message="Invalid OTP ID",
-            )
-
-        if original.expires_at < datetime.datetime.now():
-            raise WebTritErrorException(
-                status_code=419,
-                code=42,
-                error_message="OTP has expired",
-            )
-
-        if original.otp_expected_code != otp.code:
-            raise WebTritErrorException(
-                status_code=401,
-                code=42,
-                error_message="Invalid OTP",
-            )
-
-        # everything is in order, create a session
-        session = self.storage.create_session(original.user_id)
-        self.storage.store_session(session)
-        return session
-
-    def retrieve_user(self, session: SessionInfo, user_id: str) -> EndUser:
-        """Obtain user's information - most importantly, his/her SIP credentials."""
-
-        user = ExampleBSSAdapter.fake_user_db.get(user_id, None)
-        if user:
-            return EndUser(**user)
-
-        # no such session
-        raise WebTritErrorException(
-            status_code=404, code=42, error_message="User not found"
-        )
 
     def retrieve_contacts(self, session: SessionInfo, user_id: str) -> Contacts:
         """List of other extensions in the PBX"""
