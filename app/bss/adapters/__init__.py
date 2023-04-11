@@ -45,7 +45,7 @@ class OTP:
 class BSSAdapter(ABC):
     def __init__(self, config: AppConfig):
         self.config = config
-        self.session_db = SessionStorage(config)
+        self.sessions = SessionStorage(config)
 
     def initialize(self) -> bool:
         """Initialize some session-related data, e.g. open a connection
@@ -93,12 +93,12 @@ class BSSAdapter(ABC):
     def validate_session(self, access_token: str) -> SessionInfo:
         """Validate that the supplied API token is still valid."""
 
-        session = self.session_db.get_session(access_token=access_token)
+        session = self.sessions.get_session(access_token=access_token)
 
         if session:
             if not session.still_active():
                 # remove it from the DB
-                self.session_db.delete_session(
+                self.sessions.delete_session(
                     access_token=access_token, refresh_token=session.refresh_token
                 )
                 # raise an error
@@ -119,7 +119,7 @@ class BSSAdapter(ABC):
     def refresh_session(self, user_id: str, refresh_token: str) -> SessionInfo:
         """Extend the API session be exchanging the refresh token for
         a new API access token."""
-        session = self.session_db.get_session(refresh_token=refresh_token)
+        session = self.sessions.get_session(refresh_token=refresh_token)
         if not session:
             raise WebTritErrorException(
                 status_code=401,
@@ -127,15 +127,15 @@ class BSSAdapter(ABC):
                 error_message="Invalid refresh token",
             )
         # everything is in order, create a new session
-        session = self.session_db.create_session(user_id)
-        self.session_db.store_session(session)
+        session = self.sessions.create_session(user_id)
+        self.sessions.store_session(session)
         return session
 
     def close_session(self, access_token: str) -> bool:
         """Close the API session and logout the user."""
-        session = self.session_db.get_session(access_token)
+        session = self.sessions.get_session(access_token)
         if session:
-            return self.session_db.delete_session(access_token)
+            return self.sessions.delete_session(access_token)
 
         raise WebTritErrorException(
             status_code=401,
@@ -190,7 +190,7 @@ class BSSAdapterExternalDB(BSSAdapter):
         self.config = config
         # these have to be re-assigned in the sub-class constructor
         self.user_db = None
-        self.session_db = None
+        self.sessions = None
         self.otp_db = None
 
     @classmethod
@@ -217,8 +217,8 @@ class BSSAdapterExternalDB(BSSAdapter):
         if user:
             if user["password"] == password:
                 # everything is in order, create a session
-                session = self.session_db.create_session(user_id)
-                self.session_db.store_session(session)
+                session = self.sessions.create_session(user_id)
+                self.sessions.store_session(session)
                 return session
 
             raise WebTritErrorException(
@@ -308,8 +308,8 @@ class BSSAdapterExternalDB(BSSAdapter):
             )
 
         # everything is in order, create a session
-        session = self.session_db.create_session(original.user_id)
-        self.session_db.store_session(session)
+        session = self.sessions.create_session(original.user_id)
+        self.sessions.store_session(session)
         return session
 
 

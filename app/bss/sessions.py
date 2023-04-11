@@ -17,13 +17,10 @@ class SessionStorage:
     """A class that provides access to stored session data (which can
     be stored in some SQL/no-SQL database, external REST services, etc.)"""
 
-    def __init__(self, config: AppConfig):
-        """Initialize the object using the provided configuration"""
-        self.config = config
-        # your sub-class should initialize the storage and 
-        # assign it to self.sessions, otherwise you get the
-        # in-memory storage
-        self.sessions = {}
+    def __init__(self, session_db):
+        """Initialize the object using the provided object
+        for storing the sessions"""
+        self.session_db = session_db
 
     def __refresh_token_index(self, id: str) -> str:
         """Change the value of refresh token so it still will
@@ -37,8 +34,8 @@ class SessionStorage:
 
         if refresh_token:
             refr_id = self.__refresh_token_index(refresh_token)
-            return self.sessions.get(refr_id, None)
-        return self.sessions.get(access_token, None)
+            return self.session_db.get(refr_id, None)
+        return self.session_db.get(access_token, None)
 
     def create_session(self, user_id: str) -> SessionInfo:
         expiration = datetime.now() + timedelta(days=1) 
@@ -53,10 +50,10 @@ class SessionStorage:
         return session
     
     def __store_session(self, session: SessionInfo):
-        self.sessions[session.access_token] = session
+        self.session_db[session.access_token] = session
         # also add the possibility to find the session by its refresh token
         refresh_token = self.__refresh_token_index(session.refresh_token)
-        self.sessions[refresh_token] = session
+        self.session_db[refresh_token] = session
 
     def store_session(self, session: SessionInfo):
         """Store a session in the database"""
@@ -66,8 +63,8 @@ class SessionStorage:
         """Remove a session from the database"""
 
         if refresh_token:
-            del self.sessions[refresh_token]
-        session = self.sessions.pop(access_token, None)
+            del self.session_db[refresh_token]
+        session = self.session_db.pop(access_token, None)
 
         return True if session else False
     
@@ -77,18 +74,18 @@ class SessionStorage:
         return self.__delete_session(access_token, refresh_token)
 
 
-class FileSessionStorage(SessionStorage):
-    """Store sessions in local file. Suitable only
-    for demo / development. Implement a real persistent & scalable
-    session storage for your application, or use a class like
-    FirestoreSessionStorage below."""
-    def __init__(self, config: AppConfig):
-        super().__init__(config)
-        # to make the sessions survive a restart of a container - 
-        # ensure that /var/db/ (or whichever
-        # location you choose) is mounted as a volume to the container
-        file_name = config.get_conf_val('Sessions', 'StorageFile',
-                            default = '/var/db/sessions.db')
-        logging.debug(f"Using file {file_name} for session storage")
-        self.sessions = FileStoredKeyValue(file_name)
+# class FileSessionStorage(SessionStorage):
+#     """Store sessions in local file. Suitable only
+#     for demo / development. Implement a real persistent & scalable
+#     session storage for your application, or use a class like
+#     FirestoreSessionStorage below."""
+#     def __init__(self, config: AppConfig):
+#         super().__init__(config)
+#         # to make the sessions survive a restart of a container - 
+#         # ensure that /var/db/ (or whichever
+#         # location you choose) is mounted as a volume to the container
+#         file_name = config.get_conf_val('Sessions', 'StorageFile',
+#                             default = '/var/db/sessions.db')
+#         logging.debug(f"Using file {file_name} for session storage")
+#         self.sessions = FileStoredKeyValue(file_name)
 
