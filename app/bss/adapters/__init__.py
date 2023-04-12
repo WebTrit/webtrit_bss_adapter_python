@@ -1,7 +1,5 @@
 from dataclasses import dataclass
-import importlib
 import logging
-import sys
 import random
 import uuid
 from abc import ABC, abstractmethod
@@ -30,10 +28,10 @@ from bss.models import ContactInfoSchema as ContactInfo
 from bss.models import HistoryResponseSchema as Calls
 from bss.models import ErrorSchema as ErrorMsg
 from bss.models import SupportedEnum as Capabilities
-
 from bss.sessions import SessionStorage, SessionInfo
 from app_config import AppConfig
 from report_error import WebTritErrorException
+from module_loader import ModuleLoader
 
 @dataclass
 class OTP:
@@ -42,10 +40,13 @@ class OTP:
     user_id: str
     expires_at: datetime
 
+
 class BSSAdapter(ABC):
     def __init__(self, config: AppConfig):
         self.config = config
-        self.sessions = SessionStorage(config)
+        # this should be overridden in the subclass, otherwise
+        # you end up storing sessions only in memory
+        self.sessions = SessionStorage()
 
     def initialize(self) -> bool:
         """Initialize some session-related data, e.g. open a connection
@@ -339,9 +340,11 @@ class BSSAdapterExternalDB(BSSAdapter):
         """Get the media file for a previously recorded call."""
         raise NotImplementedError("Override this method in your sub-class")
 
+
 # initialize BSS Adapter
 def initialize_bss_adapter(root_package: str, config: AppConfig) -> BSSAdapter:
     """Create an instance of BSS adapter - of the type specified in the config"""
+
     bss_module_path = config.get_conf_val("BSS", "Adapter", "Path")
     bss_module_name = config.get_conf_val(
         "BSS", "Adapter", "Module", default="bss.adapters.example"
@@ -349,27 +352,8 @@ def initialize_bss_adapter(root_package: str, config: AppConfig) -> BSSAdapter:
     bss_class_name = config.get_conf_val(
         "BSS", "Adapter", "Class", default="ExampleBSSAdapter"
     )
-    if bss_module_path:
-        # allow to include modules from a directory, other than
-        # python's default location and the directory where main.py resides
-        sys.path.append(bss_module_path)
-
-    try:
-        bss_module = importlib.import_module(bss_module_name, package=root_package)
-    except ImportError as e:
-        logging.error(f"Error importing module '{bss_module_name}': {e}")
-        raise
-
-    logging.info(f"Loaded module: {bss_module_name}")
-    try:
-        bss_class = getattr(bss_module, bss_class_name)
-    except AttributeError as e:
-        logging.error(
-            f"Error finding class '{bss_class_name}' in module '{bss_module_name}': {e}"
-        )
-        raise
-
-    adapter = bss_class(config=config)
+    class_ref = ModuleLoader.load_module_and_class(bss_module_path, bss_module_name, bss_class_name, root_package)
+    adapter = class_ref(config = config)
     adapter.initialize()
     logging.info(f"Initialized BSS adapter: {bss_class_name}")
     return adapter

@@ -19,7 +19,7 @@ from bss.models import (
 from bss.models import SipStatusSchema as SIPStatus
 from bss.models import CDRInfoSchema as CDRInfo
 from bss.models import CallInfoSchema as CallInfo
-from bss.sessions import FileSessionStorage
+from sessions import configure_session_storage
 from report_error import WebTritErrorException
 from app_config import AppConfig
 from bss.http_api import HTTPAPIConnectorWithLogin
@@ -214,7 +214,7 @@ class FreePBXAdapter(BSSAdapter):
         self.api_client = FreePBXAPI(
             api_server=api_server, api_user=api_user, api_password=api_password
         )
-        self.storage = FileSessionStorage(config)
+        self.sessions = configure_session_storage(config)
 
     @classmethod
     def name(cls) -> str:

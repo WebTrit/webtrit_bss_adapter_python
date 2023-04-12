@@ -1,9 +1,8 @@
 from datetime import datetime, timedelta
-from bss.dbs import FileStoredKeyValue
 import logging
 import uuid
-from app_config import AppConfig
 from bss.models import SessionApprovedResponseSchema
+from bss.dbs import FileStoredKeyValue
 
 class SessionInfo(SessionApprovedResponseSchema):
     """Info about a session, initiated by WebTrit core on behalf of user"""
@@ -17,7 +16,7 @@ class SessionStorage:
     """A class that provides access to stored session data (which can
     be stored in some SQL/no-SQL database, external REST services, etc.)"""
 
-    def __init__(self, session_db):
+    def __init__(self, session_db = {}):
         """Initialize the object using the provided object
         for storing the sessions"""
         self.session_db = session_db
@@ -34,7 +33,9 @@ class SessionStorage:
 
         if refresh_token:
             refr_id = self.__refresh_token_index(refresh_token)
-            return self.session_db.get(refr_id, None)
+            ref = self.session_db.get(refr_id, None)
+            if isinstance(ref, dict) and 'access_token' in ref:
+                access_token = ref['access_token']
         return self.session_db.get(access_token, None)
 
     def create_session(self, user_id: str) -> SessionInfo:
@@ -53,7 +54,11 @@ class SessionStorage:
         self.session_db[session.access_token] = session
         # also add the possibility to find the session by its refresh token
         refresh_token = self.__refresh_token_index(session.refresh_token)
-        self.session_db[refresh_token] = session
+        # store a reference to the session, do not copy the object
+        self.session_db[refresh_token] = { 
+            'type': 'reference',
+            'access_token': session.access_token
+            }
 
     def store_session(self, session: SessionInfo):
         """Store a session in the database"""
@@ -73,19 +78,28 @@ class SessionStorage:
 
         return self.__delete_session(access_token, refresh_token)
 
+def configure_session_storage(config):
+    """Create a proper session storage object based on the configuration"""
+
+    # TODO: allow dynamic selection of the storage module
+    # storage_module = config.get_conf_val('Sessions', 'StorageModule', default = 'FileStoredKeyValue')
+    # store sessions in a local file, to make the sessions survive
+    # a restart of a container - ensure that /var/db/ (or whichever
+    # location you choose) is mounted as a volume to the container
+    file_name = config.get_conf_val('Sessions', 'StorageFile',
+                        default = '/var/db/sessions.db')
+    
+    logging.debug(f"Using file {file_name} for session storage")
+    
+    return SessionStorage(session_db = FileStoredKeyValue(file_name))
 
 # class FileSessionStorage(SessionStorage):
 #     """Store sessions in local file. Suitable only
 #     for demo / development. Implement a real persistent & scalable
 #     session storage for your application, or use a class like
 #     FirestoreSessionStorage below."""
-#     def __init__(self, config: AppConfig):
-#         super().__init__(config)
-#         # to make the sessions survive a restart of a container - 
-#         # ensure that /var/db/ (or whichever
-#         # location you choose) is mounted as a volume to the container
-#         file_name = config.get_conf_val('Sessions', 'StorageFile',
-#                             default = '/var/db/sessions.db')
-#         logging.debug(f"Using file {file_name} for session storage")
-#         self.sessions = FileStoredKeyValue(file_name)
+#     def __init__(self, file_name):
+#         super().__init__(FileStoredKeyValue(file_name))
+
+
 

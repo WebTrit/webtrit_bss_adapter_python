@@ -59,15 +59,18 @@ class FirestoreKeyValue(TiedKeyValue):
         if doc.exists:
             return self.__unpack_from_store__(doc.to_dict())
         
-        return None
+        raise KeyError(key)
         
     def get(self, key: str, *args):
         """Get the data from the database"""
         doc = self.__getitem_doc__(key)
         if doc.exists:
             return self.__unpack_from_store__(doc.to_dict())
-        
-        return args[0] if len(args) > 0 else None
+
+        if args:
+            return args[0] 
+        else:
+            raise KeyError(key)
 
     def __contains__(self, key):
         doc = self.__getitem_doc__(key)
@@ -76,8 +79,8 @@ class FirestoreKeyValue(TiedKeyValue):
     def __setitem__(self, key, value):
         """Store the data in the database"""
         doc_ref = self.db.collection(self.collection).document(key)
-
-        x = doc_ref.set(self.__pack2store__(value))
+        # TODO: analyze the result
+        result = doc_ref.set(self.__pack2store__(value))
         return value
     
     def __delitem__(self, key):

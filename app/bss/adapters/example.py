@@ -19,7 +19,7 @@ from bss.dbs import TiedKeyValue, FileStoredKeyValue
 from bss.models import SipStatusSchema as SIPStatus
 from bss.models import CDRInfoSchema as CDRInfo
 from bss.models import CallInfoSchema as CallInfo
-from bss.sessions import SessionStorage
+from bss.sessions import SessionStorage, configure_session_storage
 from report_error import WebTritErrorException
 from app_config import AppConfig
 
@@ -65,14 +65,9 @@ class ExampleBSSAdapter(BSSAdapterExternalDB):
         self.config = config
         # for generation of fake names, etc.
         self.fake = MadeUpThings()
-        # store sessions in a local file, to make the sessions survive
-        # a restart of a container - ensure that /var/db/ (or whichever
-        # location you choose) is mounted as a volume to the container
-        file_name = config.get_conf_val('Sessions', 'StorageFile',
-                            default = '/var/db/sessions.db')
-        logging.debug(f"Using file {file_name} for session storage")
-        self.sessions = SessionStorage(session_db =
-                                       FileStoredKeyValue(file_name = file_name))
+
+        self.sessions = configure_session_storage(config)
+
         # retrieve user data from the in-memory variable
         self.user_db = TiedKeyValue()
         # Change the data below to suite your needs during the development.

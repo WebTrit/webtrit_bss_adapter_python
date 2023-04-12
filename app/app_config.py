@@ -84,3 +84,18 @@ class AppConfig(dict):
     def get_opt(self, section: str, param: str, default=None):
         """Same as get_conf_val but for 2-level configs (section + param name)"""
         return self.get_conf_val(section, param, default=default)
+    
+    def get_config_branch(self, *path):
+        """Return a sub-branch of the config tree, starting from the given path.
+        The path elements are case INSENSITIVE, so "DB", "Cassandra", "foo", "bar"
+        is equivalent to "DB", "CASSANDARA", "Foo", "Bar" and will work even
+        if the actual config file params were defined as "db", "cassandra", "FOO", "BAR"
+        """
+        val = self
+        for x in path:
+            if val is None or not isinstance(val, dict):
+                # no such element
+                val = None
+                break
+            val = self.get_case_insensitive(val, x, None )
+        return AppConfig(val) if val is not None else None
