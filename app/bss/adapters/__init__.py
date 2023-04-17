@@ -32,6 +32,7 @@ from bss.sessions import SessionStorage, SessionInfo
 from app_config import AppConfig
 from report_error import WebTritErrorException
 from module_loader import ModuleLoader
+from typing import List, Dict, Any
 
 @dataclass
 class OTP:
@@ -40,6 +41,11 @@ class OTP:
     user_id: str
     expires_at: datetime
 
+@dataclass
+class AttrMap:
+    new_key: str
+    old_key: str = None # if not provided, the old name is used
+    converter: callable = None # custom conversion function
 
 class BSSAdapter(ABC):
     def __init__(self, config: AppConfig):
@@ -174,80 +180,16 @@ class BSSAdapter(ABC):
         """Get the media file for a previously recorded call."""
         raise NotImplementedError("Override this method in your sub-class")
 
-
-
-
-class BSSAdapterExternalDB(BSSAdapter):
-    """Supply to WebTrit core the limited information about
-    VoIP users (only their SIP credentials) and the list of
-    extensions (other users) in the PBX. This typically is
-    required when the VoIP system or PBX does not have a proper
-    API to retrive the information; so the user data is "replicated"
-    into some other DB (e.g. MySQL, MongoDB, Firestore, etc.) so
-    it can be retrieved by WebTrit."""
-
-    def __init__(self, config: AppConfig, *args, **kwargs):
-        super().__init__(config, *args, **kwargs)
-        self.config = config
-        # these have to be re-assigned in the sub-class constructor
-        self.user_db = None
-        self.sessions = None
-        self.otp_db = None
-
     @classmethod
-    def name(cls) -> str:
-        """The name of the adapter"""
-        raise NotImplementedError("Override this method in your sub-class")
+    def remap_dict(self, mapping: List[AttrMap], data: dict) -> dict:
+        """Remap the keys of the dictionary"""
+        new_dict = { }
+        for x in mapping:
+            value = data.get(x.old_key, None)
+            new_dict[x.new_key] = value if not x.converter else x.converter(value)
+        return new_dict
 
-    @classmethod
-    def version(cls) -> str:
-        """The version"""
-        raise NotImplementedError("Override this method in your sub-class")
-
-    # these are regular class methods
-    @abstractmethod
-    def get_capabilities(self) -> list:
-        """Capabilities of your hosted PBX / BSS / your API adapter"""
-        raise NotImplementedError("Override this method in your sub-class")
-
-    def authenticate(self, user_id: str, password: str = None) -> SessionInfo:
-        """Authenticate user with username and password and obtain an API token for
-        further requests."""
-
-        user = self.user_db.get(user_id, None)
-        if user:
-            if user["password"] == password:
-                # everything is in order, create a session
-                session = self.sessions.create_session(user_id)
-                self.sessions.store_session(session)
-                return session
-
-            raise WebTritErrorException(
-                status_code=401,
-                code=42,
-                error_message="Invalid password",
-            )
-
-        # something is wrong. your code should return a more descriptive
-        # error message to simplify the process of fixing the problem
-        raise WebTritErrorException(
-            status_code=401,
-            code=42,
-            error_message="User authentication error",
-        )
-
-    def retrieve_user(self, session: SessionInfo, user_id: str) -> EndUser:
-        """Obtain user's information - most importantly, his/her SIP credentials."""
-
-        user = self.user_db.get(user_id, None)
-        if user:
-            return EndUser(**user)
-
-        # no such session
-        raise WebTritErrorException(
-            status_code=404, code=42, error_message="User not found"
-        )
-
+class OTPHandler:
     def generate_otp(self, user_id: str) -> OtpCreateResponseSchema:
         """Request that the remote hosted PBX system / BSS generates a new
         one-time-password (OTP) and sends it to the user via the
@@ -314,6 +256,92 @@ class BSSAdapterExternalDB(BSSAdapter):
         return session
 
 
+class BSSAdapterExternalDB(BSSAdapter, OTPHandler):
+    """Supply to WebTrit core the limited information about
+    VoIP users (only their SIP credentials) and the list of
+    extensions (other users) in the PBX. This typically is
+    required when the VoIP system or PBX does not have a proper
+    API to retrive the information; so the user data is "replicated"
+    into some other DB (e.g. MySQL, MongoDB, Firestore, etc.) so
+    it can be retrieved by WebTrit."""
+
+    def __init__(self, config: AppConfig, *args, **kwargs):
+        super().__init__(config, *args, **kwargs)
+        self.config = config
+        # these have to be re-assigned in the sub-class constructor
+        self.user_db = None
+        self.sessions = None
+        self.otp_db = None
+
+    @classmethod
+    def name(cls) -> str:
+        """The name of the adapter"""
+        raise NotImplementedError("Override this method in your sub-class")
+
+    @classmethod
+    def version(cls) -> str:
+        """The version"""
+        raise NotImplementedError("Override this method in your sub-class")
+
+    # these are regular class methods
+    @abstractmethod
+    def get_capabilities(self) -> list:
+        """Capabilities of your hosted PBX / BSS / your API adapter"""
+        raise NotImplementedError("Override this method in your sub-class")
+
+    def verify_password(self, user_data, password: str) -> bool:
+        """Verify that the password is correct"""
+        if hasattr(user_data, "password"):
+            # we receive a proper dataclass object
+            passw_in_db = user_data.password 
+        elif hasattr(user_data, "get"):
+            passw_in_db = user_data.get("password", None)
+        else:
+            return False
+        return passw_in_db == password
+    
+
+    def authenticate(self, user_id: str, password: str = None) -> SessionInfo:
+        """Authenticate user with username and password and obtain an API token for
+        further requests."""
+
+        user_data = self.user_db.get(user_id, None)
+        if user_data:
+            if self.verify_password(user_data, password):
+                # everything is in order, create a session
+                session = self.sessions.create_session(user_id)
+                self.sessions.store_session(session)
+                return session
+
+            raise WebTritErrorException(
+                status_code=401,
+                code=42,
+                error_message="Invalid password",
+            )
+
+        # something is wrong. your code should return a more descriptive
+        # error message to simplify the process of fixing the problem
+        raise WebTritErrorException(
+            status_code=401,
+            code=42,
+            error_message="User authentication error",
+        )
+    
+    def produce_user_object(self, db_data) -> EndUser:
+        """Create a user object from the data in the DB"""
+        return EndUser(**db_data)
+
+    def retrieve_user(self, session: SessionInfo, user_id: str) -> EndUser:
+        """Obtain user's information - most importantly, his/her SIP credentials."""
+
+        user_data = self.user_db.get(user_id, None)
+        if user_data:
+            return self.produce_user_object(user_data)
+
+        # no such session
+        raise WebTritErrorException(
+            status_code=404, code=42, error_message="User not found"
+        )
 
     @abstractmethod
     def retrieve_contacts(self, session: SessionInfo, user_id: str) -> Contacts:

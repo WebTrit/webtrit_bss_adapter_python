@@ -44,6 +44,15 @@ class TiedKeyValue():
     def __iter__(self):
         return iter(self._data)   
     
+    def __len__(self):
+        return len(self._data)
+
+    def keys(self):
+        return self._data.keys()
+    
+    def items(self):
+        return self._data.items()
+    
 class FileStoredKeyValue(TiedKeyValue):
     """Store data in a file, using shelve module."""
     def __init__(self, file_name: str, **kwargs):
@@ -51,3 +60,30 @@ class FileStoredKeyValue(TiedKeyValue):
         self._data = shelve.open(file_name)
 
 
+# class SerializedKeyValue(TiedKeyValue):
+#     """Store data in a storage where serizalization of complex
+#      objects is required."""
+#     def __init__(self, file_name: str, **kwargs):
+#         super().__init__(**kwargs)
+#         self._data = shelve.open(file_name)
+#     def __pack2store__(self, value):
+#         """Pack the data into a format suitable for storage"""
+#         if hasattr(value, '__dict__'):
+#             data = {
+#                 'object_type': type(value).__name__, 
+#                 'object_data': pickle.dumps(value)
+#             }
+#         else:
+#             data = value
+#         return data
+    
+#     def __unpack_from_store__(self, value):
+#         """Unpack the data from the storage format"""
+#         if isinstance(value, dict) and 'object_type' in value:
+#             obj_type = value['object_type']
+#             obj_data = value['object_data']
+#             if obj_type == 'bytes':
+#                 value = obj_data
+#             else:
+#                 value = pickle.loads(obj_data)
+#         return value

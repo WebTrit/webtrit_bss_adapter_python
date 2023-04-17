@@ -1,11 +1,11 @@
 from bss.dbs import TiedKeyValue
 from google.cloud import firestore
 from google.oauth2 import service_account
+from dataclasses import dataclass, is_dataclass, asdict
 #from firebase_admin import credentials, firestore
 import os
-import json
-import pickle
-
+from bss.dbs.serializer import Serializer
+        
 class FirestoreKeyValue(TiedKeyValue):
     """Access user data stored in Firestore"""
 
@@ -27,27 +27,15 @@ class FirestoreKeyValue(TiedKeyValue):
                 credentials_file = env_var
         return service_account.Credentials.from_service_account_file(credentials_file)
 
+     
     def __pack2store__(self, value):
         """Pack the data into a format suitable for storage"""
-        if hasattr(value, '__dict__'):
-            data = {
-                'object_type': type(value).__name__, 
-                'object_data': pickle.dumps(value)
-            }
-        else:
-            data = value
-        return data
+         
+        return Serializer.pack(value)
     
     def __unpack_from_store__(self, value):
         """Unpack the data from the storage format"""
-        if isinstance(value, dict) and 'object_type' in value:
-            obj_type = value['object_type']
-            obj_data = value['object_data']
-            if obj_type == 'bytes':
-                value = obj_data
-            else:
-                value = pickle.loads(obj_data)
-        return value
+        return Serializer.unpack(value)
     
     def __getitem_doc__(self, key):
         doc_ref = self.db.collection(self.collection).document(key)
@@ -99,3 +87,13 @@ class FirestoreKeyValue(TiedKeyValue):
             raise KeyError(key)
         self.__delitem__(key)
         return ret_val
+
+    def __iter__(self):
+        """Iterate over the keys"""
+        docs = self.db.collection(self.collection).stream()
+        for doc in docs:
+            yield doc.id
+
+    def keys(self):
+        """Iterate over the keys"""
+        return iter(self)
