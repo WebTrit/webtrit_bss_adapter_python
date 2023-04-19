@@ -1,5 +1,4 @@
 from bss.adapters import (
-    BSSAdapter,
     BSSAdapterExternalDB,
     SessionInfo,
     EndUser,
@@ -13,20 +12,15 @@ from bss.models import (
     NumbersSchema,
     OtpCreateResponseSchema,
     OtpVerifyRequestSchema,
-    OtpSentType,
     SipInfoSchema,
     ServerSchema,
 )
 
 from bss.models import SipStatusSchema as SIPStatus
-from bss.models import CDRInfoSchema as CDRInfo
-from bss.models import CallInfoSchema as CallInfo
 from bss.sessions import SessionStorage
 from bss.dbs.firestore import FirestoreKeyValue
 from report_error import WebTritErrorException
 from app_config import AppConfig
-import datetime
-from dataclasses import dataclass, field
 import re
 
 import logging
@@ -35,60 +29,42 @@ from typing import List
 VERSION = "0.0.1"
 
 
-@dataclass
-class OurUserInfo:
-    """The information about a user that is stored in the proprietary DB"""
+class BSS3CXAdapter(BSSAdapterExternalDB):
+    """Supply to WebTrit core the  information about
+    extensions in 3CX PBX. Since 3CX offers no native API to retrive
+    this, we rely on extracting data from Google Firestore/Datastore DB,
+    where they are imported from 3CX CSV files."""
 
-    username: str = ""
-    password: str = ""
-    first_name: str = ""
-    last_name: str = ""
-    email: str = ""
-    company_name: str = ""
-    sip_username: str = ""
-    sip_password: str = ""
-    ext_number: str = ""
-    outgoing_cli: str = ""
-    dids: List[str] = field(default_factory=list)
-
-
-class ExternalDBAdapter(BSSAdapterExternalDB):
-    """Supply to WebTrit core the limited information about
-    VoIP users (only their SIP credentials) and the list of
-    extensions (other users) in the PBX. This typically is
-    required when the VoIP system or PBX does not have a proper
-    API to retrive the information; so the user data is "replicated"
-    into some other DB (e.g. MySQL, MongoDB, Firestore, etc.) so
-    it can be retrieved by WebTrit."""
-
-    # mapping of attributes from the proprietary DB to the WebTrit EndUser object
+    # mapping of attributes from the 3CX CSV export, as described
+    # https://www.3cx.com/docs/bulk-extension-import/
+    # to WebTrit EndUser object
     ATTR_MAP = [
-        AttrMap(new_key="login", old_key="username"),
-        AttrMap(new_key="password", old_key="password"),
-        AttrMap(new_key="firstname", old_key="first_name"),
-        AttrMap(new_key="last_name", old_key="last_name"),
-        AttrMap(new_key="email"),
-        AttrMap(new_key="company_name"),
+        AttrMap(new_key="login", old_key="Number"),
+        AttrMap(new_key="password", old_key="SrvcAccessPwd"),
+        AttrMap(new_key="firstname", old_key="FirstName"),
+        AttrMap(new_key="lastname", old_key="LastName"),
+        AttrMap(new_key="email", old_key="EmailAddress"),
+        AttrMap(new_key="company_name", converter=lambda x: "Test 3CX"),
         AttrMap(new_key="time_zone", converter=lambda x: "UTC"),
     ]
     NUMBERS_ATTR_MAP = [
-        AttrMap(new_key="ext", old_key="ext_number"),
+        AttrMap(new_key="ext", old_key="Number"),
         AttrMap(
             new_key="main",
-            old_key="outgoing_cli",
-            converter=lambda x: ExternalDBAdapter.extract_number(x, "Unknown"),
+            old_key="OutboundCallerID",
+            converter=lambda x: BSS3CXAdapter.extract_number(x, "Unknown"),
         ),
         AttrMap(
             new_key="additional",
-            old_key="dids",
+            old_key="DID",
             converter=lambda x: [
-                ExternalDBAdapter.extract_number(y, "Unknown") for y in x
+                BSS3CXAdapter.extract_number(y, "Unknown") for y in x.split(":")
             ],
         ),
     ]
     SIP_ATTR_MAP = [
-        AttrMap(new_key="login", old_key="sip_username"),
-        AttrMap(new_key="password", old_key="sip_password"),
+        AttrMap(new_key="login", old_key="AuthID"),
+        AttrMap(new_key="password", old_key="AuthPassword"),
     ]
 
     def __init__(self, config: AppConfig, *args, **kwargs):
@@ -99,32 +75,34 @@ class ExternalDBAdapter(BSSAdapterExternalDB):
             "ExternalDB", "SIP_Server", default="127.0.0.1"
         )
         # add mappings to SIP_ATTR_MAP so it includes the SIP server address
-        ExternalDBAdapter.SIP_ATTR_MAP.append(
-            AttrMap(new_key="sip_server", converter=lambda x:
-                    { 'host': self.sip_server, 'port': 5060 })
+        BSS3CXAdapter.SIP_ATTR_MAP.append(
+            AttrMap(
+                new_key="sip_server",
+                converter=lambda x: {"host": self.sip_server, "port": 5060},
+            )
         )
-        ExternalDBAdapter.SIP_ATTR_MAP.append(
-            AttrMap(new_key="registration_server", converter=lambda x:
-                    { 'host': self.sip_server, 'port': 5060 })
+        BSS3CXAdapter.SIP_ATTR_MAP.append(
+            AttrMap(
+                new_key="registration_server",
+                converter=lambda x: {"host": self.sip_server, "port": 5060},
+            )
         )
 
         cred_file = config.get_conf_val("Firestore", "Credentials", default=None)
         self.user_db = FirestoreKeyValue(
-            credentials_file=cred_file, collection_name="Users"
+            credentials_file=cred_file, collection_name="3CX"
         )
+
         self.sessions = SessionStorage(
             session_db=FirestoreKeyValue(
                 credentials_file=cred_file, collection_name="Sessions"
             )
         )
-        self.otp_db = FirestoreKeyValue(
-            credentials_file=cred_file, collection_name="OTP"
-        )
 
     @classmethod
     def name(cls) -> str:
         """The name of the adapter"""
-        return "ExternalDBWire"
+        return "3CX"
 
     @classmethod
     def version(cls) -> str:
@@ -150,6 +128,8 @@ class ExternalDBAdapter(BSSAdapterExternalDB):
 
     @classmethod
     def extract_number(cls, x, default=None):
+        if x is None:
+            return default
         if m := re.search(r"\d+", x):
             return m.group(0)
         return default
@@ -158,21 +138,27 @@ class ExternalDBAdapter(BSSAdapterExternalDB):
         """Return the SIP server information."""
         return ServerSchema(host=self.sip_server, port=5060)
 
+    def verify_password(self, user_data, password: str) -> bool:
+        """Verify that the password is correct"""
+        passw_in_db = user_data.get("SrvcAccessPwd", None)
+
+        return passw_in_db == password
+
     def produce_user_object(self, db_data) -> EndUser:
         """Create an EndUser object (as defined by WebTrit) from the
         data stored in the proprietary DB, provided as OurUserInfo"""
 
         # step 1: map the attributes from the proprietary DB to
         # the WebTrit EndUser object where we have a direct mapping
-        user_data = self.remap_dict(ExternalDBAdapter.ATTR_MAP, db_data)
+        user_data = self.remap_dict(BSS3CXAdapter.ATTR_MAP, db_data)
         # step 2: more complex cases, e.g. the SIP credentials which need to go
         # as SipInfoSchema object into the "sip" attribute of the EndUser object
-        sip_data = self.remap_dict(ExternalDBAdapter.SIP_ATTR_MAP, db_data)
+        sip_data = self.remap_dict(BSS3CXAdapter.SIP_ATTR_MAP, db_data)
         user_data["sip"] = SipInfoSchema(**sip_data)
         # numbers that the user owns
-        number_data = self.remap_dict(ExternalDBAdapter.NUMBERS_ATTR_MAP, db_data)
+        number_data = self.remap_dict(BSS3CXAdapter.NUMBERS_ATTR_MAP, db_data)
         user_data["numbers"] = NumbersSchema(**number_data)
-
+        logging.debug(f"Re-mapped {db_data}\n to {user_data}")
         return EndUser(**user_data)
 
     def produce_contact_object(self, db_data) -> ContactInfo:
@@ -181,19 +167,23 @@ class ExternalDBAdapter(BSSAdapterExternalDB):
 
         # step 1: map the attributes from the proprietary DB to
         # the WebTrit EndUser object where we have a direct mapping
-        user_data = self.remap_dict(ExternalDBAdapter.ATTR_MAP, db_data)
+        user_data = self.remap_dict(BSS3CXAdapter.ATTR_MAP, db_data)
         # step 2: more complex cases, e.g. the SIP credentials which need to go
         # as SipInfoSchema object into the "sip" attribute of the EndUser object
-        user_data["sip"] = SIPStatus(** {
-            "status": "registered",
-            "display_name": db_data.get('last_name', '?') + ', ' + db_data.get('first_name', '?'),
-            })
+        user_data["sip"] = SIPStatus(
+            **{
+                "status": "registered",
+                "display_name": db_data.get("last_name", "?")
+                + ", "
+                + db_data.get("first_name", "?"),
+            }
+        )
         # numbers that the user owns
-        number_data = self.remap_dict(ExternalDBAdapter.NUMBERS_ATTR_MAP, db_data)
+        number_data = self.remap_dict(BSS3CXAdapter.NUMBERS_ATTR_MAP, db_data)
         user_data["numbers"] = NumbersSchema(**number_data)
-
+        logging.debug(f"Re-mapped {db_data}\n to {user_data}")
         return ContactInfo(**user_data)
-    
+
     # retrieve_user is provided by the superclass
 
     def generate_otp(self, user_id: str) -> OtpCreateResponseSchema:
@@ -216,7 +206,6 @@ class ExternalDBAdapter(BSSAdapterExternalDB):
         ]
 
         return Contacts(__root__=contacts)
-
 
     def retrieve_calls(
         self,

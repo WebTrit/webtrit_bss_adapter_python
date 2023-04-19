@@ -34,18 +34,22 @@ from report_error import WebTritErrorException
 from module_loader import ModuleLoader
 from typing import List, Dict, Any
 
+
 @dataclass
 class OTP:
     """One-time password for user authentication"""
+
     otp_expected_code: str
     user_id: str
     expires_at: datetime
 
+
 @dataclass
 class AttrMap:
     new_key: str
-    old_key: str = None # if not provided, the old name is used
-    converter: callable = None # custom conversion function
+    old_key: str = None  # if not provided, the old name is used
+    converter: callable = None  # custom conversion function
+
 
 class BSSAdapter(ABC):
     def __init__(self, config: AppConfig):
@@ -183,11 +187,12 @@ class BSSAdapter(ABC):
     @classmethod
     def remap_dict(self, mapping: List[AttrMap], data: dict) -> dict:
         """Remap the keys of the dictionary"""
-        new_dict = { }
+        new_dict = {}
         for x in mapping:
             value = data.get(x.old_key, None)
             new_dict[x.new_key] = value if not x.converter else x.converter(value)
         return new_dict
+
 
 class OTPHandler:
     def generate_otp(self, user_id: str) -> OtpCreateResponseSchema:
@@ -293,13 +298,12 @@ class BSSAdapterExternalDB(BSSAdapter, OTPHandler):
         """Verify that the password is correct"""
         if hasattr(user_data, "password"):
             # we receive a proper dataclass object
-            passw_in_db = user_data.password 
+            passw_in_db = user_data.password
         elif hasattr(user_data, "get"):
             passw_in_db = user_data.get("password", None)
         else:
             return False
         return passw_in_db == password
-    
 
     def authenticate(self, user_id: str, password: str = None) -> SessionInfo:
         """Authenticate user with username and password and obtain an API token for
@@ -326,7 +330,7 @@ class BSSAdapterExternalDB(BSSAdapter, OTPHandler):
             code=42,
             error_message="User authentication error",
         )
-    
+
     def produce_user_object(self, db_data) -> EndUser:
         """Create a user object from the data in the DB"""
         return EndUser(**db_data)
@@ -380,9 +384,10 @@ def initialize_bss_adapter(root_package: str, config: AppConfig) -> BSSAdapter:
     bss_class_name = config.get_conf_val(
         "BSS", "Adapter", "Class", default="ExampleBSSAdapter"
     )
-    class_ref = ModuleLoader.load_module_and_class(bss_module_path, bss_module_name, bss_class_name, root_package)
-    adapter = class_ref(config = config)
+    class_ref = ModuleLoader.load_module_and_class(
+        bss_module_path, bss_module_name, bss_class_name, root_package
+    )
+    adapter = class_ref(config=config)
     adapter.initialize()
     logging.info(f"Initialized BSS adapter: {bss_class_name}")
     return adapter
-
