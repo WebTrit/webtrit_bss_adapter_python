@@ -18,9 +18,11 @@ class TiedKeyValue:
         self.lock = threading.Lock()
 
     def __getitem__(self, key):
+        """Internal method, called when accessing the data as my_dict[key]"""
         return self._data[key]
 
     def get(self, key, *args):
+        """Override the standard dict.get() method"""
         if args:
             # called as x.get(key, default)
             return self._data.get(key, args[0])
@@ -33,20 +35,30 @@ class TiedKeyValue:
         return self._data.pop(key)
 
     def __setitem__(self, key, value):
+        """Internal method, called when setting a value to a dict key,
+        for instance my_dict[key] = value"""
         with self.lock:
             self._data[key] = value
 
     def __delitem__(self, key):
+        """Internal method, called when the code does
+        del my_dict[key]"""
         with self.lock:
             del self._data[key]
 
     def __contains__(self, key):
+        """Internal method, called when the code does a check like
+        key in my_dict"""
         return key in self._data
 
     def __iter__(self):
+        """Internal method, called when the code has a construct like
+        for key in obj"""
         return iter(self._data)
 
     def __len__(self):
+        """Internal method, called when the code has a construct like
+        if len(my_obj) > 0: """
         return len(self._data)
 
     def keys(self):

@@ -3,7 +3,6 @@ import pickle
 import json
 import inspect
 import sys
-from typing import Type
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, is_dataclass, asdict
 

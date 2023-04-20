@@ -50,56 +50,12 @@ class AttrMap:
     old_key: str = None  # if not provided, the old name is used
     converter: callable = None  # custom conversion function
 
-
-class BSSAdapter(ABC):
-    def __init__(self, config: AppConfig):
-        self.config = config
+class SessionManagement(ABC):
+    """Basic session management on our side."""
+    def __init__(self) -> None:
         # this should be overridden in the subclass, otherwise
         # you end up storing sessions only in memory
         self.sessions = SessionStorage()
-
-    def initialize(self) -> bool:
-        """Initialize some session-related data, e.g. open a connection
-        to the database. This can be done after the creation of a new
-        object."""
-        pass
-
-    # virtual methods - override them in your subclass
-    # these two are class methods, so they can be called without
-    # creating an object instance
-    @classmethod
-    def name(cls) -> str:
-        """The name of the adapter"""
-        raise NotImplementedError("Override this method in your sub-class")
-
-    @classmethod
-    def version(cls) -> str:
-        """The version"""
-        raise NotImplementedError("Override this method in your sub-class")
-
-    # these are regular class methods
-    @abstractmethod
-    def get_capabilities(self) -> list:
-        """Capabilities of your hosted PBX / BSS / your API adapter"""
-        raise NotImplementedError("Override this method in your sub-class")
-
-    @abstractmethod
-    def authenticate(self, user_id: str, password: str = None) -> SessionInfo:
-        """Authenticate user with username and password and obtain an API token for
-        further requests."""
-        raise NotImplementedError("Override this method in your sub-class")
-
-    @abstractmethod
-    def generate_otp(self, user_id: str) -> OtpCreateResponseSchema:
-        """Request that a remote hosted PBX system / BSS generates a new
-        one-time-password (OTP) and sends it to the user via the
-        configured communication channel (e.g. SMS)"""
-        raise NotImplementedError("Override this method in your sub-class")
-
-    @abstractmethod
-    def validate_otp(self, otp: OtpVerifyRequestSchema) -> SessionInfo:
-        """Verify that the OTP code, provided by the user, is correct."""
-        raise NotImplementedError("Override this method in your sub-class")
 
     def validate_session(self, access_token: str) -> SessionInfo:
         """Validate that the supplied API token is still valid."""
@@ -153,6 +109,54 @@ class BSSAdapter(ABC):
             code=42,
             error_message="Error closing the session",
         )
+
+
+class BSSAdapter(SessionManagement):
+    def __init__(self, config: AppConfig):
+        self.config = config
+
+    def initialize(self) -> bool:
+        """Initialize some session-related data, e.g. open a connection
+        to the database. This can be done after the creation of a new
+        object."""
+        pass
+
+    # virtual methods - override them in your subclass
+    # these two are class methods, so they can be called without
+    # creating an object instance
+    @classmethod
+    def name(cls) -> str:
+        """The name of the adapter"""
+        raise NotImplementedError("Override this method in your sub-class")
+
+    @classmethod
+    def version(cls) -> str:
+        """The version"""
+        raise NotImplementedError("Override this method in your sub-class")
+
+    # these are regular class methods
+    @abstractmethod
+    def get_capabilities(self) -> list:
+        """Capabilities of your hosted PBX / BSS / your API adapter"""
+        raise NotImplementedError("Override this method in your sub-class")
+
+    @abstractmethod
+    def authenticate(self, user_id: str, password: str = None) -> SessionInfo:
+        """Authenticate user with username and password and obtain an API token for
+        further requests."""
+        raise NotImplementedError("Override this method in your sub-class")
+
+    @abstractmethod
+    def generate_otp(self, user_id: str) -> OtpCreateResponseSchema:
+        """Request that a remote hosted PBX system / BSS generates a new
+        one-time-password (OTP) and sends it to the user via the
+        configured communication channel (e.g. SMS)"""
+        raise NotImplementedError("Override this method in your sub-class")
+
+    @abstractmethod
+    def validate_otp(self, otp: OtpVerifyRequestSchema) -> SessionInfo:
+        """Verify that the OTP code, provided by the user, is correct."""
+        raise NotImplementedError("Override this method in your sub-class")
 
     @abstractmethod
     def retrieve_user(self, session: SessionInfo, user_id: str) -> EndUser:
@@ -306,8 +310,8 @@ class BSSAdapterExternalDB(BSSAdapter, OTPHandler):
         return passw_in_db == password
 
     def authenticate(self, user_id: str, password: str = None) -> SessionInfo:
-        """Authenticate user with username and password and obtain an API token for
-        further requests."""
+        """Authenticate user with username and password and
+        produce an API token for further requests."""
 
         user_data = self.user_db.get(user_id, None)
         if user_data:
