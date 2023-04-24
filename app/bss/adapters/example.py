@@ -2,13 +2,7 @@ from bss.adapters import (
     BSSAdapter,
     BSSAdapterExternalDB,
     SessionInfo,
-    EndUser,
-    Contacts,
-    Calls,
-    ContactInfo,
-    Capabilities,
-    OTP
-)
+    SampleOTPHandler)
 from bss.models import (
     NumbersSchema,
     OtpCreateResponseSchema,
@@ -16,11 +10,11 @@ from bss.models import (
     OtpSentType,
 )
 from bss.dbs import TiedKeyValue, FileStoredKeyValue
-from bss.models import SipStatusSchema as SIPStatus
-from bss.models import CDRInfoSchema as CDRInfo
-from bss.models import CallInfoSchema as CallInfo
-from bss.sessions import SessionStorage, configure_session_storage
-from report_error import WebTritErrorException
+
+from bss.types import (Capabilities, UserInfo, EndUser, Contacts, ContactInfo,
+                       Calls, CallInfo, CDRInfo, SIPStatus, OTP )
+
+from bss.sessions import configure_session_storage
 from app_config import AppConfig
 
 import uuid
@@ -73,6 +67,7 @@ class ExampleBSSAdapter(BSSAdapterExternalDB):
         # Change the data below to suite your needs during the development.
         # DO NOT USE THIS IN PRODUCTION!
         self.user_db["john"] = {
+            "user_id": "john",
             "password": "qwerty",
             "firstname": "John",
             "lastname": "Doe",
@@ -121,7 +116,7 @@ class ExampleBSSAdapter(BSSAdapterExternalDB):
 
 
 
-    def retrieve_contacts(self, session: SessionInfo, user_id: str) -> Contacts:
+    def retrieve_contacts(self, session: SessionInfo, user: UserInfo) -> Contacts:
         """List of other extensions in the PBX"""
 
         min_contacts = 4
@@ -151,7 +146,7 @@ class ExampleBSSAdapter(BSSAdapterExternalDB):
 
         return contacts
 
-    def retrieve_calls(self, session: SessionInfo, user_id: str, **kwargs) -> Calls:
+    def retrieve_calls(self, session: SessionInfo, user: UserInfo, **kwargs) -> Calls:
         """Obtain CDRs (call history) of the user"""
         min_calls = 5
         max_calls = 20

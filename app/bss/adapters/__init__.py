@@ -19,36 +19,39 @@ from bss.models import (
     # SupportedEnum,
 )
 
-# for now these are just "clones" but we may extend them in the future
-# plus we do not want to depend on the names of the objects in the schema too much
-# so use these in your code instead of the schema objects
-from bss.models import UserInfoResponseSchema as EndUser
-from bss.models import ContactsResponseSchema as Contacts
-from bss.models import ContactInfoSchema as ContactInfo
-from bss.models import HistoryResponseSchema as Calls
-from bss.models import ErrorSchema as ErrorMsg
-from bss.models import SupportedEnum as Capabilities
+
+from bss.types import (UserInfo, EndUser, Contacts, Calls, OTP)
 from bss.sessions import SessionStorage, SessionInfo
 from app_config import AppConfig
 from report_error import WebTritErrorException
 from module_loader import ModuleLoader
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Optional, List
 
 
-@dataclass
-class OTP:
-    """One-time password for user authentication"""
 
-    otp_expected_code: str
-    user_id: str
-    expires_at: datetime
 
 
 @dataclass
 class AttrMap:
+    """Define how to map the attributes of one data structure
+    (e.g. how user data is stored in external system) to the
+    naming used in WebTrit.
+    
+    For example, if the external system uses "login" attribute
+    to store the customer's username, and WebTrit uses "user_id",
+    then the mapping would be:
+    AttrMap(new_key = "user_id", old_key = "login")
+
+    If we need to do some conversion, e.g. strip off the "+" in
+    front of a phone number, we can supply the function that will do
+    the desired converion via converter parameter:
+    AttrMap(new_key = "main", old_key = "phone_num",
+        converter = lambda x: x[1:] if x.startswith("+") else x
+    """
     new_key: str
     old_key: str = None  # if not provided, the old name is used
     converter: callable = None  # custom conversion function
+
 
 class SessionManagement(ABC):
     """Basic session management on our side."""
@@ -83,7 +86,7 @@ class SessionManagement(ABC):
             error_message="Invalid access token",
         )
 
-    def refresh_session(self, user_id: str, refresh_token: str) -> SessionInfo:
+    def refresh_session(self, user: UserInfo, refresh_token: str) -> SessionInfo:
         """Extend the API session be exchanging the refresh token for
         a new API access token."""
         session = self.sessions.get_session(refresh_token=refresh_token)
@@ -94,7 +97,7 @@ class SessionManagement(ABC):
                 error_message="Invalid refresh token",
             )
         # everything is in order, create a new session
-        session = self.sessions.create_session(user_id)
+        session = self.sessions.create_session(user)
         self.sessions.store_session(session)
         return session
 
@@ -110,8 +113,19 @@ class SessionManagement(ABC):
             error_message="Error closing the session",
         )
 
+class OTPHandler(ABC):
+    @abstractmethod
+    def generate_otp(self, user: UserInfo) -> OtpCreateResponseSchema:
+        """Request that the remote hosted PBX system / BSS generates a new
+        one-time-password (OTP) and sends it to the user via the
+        configured communication channel (e.g. SMS)"""
+        pass
+    @abstractmethod
+    def validate_otp(self, otp: OtpVerifyRequestSchema) -> SessionInfo:
+        """Verify that the OTP code, provided by the user, is correct."""
+        pass
 
-class BSSAdapter(SessionManagement):
+class BSSAdapter(SessionManagement, OTPHandler):
     def __init__(self, config: AppConfig):
         self.config = config
 
@@ -141,30 +155,30 @@ class BSSAdapter(SessionManagement):
         raise NotImplementedError("Override this method in your sub-class")
 
     @abstractmethod
-    def authenticate(self, user_id: str, password: str = None) -> SessionInfo:
+    def authenticate(self, user: UserInfo, password: str = None) -> SessionInfo:
         """Authenticate user with username and password and obtain an API token for
         further requests."""
         raise NotImplementedError("Override this method in your sub-class")
 
-    @abstractmethod
-    def generate_otp(self, user_id: str) -> OtpCreateResponseSchema:
-        """Request that a remote hosted PBX system / BSS generates a new
-        one-time-password (OTP) and sends it to the user via the
-        configured communication channel (e.g. SMS)"""
-        raise NotImplementedError("Override this method in your sub-class")
+    # @abstractmethod
+    # def generate_otp(self, user: UserInfo) -> OtpCreateResponseSchema:
+    #     """Request that a remote hosted PBX system / BSS generates a new
+    #     one-time-password (OTP) and sends it to the user via the
+    #     configured communication channel (e.g. SMS)"""
+    #     raise NotImplementedError("Override this method in your sub-class")
+
+    # @abstractmethod
+    # def validate_otp(self, otp: OtpVerifyRequestSchema) -> SessionInfo:
+    #     """Verify that the OTP code, provided by the user, is correct."""
+    #     raise NotImplementedError("Override this method in your sub-class")
 
     @abstractmethod
-    def validate_otp(self, otp: OtpVerifyRequestSchema) -> SessionInfo:
-        """Verify that the OTP code, provided by the user, is correct."""
-        raise NotImplementedError("Override this method in your sub-class")
-
-    @abstractmethod
-    def retrieve_user(self, session: SessionInfo, user_id: str) -> EndUser:
+    def retrieve_user(self, session: SessionInfo, user: UserInfo) -> EndUser:
         """Obtain user's information - most importantly, his/her SIP credentials."""
         raise NotImplementedError("Override this method in your sub-class")
 
     @abstractmethod
-    def retrieve_contacts(self, session: SessionInfo, user_id: str) -> Contacts:
+    def retrieve_contacts(self, session: SessionInfo, user: UserInfo) -> Contacts:
         """List of other extensions in the PBX"""
         raise NotImplementedError("Override this method in your sub-class")
 
@@ -172,7 +186,7 @@ class BSSAdapter(SessionManagement):
     def retrieve_calls(
         self,
         session: SessionInfo,
-        user_id: str,
+        user: UserInfo,
         page: None,
         items_per_page: None,
         date_from: None,
@@ -198,8 +212,14 @@ class BSSAdapter(SessionManagement):
         return new_dict
 
 
-class OTPHandler:
-    def generate_otp(self, user_id: str) -> OtpCreateResponseSchema:
+
+class SampleOTPHandler(OTPHandler):
+    """This is a demo class for handling OTPss, it does not send any
+    data to the end-user (only prints it in the log), so it is useful
+    for debugging your own application while you are working on establishing
+    a way to send real OTPs via SMS or other channel."""
+
+    def generate_otp(self, user: UserInfo) -> OtpCreateResponseSchema:
         """Request that the remote hosted PBX system / BSS generates a new
         one-time-password (OTP) and sends it to the user via the
         configured communication channel (e.g. SMS)"""
@@ -219,7 +239,7 @@ class OTPHandler:
         otp_id = str(uuid.uuid1())
 
         otp = OTP(
-            user_id=user_id,
+            user_id=user.user_id,
             otp_expected_code="{:06d}".format(code),
             expires_at=datetime.now() + timedelta(minutes=10),
         )
@@ -260,12 +280,11 @@ class OTPHandler:
             )
 
         # everything is in order, create a session
-        session = self.sessions.create_session(original.user_id)
+        session = self.sessions.create_session(UserInfo(user_id = original.user_id))
         self.sessions.store_session(session)
         return session
 
-
-class BSSAdapterExternalDB(BSSAdapter, OTPHandler):
+class BSSAdapterExternalDB(BSSAdapter, SampleOTPHandler):
     """Supply to WebTrit core the limited information about
     VoIP users (only their SIP credentials) and the list of
     extensions (other users) in the PBX. This typically is
@@ -298,26 +317,17 @@ class BSSAdapterExternalDB(BSSAdapter, OTPHandler):
         """Capabilities of your hosted PBX / BSS / your API adapter"""
         raise NotImplementedError("Override this method in your sub-class")
 
-    def verify_password(self, user_data, password: str) -> bool:
-        """Verify that the password is correct"""
-        if hasattr(user_data, "password"):
-            # we receive a proper dataclass object
-            passw_in_db = user_data.password
-        elif hasattr(user_data, "get"):
-            passw_in_db = user_data.get("password", None)
-        else:
-            return False
-        return passw_in_db == password
-
-    def authenticate(self, user_id: str, password: str = None) -> SessionInfo:
+    def authenticate(self, user: UserInfo, password: str = None) -> SessionInfo:
         """Authenticate user with username and password and
         produce an API token for further requests."""
 
-        user_data = self.user_db.get(user_id, None)
+        # important: need to use user.login here, not user.user_id
+        user_data = self.user_db.get(user.login, None)
         if user_data:
             if self.verify_password(user_data, password):
                 # everything is in order, create a session
-                session = self.sessions.create_session(user_id)
+                user.user_id = self.extract_user_id(user_data)
+                session = self.sessions.create_session(user)
                 self.sessions.store_session(session)
                 return session
 
@@ -335,14 +345,38 @@ class BSSAdapterExternalDB(BSSAdapter, OTPHandler):
             error_message="User authentication error",
         )
 
+    def extract_user_id(self, user_data) -> str:
+        """Extract user_id (unique and unmutable identifier of the user)
+        from the data in the DB. Please override it in your sub-class"""
+        if hasattr(user_data, "user_id"):
+            # we receive a proper dataclass object
+            return user_data.user_id
+        elif hasattr(user_data, "get"):
+            return user_data.get("user_id", None)
+        else:
+            return None
+        
+    def verify_password(self, user_data, password: str) -> bool:
+        """Verify that the supplied password is correct - please override it
+        in your sub-class to perform a proper vertification using the structure
+        of your data in the DB"""
+        if hasattr(user_data, "password"):
+            # we receive a proper dataclass object
+            passw_in_db = user_data.password
+        elif hasattr(user_data, "get"):
+            passw_in_db = user_data.get("password", None)
+        else:
+            return False
+        return passw_in_db == password
+    
     def produce_user_object(self, db_data) -> EndUser:
         """Create a user object from the data in the DB"""
         return EndUser(**db_data)
 
-    def retrieve_user(self, session: SessionInfo, user_id: str) -> EndUser:
+    def retrieve_user(self, session: SessionInfo, user: UserInfo) -> EndUser:
         """Obtain user's information - most importantly, his/her SIP credentials."""
 
-        user_data = self.user_db.get(user_id, None)
+        user_data = self.user_db.get(user.user_id, None)
         if user_data:
             return self.produce_user_object(user_data)
 
@@ -352,7 +386,7 @@ class BSSAdapterExternalDB(BSSAdapter, OTPHandler):
         )
 
     @abstractmethod
-    def retrieve_contacts(self, session: SessionInfo, user_id: str) -> Contacts:
+    def retrieve_contacts(self, session: SessionInfo, user: UserInfo) -> Contacts:
         """List of other extensions in the PBX"""
         raise NotImplementedError("Override this method in your sub-class")
 
@@ -360,7 +394,7 @@ class BSSAdapterExternalDB(BSSAdapter, OTPHandler):
     def retrieve_calls(
         self,
         session: SessionInfo,
-        user_id: str,
+        user: UserInfo,
         page: None,
         items_per_page: None,
         date_from: None,

@@ -35,8 +35,12 @@ class FirestoreKeyValue(TiedKeyValue):
         """Unpack the data from the storage format"""
         return Serializer.unpack(value)
 
+    def get_docref(self, key):
+        """Provide a references to the document which corresponds to the key"""
+        return self.db.collection(self.collection).document(key)
+    
     def __getitem_doc__(self, key):
-        doc_ref = self.db.collection(self.collection).document(key)
+        doc_ref = self.get_docref(key)
         doc = doc_ref.get()
         return doc
 
@@ -64,13 +68,13 @@ class FirestoreKeyValue(TiedKeyValue):
 
     def __setitem__(self, key, value):
         """Store the data in the database"""
-        doc_ref = self.db.collection(self.collection).document(key)
+        doc_ref = self.__docref__(key)
         # TODO: analyze the result
         result = doc_ref.set(self.__pack2store__(value))
         return value
 
     def __delitem__(self, key):
-        doc_ref = self.db.collection(self.collection).document(key)
+        doc_ref = self.get_docref(key)
         if doc_ref:
             doc_ref.delete()
 

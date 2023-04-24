@@ -1,6 +1,7 @@
 import threading
 import shelve
 import logging
+from bss.types import AppConfig
 
 class TiedKeyValue():
     """Dict-like access to external database, similar to
@@ -48,6 +49,7 @@ class FileStoredKeyValue(TiedKeyValue):
     """Store data in a file, using shelve module."""
     def __init__(self, file_name: str, **kwargs):
         super().__init__(**kwargs)
+        #logging.debug(f"Using file {file_name} for storage")
         self._data = shelve.open(file_name)
 
 

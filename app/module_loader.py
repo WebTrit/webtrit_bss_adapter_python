@@ -8,7 +8,7 @@ class ModuleLoader:
                                 module_path: str,
                                 module_name: str,
                                 class_name: str,
-                                root_package,
+                                root_package = None,
                                 **kwargs):
         """Load a module from a given path and return a reference to a class,
         which can be used then to instantiate an object."""
@@ -19,6 +19,7 @@ class ModuleLoader:
 
         if module_name in sys.modules:
             logging.debug(f"Module {module_name} is already loaded")
+            module = sys.modules[module_name]
         else:
             try:
                 module = importlib.import_module(module_name, package=root_package)

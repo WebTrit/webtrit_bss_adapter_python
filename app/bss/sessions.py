@@ -1,25 +1,20 @@
 from datetime import datetime, timedelta
 import logging
 import uuid
-from bss.models import SessionApprovedResponseSchema
-from bss.dbs import FileStoredKeyValue
-
-class SessionInfo(SessionApprovedResponseSchema):
-    """Info about a session, initiated by WebTrit core on behalf of user"""
-
-    def still_active(self, timestamp=datetime.now()) -> bool:
-        """Check whether the session has not yet expired"""
-
-        return self.expires_at > timestamp
+from module_loader import ModuleLoader
+import bss.dbs
+from bss.dbs import (FileStoredKeyValue, TiedKeyValue)
+from bss.types import (SessionInfo, UserInfo)
     
 class SessionStorage:
     """A class that provides access to stored session data (which can
     be stored in some SQL/no-SQL database, external REST services, etc.)"""
+    SESSION_EXPIRATION = 1
 
-    def __init__(self, session_db = {}):
+    def __init__(self, session_db = None):
         """Initialize the object using the provided object
         for storing the sessions"""
-        self.session_db = session_db
+        self.session_db = session_db if session_db else TiedKeyValue()
 
     def __refresh_token_index(self, id: str) -> str:
         """Change the value of refresh token so it still will
@@ -38,11 +33,12 @@ class SessionStorage:
                 access_token = ref['access_token']
         return self.session_db.get(access_token, None)
 
-    def create_session(self, user_id: str) -> SessionInfo:
-        expiration = datetime.now() + timedelta(days=1) 
+    def create_session(self, user: UserInfo) -> SessionInfo:
+        """Create a new session object for the user"""
+        expiration = datetime.now() + timedelta(days=self.SESSION_EXPIRATION) 
         expiration = expiration.replace(microsecond=0)
         session = SessionInfo(
-            user_id=user_id,
+            user_id=user.user_id,
             access_token=str(uuid.uuid1()),
             refresh_token=str(uuid.uuid1()),
             expires_at=expiration,
@@ -82,16 +78,26 @@ def configure_session_storage(config):
     """Create a proper session storage object based on the configuration"""
 
     # TODO: allow dynamic selection of the storage module
+    module_name = config.get_conf_val('Sessions', 'Storage', 'Module',
+                        default = 'bss.dbs')
+    class_name = config.get_conf_val('Sessions', 'Storage', 'Class',
+                        default = 'FileStoredKeyValue')
     # storage_module = config.get_conf_val('Sessions', 'StorageModule', default = 'FileStoredKeyValue')
     # store sessions in a local file, to make the sessions survive
     # a restart of a container - ensure that /var/db/ (or whichever
     # location you choose) is mounted as a volume to the container
-    file_name = config.get_conf_val('Sessions', 'StorageFile',
-                        default = '/var/db/sessions.db')
+    # TODO: the parameters for the session storage should be defined in config 
+    file_name = config.get_conf_val('Sessions', 'Storage', 'FileName',
+                                    default = '/var/db/sessions.db')
+
     
     logging.debug(f"Using file {file_name} for session storage")
-    
-    return SessionStorage(session_db = FileStoredKeyValue(file_name))
+    storage_creator = ModuleLoader.load_module_and_class(module_path=None,
+                                                 module_name=module_name,
+                                                 class_name=class_name,
+                                                 root_package=bss.dbs.__name__)
+    storage = storage_creator(file_name = file_name)
+    return SessionStorage(session_db = storage)
 
 # class FileSessionStorage(SessionStorage):
 #     """Store sessions in local file. Suitable only

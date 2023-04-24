@@ -13,7 +13,8 @@ from datetime import datetime
 from report_error import WebTritErrorException
 from app_config import AppConfig
 import bss.adapters
-from bss.adapters import initialize_bss_adapter, Capabilities
+from bss.adapters import initialize_bss_adapter
+from bss.types import Capabilities, UserInfo
 from request_trace import RouteWithLogging
 
 from bss.models import (
@@ -31,7 +32,7 @@ from bss.models import (
     UserInfoResponseSchema,
     Health
 )
-
+VERSION="0.0.8"
 API_VERSION_PREFIX = "/api/v1"
 
 my_project_path = os.path.dirname(__file__)
@@ -60,7 +61,7 @@ app = FastAPI(
         to a hosted PBX system. It enables to authenticate users,
         obtain their SIP credentials, etc.""",
     title="Sample adapter for connecting WebTrit to a BSS",
-    version="v0.1.7",
+    version=VERSION,
     #    servers=[{'url': '/api/v1', 'variables': {}}],
 )
 security = HTTPBearer()
@@ -92,8 +93,9 @@ def login_operation(
     Login user using username and password
     """
     global bss
-
-    session = bss.authenticate(body.login, body.password)
+    user = UserInfo(user_id = 'N/A', # do not know it yet
+                    login = body.login)
+    session = bss.authenticate(user, body.password)
 
     data = vars(session)
     return SessionApprovedResponseSchema(**data)
@@ -112,8 +114,8 @@ def refresh_operation(
     Refresh user session
     """
     global bss
-
-    return bss.refresh_session(body.user_id, body.refresh_token.__root__)
+    user = UserInfo(user_id = body.user_id)
+    return bss.refresh_session(user, body.refresh_token.__root__)
 
 
 @router.delete(
@@ -164,7 +166,7 @@ def generate_otp(
             status_code=405, code=42, error_message="Method not supported"
         )
 
-    otp_request = bss.generate_otp(user_id=body.user_ref.__root__)
+    otp_request = bss.generate_otp(UserInfo(user_id=body.user_ref.__root__))
     return otp_request
 
 
@@ -223,7 +225,7 @@ def user_info(
     access_token = auth_data.credentials
     session = bss.validate_session(access_token)
 
-    user = bss.retrieve_user(session, session.user_id.__root__)
+    user = bss.retrieve_user(session, UserInfo( user_id = session.user_id.__root__))
 
     return user
 
@@ -246,7 +248,8 @@ def contacts_operation(
     session = bss.validate_session(access_token)
 
     if Capabilities.extensions in bss.get_capabilities():
-        contacts = bss.retrieve_contacts(session, session.user_id.__root__)
+        contacts = bss.retrieve_contacts(session,
+                                         UserInfo( user_id = session.user_id.__root__))
         return contacts
 
     # not supported by hosted PBX / BSS, return empty list
@@ -281,7 +284,7 @@ def history_operation(
     if Capabilities.callHistory in bss.get_capabilities():
         calls = bss.retrieve_calls(
             session,
-            session.user_id.__root__,
+            UserInfo( user_id = session.user_id.__root__),
             items_per_page=items_per_page,
             page=page,
             date_from=date_from,
