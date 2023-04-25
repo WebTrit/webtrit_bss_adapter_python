@@ -44,9 +44,9 @@ class WebTritErrorException(HTTPException):
         super().__init__(status_code=status_code, detail=error_message)
 
     def response(self):
-        data = {
-            "code": self.code,
-            "error_message": self.error_message,
+        details = {
+            "path": '????',
+            "reason": self.error_message,
         }
         traces = {
             name: data
@@ -57,7 +57,11 @@ class WebTritErrorException(HTTPException):
             if data and len(data) > 0
         }
         if len(traces) > 0:
-            data["refining"] = traces
+            details["traces"] = traces
+        data = {
+            "code": self.code,
+            "details": details,
+        }
         logging.info(f"Application error {self.error_message} {self.code}" +
             f"traces: {traces} HTTP code: {self.status_code}")
         

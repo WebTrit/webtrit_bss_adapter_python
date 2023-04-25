@@ -15,12 +15,15 @@ from bss.models import (
     SupportedEnum as Capabilities,
     CDRInfo as CDRInfo,
     SipStatus as SIPStatus,
+    SipServer as SIPServer,
+    SipInfo as SIPInfo,
     ConnectStatus as ConnectStatus,
     SessionResponse as SessionResponse,
     Numbers as Numbers,
     SessionOtpCreateResponse as OTPCreateResponse,
     SessionOtpVerifyRequest as OTPVerifyRequest,
     DeliveryChannel as OTPDeliveryChannel,
+
 )
 
 @dataclass

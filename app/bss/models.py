@@ -281,6 +281,7 @@ class Code11(Enum):
 class ErrorResponseDetails(BaseModel):
     path: Optional[str] = None
     reason: Optional[str] = None
+    traces: Optional[Dict] = None
 
 
 class UserHistoryIndexResponsePagination(BaseModel):

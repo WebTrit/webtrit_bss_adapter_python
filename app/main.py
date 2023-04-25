@@ -312,8 +312,8 @@ def index_contact(auth_data: HTTPAuthorizationCredentials = Depends(security)) -
 
     if Capabilities.extensions in bss.get_capabilities():
         contacts = bss.retrieve_contacts(session,
-                                         UserInfo( user_id = session.user_id.__root__))
-        return UserContactIndexResponse( items = contacts )
+                        UserInfo( user_id = session.user_id.__root__))
+        return contacts
 
     # not supported by hosted PBX / BSS, return empty list
     return UserContactIndexResponse(items = [])

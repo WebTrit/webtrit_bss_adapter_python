@@ -1,25 +1,13 @@
 from bss.adapters import (
-    BSSAdapter,
-    SessionInfo,
-    EndUser,
-    Contacts,
-    Calls,
-    ContactInfo,
-    Capabilities,
+    BSSAdapter
 )
-from bss.models import (
-    NumbersSchema,
-    OtpCreateResponseSchema,
-    OtpVerifyRequestSchema,
-    OtpSentType,
-    SipInfoSchema,
-    ServerSchema,
-)
+from bss.types import (Capabilities, UserInfo, EndUser, Contacts, ContactInfo,
+                       Calls, CDRInfo, ConnectStatus, SIPStatus, SessionInfo,
+                       Numbers, OTPCreateResponse, OTPVerifyRequest,
+                       SIPServer, SIPInfo)
 
-from bss.models import SipStatusSchema as SIPStatus
-from bss.models import CDRInfoSchema as CDRInfo
-from bss.models import CallInfoSchema as CallInfo
-from sessions import configure_session_storage
+
+from bss.sessions import configure_session_storage
 from report_error import WebTritErrorException
 from app_config import AppConfig
 from bss.http_api import HTTPAPIConnectorWithLogin
@@ -141,6 +129,10 @@ class FreePBXAPI(HTTPAPIConnectorWithLogin):
     def get_extension(self, user_id: str) -> Dict:
         """Get the extension info"""
 
+        if not user_id.isdigit():
+            # ext ID has to be numeric
+            return None
+        
         query = self.query_ext.replace("<extid>", user_id)
         user = self.send_rest_request("POST", self.graphql_path, json={"query": query})
         if user:
@@ -240,16 +232,25 @@ class FreePBXAdapter(BSSAdapter):
             # SupportedEnum.recordings
         ]
 
-    def authenticate(self, user_id: str, password: str = None) -> SessionInfo:
+    def extract_user_id(self, user_data: object) -> str:
+        """Extract user_id (unique and unmutable identifier of the user)
+        from the data in the DB. Please override it in your sub-class"""
+        # for production systems it is more appropriate to use 'id'
+        # which is a permanent identifier of the user; but for testing
+        # extension number is more convenient
+        return user_data.get("extensionId", None)
+
+    def authenticate(self, user: UserInfo, password: str = None) -> SessionInfo:
         """Authenticate user with username and password and obtain an API token for
         further requests."""
 
-        user = self.api_client.get_extension(user_id)
-        if user:
-            if user.get("vm", {}).get("password", None) == password:
+        user_data = self.api_client.get_extension(user.login)
+        if user_data:
+            if user_data.get("vm", {}).get("password", None) == password:
                 # everything is in order, create a session
-                session = self.storage.create_session(user_id)
-                self.storage.store_session(session)
+                user.user_id = self.extract_user_id(user_data)
+                session = self.sessions.create_session(user)
+                self.sessions.store_session(session)
                 return session
 
             raise WebTritErrorException(
@@ -266,16 +267,16 @@ class FreePBXAdapter(BSSAdapter):
             error_message="User authentication error",
         )
 
-    def generate_otp(self, user_id: str) -> OtpCreateResponseSchema:
+    def generate_otp(self, user: UserInfo) -> OTPCreateResponse:
         pass
 
-    def validate_otp(self, otp: OtpVerifyRequestSchema) -> SessionInfo:
+    def validate_otp(self, otp: OTPVerifyRequest) -> SessionInfo:
         pass
 
-    def retrieve_user(self, session: SessionInfo, user_id: str) -> EndUser:
+    def retrieve_user(self, session: SessionInfo, user: UserInfo) -> EndUser:
         """Obtain user's information - most importantly, his/her SIP credentials."""
 
-        user = self.api_client.get_extension(user_id)
+        user = self.api_client.get_extension(user.user_id)
         if user:
             return self.freepbx_to_webtrit_obj(user, produce_user_info=True)
 
@@ -284,7 +285,7 @@ class FreePBXAdapter(BSSAdapter):
             status_code=404, code=42, error_message="User not found"
         )
 
-    def retrieve_contacts(self, session: SessionInfo, user_id: str) -> Contacts:
+    def retrieve_contacts(self, session: SessionInfo, user: UserInfo) -> Contacts:
         """List of other extensions in the PBX"""
 
         ext_list = self.api_client.get_all_extensions()
@@ -292,12 +293,12 @@ class FreePBXAdapter(BSSAdapter):
         contacts = [
             self.freepbx_to_webtrit_obj(x, produce_user_info=False)
             for x in ext_list
-            if x.get("extensionId", "") != user_id
+            if x.get("extensionId", "") != user.user_id
         ]
 
-        return Contacts(__root__=contacts)
+        return Contacts(items=contacts)
 
-    def retrieve_calls(self, session: SessionInfo, user_id: str, **kwargs) -> Calls:
+    def retrieve_calls(self, session: SessionInfo, user: UserInfo, **kwargs) -> Calls:
         pass
 
     # call recording is not supported in this example
@@ -338,7 +339,7 @@ class FreePBXAdapter(BSSAdapter):
             "firstname": firstname,
             "lastname": lastname,
             "email": ext.get("vm", {}).get("email", None),
-            "numbers": NumbersSchema(
+            "numbers": Numbers(
                 ext=ext.get("extensionId", ""),
                 main=main_number
             )
@@ -349,10 +350,10 @@ class FreePBXAdapter(BSSAdapter):
             display_name = 'Ext ' + ext.get("extensionId", "???")
 
         if produce_user_info:
-            data["sip"] = SipInfoSchema(
+            data["sip"] = SIPInfo(
                 login=ext.get("extensionId", ""),
                 password=ext_info.get("extPassword", ""),
-                sip_server=ServerSchema(host=self.sip_server, port=5060),
+                sip_server=SIPServer(host=self.sip_server, port=5060),
             )
             return EndUser(**data)
         else:

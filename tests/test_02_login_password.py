@@ -7,6 +7,7 @@ def test_failed_login(api_url, login_path):
     response = requests.post(
         api_url + login_path, json={"login": "hacker", "password": "12345"}
     )
+    print(response.content)
     assert response.status_code == 401
 
 
@@ -18,6 +19,7 @@ def test_login(api_url, login_path, username, password):
     response = requests.post(
         api_url + login_path, json={"login": username, "password": password}
     )
+    print(response.content)
     assert response.status_code == 200
     assert isinstance(body := response.json(), dict)
 

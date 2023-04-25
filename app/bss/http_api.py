@@ -1,7 +1,8 @@
 import logging
 import requests
 from datetime import datetime, timedelta
-from abc import ABC, abstractmethod    
+from abc import ABC, abstractmethod
+from report_error import WebTritErrorException
 
 class HTTPAPIConnector(ABC):
     """Extract data from a remote server via REST/GRAPHQL or other HTTP-based API"""
@@ -82,9 +83,38 @@ class HTTPAPIConnector(ABC):
 
         except requests.exceptions.Timeout:
             logging.debug(f"Connection to {self.api_server} timed out")
+            raise WebTritErrorException(
+                    status_code=500,
+                    code=42,
+                    error_message="Request execution error on the other side",
+                    bss_request_trace = {
+                        'method': method,
+                        'url': url,
+                        **params
+                        },
+                    bss_response_trace = {
+                        'status_code': response.status_code,
+                        'text': 'Timed out'
+                    }
+                )
             return None
         except requests.exceptions.RequestException as e:
             logging.debug(f"Request error: {e}")
+            raise WebTritErrorException(
+                    status_code=500,
+                    code=42,
+                    error_message="Request execution error on the other side",
+                    bss_request_trace = {
+                        'method': method,
+                        'url': url,
+                        **params
+                        },
+                    bss_response_trace = {
+                        'status_code': response.status_code,
+                        'text': response.text
+                    }
+                )
+
             return None
 
     def decode_response(self, response) -> dict:

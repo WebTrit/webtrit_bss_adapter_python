@@ -1,15 +1,8 @@
-from bss.adapters import (
-    BSSAdapter,
-    BSSAdapterExternalDB,
-    SessionInfo,
-    SampleOTPHandler,
-)
-
+from bss.adapters import BSSAdapterExternalDB
 from bss.dbs import TiedKeyValue, FileStoredKeyValue
-
 from bss.types import (Capabilities, UserInfo, EndUser, Contacts, ContactInfo,
-                       Calls, CDRInfo, ConnectStatus, SIPStatus, OTP,
-                       Numbers, OTPCreateResponse, OTPVerifyRequest )
+                       Calls, CDRInfo, ConnectStatus, SIPStatus, SessionInfo,
+                       Numbers)
 
 from bss.sessions import configure_session_storage
 from app_config import AppConfig

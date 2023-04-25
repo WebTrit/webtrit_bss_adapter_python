@@ -5,7 +5,6 @@ import uuid
 from abc import ABC, abstractmethod
 from datetime import datetime, timedelta
 
-
 from bss.types import (UserInfo, EndUser, Contacts, Calls, OTP,
                        OTPCreateResponse, OTPVerifyRequest, OTPDeliveryChannel)
 from bss.sessions import SessionStorage, SessionInfo
@@ -13,10 +12,6 @@ from app_config import AppConfig
 from report_error import WebTritErrorException
 from module_loader import ModuleLoader
 from typing import List, Dict, Any, Optional, List
-
-
-
-
 
 @dataclass
 class AttrMap:
@@ -173,7 +168,7 @@ class BSSAdapter(SessionManagement, OTPHandler):
 
     @abstractmethod
     def retrieve_call_recording(
-        self, session: SessionInfo, call_recording: str
+        self, session: SessionInfo, recording_id: str
     ) -> bytes:
         """Get the media file for a previously recorded call."""
         raise NotImplementedError("Override this method in your sub-class")
@@ -381,7 +376,7 @@ class BSSAdapterExternalDB(BSSAdapter, SampleOTPHandler):
 
     @abstractmethod
     def retrieve_call_recording(
-        self, session: SessionInfo, call_recording: str
+        self, session: SessionInfo, recording_id: str
     ) -> bytes:
         """Get the media file for a previously recorded call."""
         raise NotImplementedError("Override this method in your sub-class")
