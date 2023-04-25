@@ -54,12 +54,15 @@ def test_call_history(api_url, call_history_path):
 @pytest.mark.parametrize(
     "attr",
     [
-        Attr(name="call", type=type({})),
-        Attr(name="call_recording_id", type=type("")),
-        Attr(name="call_start_time", type=type(""), mandatory=True),
-        Attr(name="callee", type=type(""), mandatory=True),
-        Attr(name="caller", type=type(""), mandatory=True),
-        Attr(name="duration", type=type(0), mandatory=True),
+
+        Attr(name="connect_time", type=str, mandatory=True),
+        Attr(name="callee", type=str, mandatory=True),
+        Attr(name="caller", type=str, mandatory=True),
+        Attr(name="direction", type=str, mandatory=True),
+        Attr(name="status", type=str, mandatory=True),
+        Attr(name="duration", type=type(0)),
+        Attr(name="disconnected_reason", type=str),
+        Attr(name="recording_id", type=str),
     ],
 )
 def test_cdrs(api_url, call_history_path, attr):

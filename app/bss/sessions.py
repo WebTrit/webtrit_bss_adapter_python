@@ -9,7 +9,9 @@ from bss.types import (SessionInfo, UserInfo)
 class SessionStorage:
     """A class that provides access to stored session data (which can
     be stored in some SQL/no-SQL database, external REST services, etc.)"""
-    SESSION_EXPIRATION = 1
+
+    # default time in hours after which the session expires
+    SESSION_EXPIRATION = 24
 
     def __init__(self, session_db = None):
         """Initialize the object using the provided object
@@ -35,7 +37,7 @@ class SessionStorage:
 
     def create_session(self, user: UserInfo) -> SessionInfo:
         """Create a new session object for the user"""
-        expiration = datetime.now() + timedelta(days=self.SESSION_EXPIRATION) 
+        expiration = datetime.now() + timedelta(hours=self.SESSION_EXPIRATION) 
         expiration = expiration.replace(microsecond=0)
         session = SessionInfo(
             user_id=user.user_id,

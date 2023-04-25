@@ -2,17 +2,14 @@ from bss.adapters import (
     BSSAdapter,
     BSSAdapterExternalDB,
     SessionInfo,
-    SampleOTPHandler)
-from bss.models import (
-    NumbersSchema,
-    OtpCreateResponseSchema,
-    OtpVerifyRequestSchema,
-    OtpSentType,
+    SampleOTPHandler,
 )
+
 from bss.dbs import TiedKeyValue, FileStoredKeyValue
 
 from bss.types import (Capabilities, UserInfo, EndUser, Contacts, ContactInfo,
-                       Calls, CallInfo, CDRInfo, SIPStatus, OTP )
+                       Calls, CDRInfo, ConnectStatus, SIPStatus, OTP,
+                       Numbers, OTPCreateResponse, OTPVerifyRequest )
 
 from bss.sessions import configure_session_storage
 from app_config import AppConfig
@@ -128,7 +125,7 @@ class ExampleBSSAdapter(BSSAdapterExternalDB):
                 lastname=self.fake.random_lastname(),
                 email=self.fake.email(),
                 company_name=self.fake.company(),
-                numbers=NumbersSchema(
+                numbers=Numbers(
                     main=self.fake.random_phone_number(),
                     ext=str(random.randrange(1000, 2000)),
                     additional=[
@@ -156,8 +153,8 @@ class ExampleBSSAdapter(BSSAdapterExternalDB):
         cdrs = {
             "items": [
                 CDRInfo(
-                    call_recording_id=str(uuid.uuid1()),
-                    call_start_time=datetime.datetime.now()
+                    recording_id=str(uuid.uuid1()),
+                    connect_time=datetime.datetime.now()
                     + datetime.timedelta(
                         minutes=n * 5 + random.randint(1, 5),
                         seconds=random.randint(1, 20),
@@ -165,10 +162,9 @@ class ExampleBSSAdapter(BSSAdapterExternalDB):
                     callee=self.fake.random_phone_number(),
                     caller=self.fake.random_phone_number(),
                     duration=0 if random.randint(1, 2) == 1 else random.randint(1, 300),
-                    call=CallInfo(
-                        direction=self.fake.random_list_member(directions),
-                        status=self.fake.random_list_member(statuses),
-                    ),
+                    direction=self.fake.random_list_member(directions),
+                    status=self.fake.random_list_member(statuses),
+                    disconnected_reason="Unknown"
                 )
                 for n in range(calls)
             ],

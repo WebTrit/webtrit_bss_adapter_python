@@ -31,7 +31,7 @@ response2 = None
 
 
 def test_extensions(api_url, extensions_path):
-    global response2, access_token
+    global response2, body, access_token
     response2 = requests.get(
         api_url + extensions_path,
         headers={"Authorization": "Bearer " + access_token},
@@ -40,7 +40,14 @@ def test_extensions(api_url, extensions_path):
     logging.info("response:" + response2.content.decode("utf-8"))
     assert response2.status_code == 200
     # we got a list
-    assert type(response2.json()) == type([])
+    try:
+        body = response2.json()
+    except json.JSONDecodeError as e:
+        body = {}
+    logging.warning("Reply from the server:" + pp.pformat(body))
+
+    assert isinstance(body, dict)
+    assert 'items' in body
 
 
 # required response attributes
@@ -56,14 +63,9 @@ def test_extensions(api_url, extensions_path):
     ],
 )
 def test_extensions_elements(api_url, extensions_path, attr):
-    global response2, pp
-    try:
-        body = response2.json()
-    except json.JSONDecodeError as e:
-        body = {}
-    logging.warning("Reply from the server:" + pp.pformat(body))
+    global body
 
-    for x in body:
+    for x in body["items"]:
         # verify the attribute in each returned element
         verify_attribute_in_json(attr, x)
 
@@ -76,14 +78,9 @@ def test_extensions_elements(api_url, extensions_path, attr):
     ],
 )
 def test_extension_numbers(api_url, extensions_path, attr):
-    global response2, pp
-    try:
-        body = response2.json()
-    except json.JSONDecodeError as e:
-        body = {}
-    logging.warning("Reply from the server:" + pp.pformat(body))
+    global body
 
-    for x in body:
+    for x in body["items"]:
          # verify the attribute in each returned element
         numbers = x["numbers"]
         logging.warning("numbers:" + pp.pformat(numbers))

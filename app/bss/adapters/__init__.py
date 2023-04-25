@@ -4,23 +4,10 @@ import random
 import uuid
 from abc import ABC, abstractmethod
 from datetime import datetime, timedelta
-from bss.models import (
-    # ContactsResponseSchema,
-    # HistoryResponseSchema,
-    SessionApprovedResponseSchema,
-    # SigninRequestSchema,
-    # OtpCreateRequestSchema,
-    OtpCreateResponseSchema,
-    OtpVerifyRequestSchema,
-    OtpSentType,
-    # SessionApprovedResponseSchema,
-    # SystemInfoResponseSchema,
-    # UserInfoResponseSchema,
-    # SupportedEnum,
-)
 
 
-from bss.types import (UserInfo, EndUser, Contacts, Calls, OTP)
+from bss.types import (UserInfo, EndUser, Contacts, Calls, OTP,
+                       OTPCreateResponse, OTPVerifyRequest, OTPDeliveryChannel)
 from bss.sessions import SessionStorage, SessionInfo
 from app_config import AppConfig
 from report_error import WebTritErrorException
@@ -115,13 +102,13 @@ class SessionManagement(ABC):
 
 class OTPHandler(ABC):
     @abstractmethod
-    def generate_otp(self, user: UserInfo) -> OtpCreateResponseSchema:
+    def generate_otp(self, user: UserInfo) -> OTPCreateResponse:
         """Request that the remote hosted PBX system / BSS generates a new
         one-time-password (OTP) and sends it to the user via the
         configured communication channel (e.g. SMS)"""
         pass
     @abstractmethod
-    def validate_otp(self, otp: OtpVerifyRequestSchema) -> SessionInfo:
+    def validate_otp(self, otp: OTPVerifyRequest) -> SessionInfo:
         """Verify that the OTP code, provided by the user, is correct."""
         pass
 
@@ -160,17 +147,6 @@ class BSSAdapter(SessionManagement, OTPHandler):
         further requests."""
         raise NotImplementedError("Override this method in your sub-class")
 
-    # @abstractmethod
-    # def generate_otp(self, user: UserInfo) -> OtpCreateResponseSchema:
-    #     """Request that a remote hosted PBX system / BSS generates a new
-    #     one-time-password (OTP) and sends it to the user via the
-    #     configured communication channel (e.g. SMS)"""
-    #     raise NotImplementedError("Override this method in your sub-class")
-
-    # @abstractmethod
-    # def validate_otp(self, otp: OtpVerifyRequestSchema) -> SessionInfo:
-    #     """Verify that the OTP code, provided by the user, is correct."""
-    #     raise NotImplementedError("Override this method in your sub-class")
 
     @abstractmethod
     def retrieve_user(self, session: SessionInfo, user: UserInfo) -> EndUser:
@@ -219,7 +195,7 @@ class SampleOTPHandler(OTPHandler):
     for debugging your own application while you are working on establishing
     a way to send real OTPs via SMS or other channel."""
 
-    def generate_otp(self, user: UserInfo) -> OtpCreateResponseSchema:
+    def generate_otp(self, user: UserInfo) -> OTPCreateResponse:
         """Request that the remote hosted PBX system / BSS generates a new
         one-time-password (OTP) and sends it to the user via the
         configured communication channel (e.g. SMS)"""
@@ -246,14 +222,14 @@ class SampleOTPHandler(OTPHandler):
         # memorize it
         self.otp_db[otp_id] = otp
 
-        return OtpCreateResponseSchema(
+        return OTPCreateResponse(
             # OTP sender's address so the user can find it easier
             otp_sent_from="sample@webtrit.com",
             otp_id=otp_id,
-            otp_sent_type=OtpSentType.email,
+            otp_sent_type=OTPDeliveryChannel.email,
         )
 
-    def validate_otp(self, otp: OtpVerifyRequestSchema) -> SessionInfo:
+    def validate_otp(self, otp: OTPVerifyRequest) -> SessionInfo:
         """Verify that the OTP code, provided by the user, is correct."""
 
         otp_id = otp.otp_id.__root__

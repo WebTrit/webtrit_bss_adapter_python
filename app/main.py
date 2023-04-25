@@ -14,23 +14,34 @@ from report_error import WebTritErrorException
 from app_config import AppConfig
 import bss.adapters
 from bss.adapters import initialize_bss_adapter
-from bss.types import Capabilities, UserInfo
+from bss.types import Capabilities, UserInfo, Health
 from request_trace import RouteWithLogging
 
 from bss.models import (
+    BinaryResponse,
     CallRecordingId,
-    ErrorSchema,
-    OtpCreateRequestSchema,
-    OtpCreateResponseSchema,
-    SessionApprovedResponseSchema,
-    SigninRequestSchema,
-    OtpVerifyRequestSchema,
-    RefreshRequestSchema,
-    SystemInfoResponseSchema,
-    ContactsResponseSchema,
-    HistoryResponseSchema,
-    UserInfoResponseSchema,
-    Health
+    GeneralSystemInfoResponse,
+    InlineResponse401,
+    InlineResponse404,
+    InlineResponse405,
+    InlineResponse422,
+    InlineResponse500,
+    InlineResponse4041,
+    InlineResponse4042,
+    InlineResponse4043,
+    InlineResponse4221,
+    InlineResponse4222,
+    InlineResponse4223,
+    InlineResponse4224,
+    SessionCreateRequest,
+    SessionOtpCreateRequest,
+    SessionOtpCreateResponse,
+    SessionOtpVerifyRequest,
+    SessionResponse,
+    SessionUpdateRequest,
+    UserContactIndexResponse,
+    UserHistoryIndexResponse,
+    UserInfoShowResponse
 )
 VERSION="0.0.8"
 API_VERSION_PREFIX = "/api/v1"
@@ -81,14 +92,17 @@ def health_check() -> Health:
 
 
 @router.post(
-    "/session",
-    response_model=SessionApprovedResponseSchema,
-    responses={"422": {"model": ErrorSchema}, "500": {"model": ErrorSchema}},
-    tags=["session"],
+    '/session',
+    response_model=SessionResponse,
+    responses={
+        '422': {'model': InlineResponse4221},
+        '500': {'model': InlineResponse500},
+    },
+    tags=['session'],
 )
-def login_operation(
-    body: SigninRequestSchema,
-) -> Union[SessionApprovedResponseSchema, ErrorSchema]:
+def create_session(
+    body: SessionCreateRequest,
+) -> Union[SessionResponse, InlineResponse4221, InlineResponse500]:
     """
     Login user using username and password
     """
@@ -98,20 +112,24 @@ def login_operation(
     session = bss.authenticate(user, body.password)
 
     data = vars(session)
-    return SessionApprovedResponseSchema(**data)
+    return SessionResponse(**data)
 
 
 @router.put(
-    "/session",
-    response_model=SessionApprovedResponseSchema,
-    responses={"422": {"model": ErrorSchema}, "500": {"model": ErrorSchema}},
-    tags=["session"],
+    '/session',
+    response_model=SessionResponse,
+    responses={
+        '404': {'model': InlineResponse404},
+        '422': {'model': InlineResponse422},
+        '500': {'model': InlineResponse500},
+    },
+    tags=['session'],
 )
-def refresh_operation(
-    body: RefreshRequestSchema,
-) -> Union[SessionApprovedResponseSchema, ErrorSchema]:
+def refresh_session(
+    body: SessionUpdateRequest,
+) -> Union[SessionResponse, InlineResponse404, InlineResponse422, InlineResponse500]:
     """
-    Refresh user session
+    Refresh user's API session and retrieve new tokens
     """
     global bss
     user = UserInfo(user_id = body.user_id)
@@ -119,16 +137,20 @@ def refresh_operation(
 
 
 @router.delete(
-    "/session",
+    '/session',
     response_model=None,
-    responses={"500": {"model": ErrorSchema}},
-    tags=["session"],
+    responses={
+        '401': {'model': InlineResponse401},
+        '404': {'model': InlineResponse404},
+        '500': {'model': InlineResponse500},
+    },
+    tags=['session'],
 )
-def logout_operation(
-    auth_data: HTTPAuthorizationCredentials = Depends(security),
-) -> Union[None, ErrorSchema]:
+def delete_session(auth_data: HTTPAuthorizationCredentials = Depends(security)) -> (
+    Union[None, InlineResponse401, InlineResponse404, InlineResponse500]
+):
     """
-    User logout
+    Sign out the user
     """
     global bss
     access_token = auth_data.credentials
@@ -142,22 +164,28 @@ def logout_operation(
 
     return Response(content="", status_code=204)
 
-
 @router.post(
-    "/session/otp-create",
-    response_model=OtpCreateResponseSchema,
+    '/session/otp-create',
+    response_model=SessionOtpCreateResponse,
     responses={
-        "422": {"model": ErrorSchema},
-        "500": {"model": ErrorSchema},
-        "501": {"model": ErrorSchema},
+        '404': {'model': InlineResponse4041},
+        '405': {'model': InlineResponse405},
+        '422': {'model': InlineResponse4222},
+        '500': {'model': InlineResponse500},
     },
-    tags=["session"],
+    tags=['session'],
 )
-def generate_otp(
-    body: OtpCreateRequestSchema,
-) -> Union[OtpCreateResponseSchema, ErrorSchema]:
+def otp_create_session(
+    body: SessionOtpCreateRequest,
+) -> Union[
+    SessionOtpCreateResponse,
+    InlineResponse4041,
+    InlineResponse405,
+    InlineResponse4222,
+    InlineResponse500,
+]:
     """
-    Generate a one-time-password (OTP) and send it to the user
+    Generate and send an OTP to the user
     """
     global bss
 
@@ -165,22 +193,35 @@ def generate_otp(
         raise WebTritErrorException(
             status_code=405, code=42, error_message="Method not supported"
         )
+    
+    if hasattr(body.__root__, 'user_ref'):
+        user_ref = body.__root__.user_ref.__root__
+    elif hasattr(body.__root__, 'user_email'):
+        user_ref = body.__root__.user_email.__root__
+    else:
+        raise WebTritErrorException(
+            status_code=422, code=42, error_message="Cannot find user ref in the request"
+        )
 
-    otp_request = bss.generate_otp(UserInfo(user_id=body.user_ref.__root__))
+    otp_request = bss.generate_otp(UserInfo(user_id=user_ref))
     return otp_request
 
 
 @router.post(
-    "/session/otp-verify",
-    response_model=SessionApprovedResponseSchema,
-    responses={"422": {"model": ErrorSchema}, "500": {"model": ErrorSchema}},
-    tags=["session"],
+    '/session/otp-verify',
+    response_model=SessionResponse,
+    responses={
+        '404': {'model': InlineResponse4042},
+        '422': {'model': InlineResponse4223},
+        '500': {'model': InlineResponse500},
+    },
+    tags=['session'],
 )
-def verify_otp(
-    otp_data: OtpVerifyRequestSchema,
-) -> Union[SessionApprovedResponseSchema, ErrorSchema]:
+def otp_verify_session(
+    body: SessionOtpVerifyRequest,
+) -> Union[SessionResponse, InlineResponse4042, InlineResponse4223, InlineResponse500]:
     """
-    Verify the OTP, provided by the user
+    Verify the OTP and sign in the user
     """
     global bss
 
@@ -189,35 +230,46 @@ def verify_otp(
             status_code=401, code=42, error_message="Method not supported"
         )
 
-    otp_response = bss.validate_otp(otp_data)
+    otp_response = bss.validate_otp(body)
     return otp_response
 
 
 @router.get(
-    "/system-info",
-    response_model=SystemInfoResponseSchema,
-    responses={"500": {"model": ErrorSchema}},
-    tags=["info"],
+    '/system-info',
+    response_model=GeneralSystemInfoResponse,
+    responses={'500': {'model': InlineResponse500}},
+    tags=['general'],
 )
-def info_operation() -> Union[SystemInfoResponseSchema, ErrorSchema]:
+def show_system_info() -> Union[GeneralSystemInfoResponse, InlineResponse500]:
     """
-    Supply information about the capabilities of the hosted PBX system and/or BSS
+    Supply information about the capabilities of the hosted PBX system and/or BSS adapter
     """
     global bss
-    return SystemInfoResponseSchema(
+    return GeneralSystemInfoResponse(
         name=bss.name(), version=bss.version(), supported=bss.get_capabilities()
     )
 
 
 @router.get(
-    "/user",
-    response_model=UserInfoResponseSchema,
-    responses={"422": {"model": ErrorSchema}, "500": {"model": ErrorSchema}},
-    tags=["user"],
+    '/user',
+    response_model=UserInfoShowResponse,
+    responses={
+        '401': {'model': InlineResponse401},
+        '404': {'model': InlineResponse4043},
+        '422': {'model': InlineResponse4224},
+        '500': {'model': InlineResponse500},
+    },
+    tags=['user'],
 )
-def user_info(
-    auth_data: HTTPAuthorizationCredentials = Depends(security),
-) -> Union[UserInfoResponseSchema, ErrorSchema]:
+def show_info(auth_data: HTTPAuthorizationCredentials = Depends(security)) -> (
+    Union[
+        UserInfoShowResponse,
+        InlineResponse401,
+        InlineResponse4043,
+        InlineResponse4224,
+        InlineResponse500,
+    ]
+):
     """
     Get user information
     """
@@ -231,14 +283,25 @@ def user_info(
 
 
 @router.get(
-    "/user/contacts",
-    response_model=ContactsResponseSchema,
-    responses={"422": {"model": ErrorSchema}, "500": {"model": ErrorSchema}},
-    tags=["user"],
+    '/user/contacts',
+    response_model=UserContactIndexResponse,
+    responses={
+        '401': {'model': InlineResponse401},
+        '404': {'model': InlineResponse4043},
+        '422': {'model': InlineResponse4224},
+        '500': {'model': InlineResponse500},
+    },
+    tags=['user'],
 )
-def contacts_operation(
-    auth_data: HTTPAuthorizationCredentials = Depends(security),
-) -> Union[ContactsResponseSchema, ErrorSchema]:
+def index_contact(auth_data: HTTPAuthorizationCredentials = Depends(security)) -> (
+    Union[
+        UserContactIndexResponse,
+        InlineResponse401,
+        InlineResponse4043,
+        InlineResponse4224,
+        InlineResponse500,
+    ]
+):
     """
     Get corporate directory (contacts of other users in the same PBX)
     """
@@ -250,29 +313,36 @@ def contacts_operation(
     if Capabilities.extensions in bss.get_capabilities():
         contacts = bss.retrieve_contacts(session,
                                          UserInfo( user_id = session.user_id.__root__))
-        return contacts
+        return UserContactIndexResponse( items = contacts )
 
     # not supported by hosted PBX / BSS, return empty list
-    return ContactsResponseSchema(__root__=[])
+    return UserContactIndexResponse(items = [])
 
 
 @router.get(
-    "/user/history",
-    response_model=HistoryResponseSchema,
+    '/user/history',
+    response_model=UserHistoryIndexResponse,
     responses={
-        "405": {"model": ErrorSchema},
-        "422": {"model": ErrorSchema},
-        "500": {"model": ErrorSchema},
+        '401': {'model': InlineResponse401},
+        '404': {'model': InlineResponse4043},
+        '422': {'model': InlineResponse4224},
+        '500': {'model': InlineResponse500},
     },
-    tags=["user"],
+    tags=['user'],
 )
-def history_operation(
+def index_history(
     auth_data: HTTPAuthorizationCredentials = Depends(security),
-    page: Optional[conint(ge=1)] = None,
-    items_per_page: Optional[conint(ge=1)] = None,
-    date_from: Optional[datetime] = None,
-    date_to: Optional[datetime] = None,
-) -> Union[HistoryResponseSchema, ErrorSchema]:
+    page: Optional[conint(ge=1)] = 1,
+    items_per_page: Optional[conint(ge=1)] = 100,
+    time_from: Optional[datetime] = None,
+    time_to: Optional[datetime] = None,
+) -> Union[
+    UserHistoryIndexResponse,
+    InlineResponse401,
+    InlineResponse4043,
+    InlineResponse4224,
+    InlineResponse500,
+]:
     """
     Get user's call history
     """
@@ -287,35 +357,44 @@ def history_operation(
             UserInfo( user_id = session.user_id.__root__),
             items_per_page=items_per_page,
             page=page,
-            date_from=date_from,
-            date_to=date_to,
+            date_from=time_from,
+            date_to=time_to,
         )
 
         return calls
 
     # not supported by hosted PBX / BSS, return empty list
-    return HistoryResponseSchema(__root__=[])
+    return UserHistoryIndexResponse(__root__=[])
 
 
 @router.get(
-    "/user/records/{call_recording_id}",
-    response_model=bytes,
-    responses={"405": {"model": ErrorSchema}, "500": {"model": ErrorSchema}},
-    tags=["user"],
+    '/user/recordings/{recording_id}',
+    response_model=BinaryResponse,
+    responses={
+        '401': {'model': InlineResponse401},
+        '404': {'model': InlineResponse4043},
+        '422': {'model': InlineResponse4224},
+        '500': {'model': InlineResponse500},
+    },
+    tags=['user'],
 )
-def call_recording_operation(
-    call_recording_id: str, auth_data: HTTPAuthorizationCredentials = Depends(security)
-) -> Union[bytes, ErrorSchema]:
-    """
-    Download a recorded call
-    """
+def show_recording(
+    recording_id: str,
+    auth_data: HTTPAuthorizationCredentials = Depends(security)
+) -> Union[
+    BinaryResponse,
+    InlineResponse401,
+    InlineResponse4043,
+    InlineResponse4224,
+    InlineResponse500,
+]:
     global bss
 
     access_token = auth_data.credentials
     session = bss.validate_session(access_token)
     if Capabilities.recordings in bss.get_capabilities():
         return bss.retrieve_call_recording(
-            session, CallRecordingId(__root__=call_recording_id)
+            session, CallRecordingId(__root__=recording_id)
         )
 
     # not supported by hosted PBX / BSS, return None
