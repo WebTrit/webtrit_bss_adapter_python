@@ -35,12 +35,12 @@ class FirestoreKeyValue(TiedKeyValue):
         """Unpack the data from the storage format"""
         return Serializer.unpack(value)
 
-    def get_docref(self, key):
+    def __docref__(self, key):
         """Provide a references to the document which corresponds to the key"""
         return self.db.collection(self.collection).document(key)
     
     def __getitem_doc__(self, key):
-        doc_ref = self.get_docref(key)
+        doc_ref = self.__docref__(key)
         doc = doc_ref.get()
         return doc
 
@@ -50,17 +50,16 @@ class FirestoreKeyValue(TiedKeyValue):
             return self.__unpack_from_store__(doc.to_dict())
 
         raise KeyError(key)
-
+        
     def get(self, key: str, *args):
-        """Get the data from the database"""
-        doc = self.__getitem_doc__(key)
-        if doc.exists:
-            return self.__unpack_from_store__(doc.to_dict())
-
-        if args:
-            return args[0]
-        else:
+        """Get the data from the database, return default if not found"""
+        try:
+            return self.__getitem__(key)
+        except KeyError:
+            if args:
+                return args[0]
             raise KeyError(key)
+
 
     def __contains__(self, key):
         doc = self.__getitem_doc__(key)
@@ -74,7 +73,7 @@ class FirestoreKeyValue(TiedKeyValue):
         return value
 
     def __delitem__(self, key):
-        doc_ref = self.get_docref(key)
+        doc_ref = self.__docref__(key)
         if doc_ref:
             doc_ref.delete()
 

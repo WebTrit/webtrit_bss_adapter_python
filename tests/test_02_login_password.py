@@ -2,6 +2,40 @@ import requests
 import pytest
 from utils4testing import Attr, verify_attribute_in_json
 
+def test_missing_data(api_url, login_path):
+    global body    
+    response = requests.post(
+        api_url + login_path, json={"abc": "123", "xyz": "12345"}
+    )
+    print(response.content)
+    assert response.status_code == 422
+    assert isinstance(body := response.json(), dict)
+
+# required response attributes
+# TODO: fix error handler in FastAPI so it returns the response in the correct format
+# @pytest.mark.parametrize(
+#     "attr",
+#     [
+#         Attr(name="code", type=str, mandatory=True, expected="validation_error"),
+#         Attr(name="message", type=str),
+#         Attr(name="details", type=list),
+#     ],
+# )
+# def test_missing_data_response(api_url, login_path, attr):
+#     global body
+
+#     print('attr = ', attr)
+#     verify_attribute_in_json(attr, body)
+
+# this should generate an error on the remote BSS side since
+# login contains spaces and non-latin characters
+# def test_incorrect_data(api_url, login_path):
+#     response = requests.post(
+#         api_url + login_path, json={"login": "$ 252 Слава Україні!", "password": "12345"}
+#     )
+#     print(response.content)
+#     assert response.status_code == 500
+
 
 def test_failed_login(api_url, login_path):
     response = requests.post(

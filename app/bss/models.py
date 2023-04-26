@@ -346,6 +346,7 @@ class Contact(BaseModel):
 
 class ErrorResponse(BaseModel):
     code: str = Field(..., description='Error code.')
+    message: str = Field(..., description='Explanation which helps to understand & fix the problem.')
     details: Optional[List[ErrorResponseDetails]] = Field(
         None,
         description='Specific details related to the error code. Dependent on the error code.\n\nMainly used for the `validation_error` error code, providing detailed\ninformation for the failed field.\n',

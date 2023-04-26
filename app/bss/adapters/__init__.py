@@ -288,12 +288,21 @@ class BSSAdapterExternalDB(BSSAdapter, SampleOTPHandler):
         """Capabilities of your hosted PBX / BSS / your API adapter"""
         raise NotImplementedError("Override this method in your sub-class")
 
+    def find_user_by_login(self, user: UserInfo):
+        """The same users may use different login IDs, e.g.
+        email, phone number or made-up login username.
+        By default we assume login is the same as the user_id,
+        but you can override this method in your sub-class to
+        enable more creative search by various options. """
+        # important: need to use user.login here, not user.user_id
+        return self.user_db.get(user.login, None)
+    
     def authenticate(self, user: UserInfo, password: str = None) -> SessionInfo:
         """Authenticate user with username and password and
         produce an API token for further requests."""
 
-        # important: need to use user.login here, not user.user_id
-        user_data = self.user_db.get(user.login, None)
+        
+        user_data = self.find_user_by_login(user)
         if user_data:
             if self.verify_password(user_data, password):
                 # everything is in order, create a session
@@ -316,7 +325,7 @@ class BSSAdapterExternalDB(BSSAdapter, SampleOTPHandler):
             error_message="User authentication error",
         )
 
-    def extract_user_id(self, user_data) -> str:
+    def extract_user_id(self, user_data: object) -> str:
         """Extract user_id (unique and unmutable identifier of the user)
         from the data in the DB. Please override it in your sub-class"""
         if hasattr(user_data, "user_id"):

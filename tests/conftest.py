@@ -28,6 +28,12 @@ def pytest_addoption(parser):
         default="123456",
         help="""What is the OTP code the server will generate""",
     )
+    parser.addoption(
+        "--tenant",
+        action="store",
+        default="",
+        help="""Tenant ID (in case of multi-tenant setup)""",
+    )
 
 
 @pytest.fixture
@@ -117,6 +123,11 @@ def password(request):
     got_option = str(request.config.getoption("--password"))
     return got_option
 
+
+@pytest.fixture
+def tenant_id(request):
+    got_option = str(request.config.getoption("--tenant"))
+    return got_option
 
 # to make the auto-test work, we have to pre-configure the same
 # code in the test suite and on the sever. By default the OTP

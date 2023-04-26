@@ -1,4 +1,4 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime
 from typing import List, Dict, Any, Optional, List
 from pydantic import BaseModel, Field
@@ -23,14 +23,26 @@ from bss.models import (
     SessionOtpCreateResponse as OTPCreateResponse,
     SessionOtpVerifyRequest as OTPVerifyRequest,
     DeliveryChannel as OTPDeliveryChannel,
+    # error codes
+    Code3 as LoginErrCode
 
 )
 
 @dataclass
 class UserInfo:
     """Data about the user, on whose behalf the operation is requested"""
-    user_id: str # unique, immutable ID
-    login: Optional[str] = None # utilized by end-user to login, may change or a user can utilize diferent logins e.g. phone number and email
+    # 
+    user_id: str = field(metadata={
+        "description": "unique, immutable user ID," +
+                         "this is typically uuid or primary key of the user's record"
+        })
+    # 
+    login: Optional[str] = field(default=None,
+                                 metadata={
+        "description": """Unique, immutable user ID
+        utilized by end-user to login, may change or a user can
+        utilize diferent logins e.g. phone number and email"""
+        })
 
 @dataclass
 class ExtendedUserInfo(UserInfo):

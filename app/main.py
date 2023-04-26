@@ -3,7 +3,7 @@ from __future__ import annotations
 from typing import Optional, Union
 import os
 import sys
-from fastapi import FastAPI, APIRouter, Depends, Response
+from fastapi import FastAPI, APIRouter, Depends, Response, Header
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 
 # from fastapi.responses import JSONResponse
@@ -14,7 +14,7 @@ from report_error import WebTritErrorException
 from app_config import AppConfig
 import bss.adapters
 from bss.adapters import initialize_bss_adapter
-from bss.types import Capabilities, UserInfo, Health
+from bss.types import Capabilities, UserInfo, ExtendedUserInfo, Health, LoginErrCode
 from request_trace import RouteWithLogging
 
 from bss.models import (
@@ -41,7 +41,8 @@ from bss.models import (
     SessionUpdateRequest,
     UserContactIndexResponse,
     UserHistoryIndexResponse,
-    UserInfoShowResponse
+    UserInfoShowResponse,
+
 )
 VERSION="0.0.8"
 API_VERSION_PREFIX = "/api/v1"
@@ -102,17 +103,27 @@ def health_check() -> Health:
 )
 def create_session(
     body: SessionCreateRequest,
+    user_agent: str = Header(None),
+    x_tenant_id: str = Header(None,
+                              description="The value of the X-Tenant-ID HTTP header")
 ) -> Union[SessionResponse, InlineResponse4221, InlineResponse500]:
     """
     Login user using username and password
     """
     global bss
-    user = UserInfo(user_id = 'N/A', # do not know it yet
+    if not (body.login and body.password):
+        # missing parameters
+        raise WebTritErrorException(
+            status_code=422, code = LoginErrCode.validation_error ,
+            error_message="Missing login & password"
+        )
+    
+    user = ExtendedUserInfo(user_id = 'N/A', # do not know it yet
+                    client_agent = user_agent,
+                    tenant_id = x_tenant_id,
                     login = body.login)
     session = bss.authenticate(user, body.password)
-
-    data = vars(session)
-    return SessionResponse(**data)
+    return session
 
 
 @router.put(

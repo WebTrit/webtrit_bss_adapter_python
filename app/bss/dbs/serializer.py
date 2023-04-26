@@ -106,7 +106,7 @@ class SerializerDict(SerializerBase):
         document in NoSQL DB"""
         return obj | {
             SerializerBase.OBJ_TYPE: type(obj).__name__,
-            SerializerBase.OBJ_PACKER: SerializerDataclass.ID,
+            SerializerBase.OBJ_PACKER: SerializerDict.ID,
         }
 
     @classmethod
