@@ -3,7 +3,7 @@ from __future__ import annotations
 from typing import Optional, Union
 import os
 import sys
-from fastapi import FastAPI, APIRouter, Depends, Response, Header
+from fastapi import FastAPI, APIRouter, Depends, Response, Request
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 
 # from fastapi.responses import JSONResponse
@@ -14,6 +14,7 @@ from report_error import WebTritErrorException
 from app_config import AppConfig
 import bss.adapters
 from bss.adapters import initialize_bss_adapter
+from bss.constants import TENANT_ID_HTTP_HEADER
 from bss.types import Capabilities, UserInfo, ExtendedUserInfo, Health, LoginErrCode
 from request_trace import RouteWithLogging
 
@@ -103,10 +104,9 @@ def health_check() -> Health:
 )
 def create_session(
     body: SessionCreateRequest,
-    user_agent: str = Header(None),
-    x_tenant_id: str = Header(None,
-                              description="The value of the X-Tenant-ID HTTP header")
-) -> Union[SessionResponse, InlineResponse4221, InlineResponse500]:
+    # to retrieve user agent and tenant id from the request
+    request: Request
+ ) -> Union[SessionResponse, InlineResponse4221, InlineResponse500]:
     """
     Login user using username and password
     """
@@ -119,8 +119,8 @@ def create_session(
         )
     
     user = ExtendedUserInfo(user_id = 'N/A', # do not know it yet
-                    client_agent = user_agent,
-                    tenant_id = x_tenant_id,
+                    client_agent = request.headers.get('User-Agent', 'Unknown'),
+                    tenant_id = request.headers.get(TENANT_ID_HTTP_HEADER, None),
                     login = body.login)
     session = bss.authenticate(user, body.password)
     return session
