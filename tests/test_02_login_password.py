@@ -95,7 +95,7 @@ def test_refresh(api_url, login_path):
     global response, response2
     body = response.json()
 
-    response2 = requests.put(
+    response2 = requests.patch(
         api_url + login_path,
         json={"refresh_token": body["refresh_token"], "user_id": body["user_id"]},
     )

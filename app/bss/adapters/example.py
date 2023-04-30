@@ -3,7 +3,7 @@ from bss.dbs import TiedKeyValue, FileStoredKeyValue
 from bss.types import (Capabilities, UserInfo, EndUser, Contacts, ContactInfo,
                        Calls, CDRInfo, ConnectStatus, SIPStatus, SessionInfo,
                        Numbers)
-
+from typing import List
 from bss.sessions import configure_session_storage
 from app_config import AppConfig
 
@@ -106,7 +106,7 @@ class ExampleBSSAdapter(BSSAdapterExternalDB):
 
 
 
-    def retrieve_contacts(self, session: SessionInfo, user: UserInfo) -> Contacts:
+    def retrieve_contacts(self, session: SessionInfo, user: UserInfo) -> List[ContactInfo]:
         """List of other extensions in the PBX"""
 
         min_contacts = 4

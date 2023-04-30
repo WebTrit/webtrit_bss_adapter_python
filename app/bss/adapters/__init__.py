@@ -5,7 +5,7 @@ import uuid
 from abc import ABC, abstractmethod
 from datetime import datetime, timedelta
 
-from bss.types import (UserInfo, EndUser, Contacts, Calls, OTP,
+from bss.types import (UserInfo, EndUser, ContactInfo, Calls, OTP,
                        OTPCreateResponse, OTPVerifyRequest, OTPDeliveryChannel)
 from bss.sessions import SessionStorage, SessionInfo
 from app_config import AppConfig
@@ -68,7 +68,7 @@ class SessionManagement(ABC):
             error_message="Invalid access token",
         )
 
-    def refresh_session(self, user: UserInfo, refresh_token: str) -> SessionInfo:
+    def refresh_session(self, refresh_token: str) -> SessionInfo:
         """Extend the API session be exchanging the refresh token for
         a new API access token."""
         session = self.sessions.get_session(refresh_token=refresh_token)
@@ -79,7 +79,7 @@ class SessionManagement(ABC):
                 error_message="Invalid refresh token",
             )
         # everything is in order, create a new session
-        session = self.sessions.create_session(user)
+        session = self.sessions.create_session(UserInfo(user_id=session.user_id))
         self.sessions.store_session(session)
         return session
 
@@ -149,7 +149,7 @@ class BSSAdapter(SessionManagement, OTPHandler):
         raise NotImplementedError("Override this method in your sub-class")
 
     @abstractmethod
-    def retrieve_contacts(self, session: SessionInfo, user: UserInfo) -> Contacts:
+    def retrieve_contacts(self, session: SessionInfo, user: UserInfo) -> List[ContactInfo]:
         """List of other extensions in the PBX"""
         raise NotImplementedError("Override this method in your sub-class")
 
@@ -366,7 +366,7 @@ class BSSAdapterExternalDB(BSSAdapter, SampleOTPHandler):
         )
 
     @abstractmethod
-    def retrieve_contacts(self, session: SessionInfo, user: UserInfo) -> Contacts:
+    def retrieve_contacts(self, session: SessionInfo, user: UserInfo) -> List[ContactInfo]:
         """List of other extensions in the PBX"""
         raise NotImplementedError("Override this method in your sub-class")
 

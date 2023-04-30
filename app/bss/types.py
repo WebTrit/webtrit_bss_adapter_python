@@ -7,6 +7,7 @@ from pydantic import BaseModel, Field
 # plus we do not want to depend on the names of the objects in the schema too much
 # so use these in your code instead of the schema objects
 from bss.models import (
+    BinaryResponse as BinaryResponse,
     UserInfoShowResponse as EndUser,
     UserContactIndexResponse as Contacts,
     Contact as ContactInfo,
@@ -24,8 +25,61 @@ from bss.models import (
     SessionOtpVerifyRequest as OTPVerifyRequest,
     DeliveryChannel as OTPDeliveryChannel,
     # error codes
-    Code3 as LoginErrCode
+    CreateSessionInternalServerErrorErrorResponse1 as CreateSessionInternalServerErrorErrorResponse,
+    CreateSessionOtpInternalServerErrorErrorResponse1 as CreateSessionOtpInternalServerErrorErrorResponse,
+    CreateSessionOtpMethodNotAllowedErrorResponse1 as CreateSessionOtpMethodNotAllowedErrorResponse,
+    CreateSessionOtpNotFoundErrorResponse1 as CreateSessionOtpNotFoundErrorResponse,
+    CreateSessionOtpUnprocessableEntityErrorResponse1 as CreateSessionOtpUnprocessableEntityErrorResponse,
+    CreateSessionUnauthorizedErrorResponse1 as CreateSessionUnauthorizedErrorResponse,
+    CreateSessionUnprocessableEntityErrorResponse1 as CreateSessionUnprocessableEntityErrorResponse,
+    CreateUserInternalServerErrorErrorResponse1 as CreateUserInternalServerErrorErrorResponse,
+    CreateUserMethodNotAllowedErrorResponse1 as CreateUserMethodNotAllowedErrorResponse,
+    CreateUserUnprocessableEntityErrorResponse1 as CreateUserUnprocessableEntityErrorResponse,
+    DeleteSessionInternalServerErrorErrorResponse1 as DeleteSessionInternalServerErrorErrorResponse,
+    DeleteSessionNotFoundErrorResponse1 as DeleteSessionNotFoundErrorResponse,
+    DeleteSessionUnauthorizedErrorResponse1 as DeleteSessionUnauthorizedErrorResponse,
+    GetSystemInfoInternalServerErrorErrorResponse1 as GetSystemInfoInternalServerErrorErrorResponse,
+    GetUserContactListInternalServerErrorErrorResponse1 as GetUserContactListInternalServerErrorErrorResponse,
+    GetUserContactListNotFoundErrorResponse1 as GetUserContactListNotFoundErrorResponse,
+    GetUserContactListUnauthorizedErrorResponse1 as GetUserContactListUnauthorizedErrorResponse,
+    GetUserContactListUnprocessableEntityErrorResponse1 as GetUserContactListUnprocessableEntityErrorResponse,
+    GetUserHistoryListInternalServerErrorErrorResponse1 as GetUserHistoryListInternalServerErrorErrorResponse,
+    GetUserHistoryListNotFoundErrorResponse1 as GetUserHistoryListNotFoundErrorResponse,
+    GetUserHistoryListUnauthorizedErrorResponse1 as GetUserHistoryListUnauthorizedErrorResponse,
+    GetUserHistoryListUnprocessableEntityErrorResponse1 as GetUserHistoryListUnprocessableEntityErrorResponse,
+    GetUserInfoInternalServerErrorErrorResponse1 as GetUserInfoInternalServerErrorErrorResponse,
+    GetUserInfoNotFoundErrorResponse1 as GetUserInfoNotFoundErrorResponse,
+    GetUserInfoUnauthorizedErrorResponse1 as GetUserInfoUnauthorizedErrorResponse,
+    GetUserInfoUnprocessableEntityErrorResponse1 as GetUserInfoUnprocessableEntityErrorResponse,
+    GetUserRecordingInternalServerErrorErrorResponse1 as GetUserRecordingInternalServerErrorErrorResponse,
+    GetUserRecordingNotFoundErrorResponse1 as GetUserRecordingNotFoundErrorResponse,
+    GetUserRecordingUnauthorizedErrorResponse1 as GetUserRecordingUnauthorizedErrorResponse,
+    GetUserRecordingUnprocessableEntityErrorResponse1 as GetUserRecordingUnprocessableEntityErrorResponse,
+    UpdateSessionInternalServerErrorErrorResponse1 as UpdateSessionInternalServerErrorErrorResponse,
+    UpdateSessionNotFoundErrorResponse1 as UpdateSessionNotFoundErrorResponse,
+    UpdateSessionUnprocessableEntityErrorResponse1 as UpdateSessionUnprocessableEntityErrorResponse,
+    VerifySessionOtpInternalServerErrorErrorResponse1 as VerifySessionOtpInternalServerErrorErrorResponse,
+    VerifySessionOtpNotFoundErrorResponse1 as VerifySessionOtpNotFoundErrorResponse,
+    VerifySessionOtpUnprocessableEntityErrorResponse1 as VerifySessionOtpUnprocessableEntityErrorResponse,
 
+
+)
+
+from .models import (
+    BinaryResponse,
+    CallRecordingId,
+    GeneralSystemInfoResponse,
+    SessionCreateRequest,
+    SessionOtpCreateRequest,
+    SessionOtpCreateResponse,
+    SessionOtpVerifyRequest,
+    SessionResponse,
+    SessionUpdateRequest,
+    UserContactIndexResponse,
+    UserCreateRequest,
+    UserCreateResponse,
+    UserHistoryIndexResponse,
+    UserInfoShowResponse,
 )
 
 @dataclass

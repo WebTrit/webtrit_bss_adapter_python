@@ -3,7 +3,7 @@ from __future__ import annotations
 from typing import Optional, Union
 import os
 import sys
-from fastapi import FastAPI, APIRouter, Depends, Response, Request
+from fastapi import FastAPI, APIRouter, Depends, Response, Request, Header
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 
 # from fastapi.responses import JSONResponse
@@ -15,34 +15,60 @@ from app_config import AppConfig
 import bss.adapters
 from bss.adapters import initialize_bss_adapter
 from bss.constants import TENANT_ID_HTTP_HEADER
-from bss.types import Capabilities, UserInfo, ExtendedUserInfo, Health, LoginErrCode
+from bss.types import Capabilities, UserInfo, ExtendedUserInfo, Health
 from request_trace import RouteWithLogging
 
-from bss.models import (
+from bss.types import (
     BinaryResponse,
     CallRecordingId,
+    CreateSessionInternalServerErrorErrorResponse,
+    CreateSessionOtpInternalServerErrorErrorResponse,
+    CreateSessionOtpMethodNotAllowedErrorResponse,
+    CreateSessionOtpNotFoundErrorResponse,
+    CreateSessionOtpUnprocessableEntityErrorResponse,
+    CreateSessionUnauthorizedErrorResponse,
+    CreateSessionUnprocessableEntityErrorResponse,
+    CreateUserInternalServerErrorErrorResponse,
+    CreateUserMethodNotAllowedErrorResponse,
+    CreateUserUnprocessableEntityErrorResponse,
+    DeleteSessionInternalServerErrorErrorResponse,
+    DeleteSessionNotFoundErrorResponse,
+    DeleteSessionUnauthorizedErrorResponse,
     GeneralSystemInfoResponse,
-    InlineResponse401,
-    InlineResponse404,
-    InlineResponse405,
-    InlineResponse422,
-    InlineResponse500,
-    InlineResponse4041,
-    InlineResponse4042,
-    InlineResponse4043,
-    InlineResponse4221,
-    InlineResponse4222,
-    InlineResponse4223,
-    InlineResponse4224,
+    GetSystemInfoInternalServerErrorErrorResponse,
+    GetUserContactListInternalServerErrorErrorResponse,
+    GetUserContactListNotFoundErrorResponse,
+    GetUserContactListUnauthorizedErrorResponse,
+    GetUserContactListUnprocessableEntityErrorResponse,
+    GetUserHistoryListInternalServerErrorErrorResponse,
+    GetUserHistoryListNotFoundErrorResponse,
+    GetUserHistoryListUnauthorizedErrorResponse,
+    GetUserHistoryListUnprocessableEntityErrorResponse,
+    GetUserInfoInternalServerErrorErrorResponse,
+    GetUserInfoNotFoundErrorResponse,
+    GetUserInfoUnauthorizedErrorResponse,
+    GetUserInfoUnprocessableEntityErrorResponse,
+    GetUserRecordingInternalServerErrorErrorResponse,
+    GetUserRecordingNotFoundErrorResponse,
+    GetUserRecordingUnauthorizedErrorResponse,
+    GetUserRecordingUnprocessableEntityErrorResponse,
     SessionCreateRequest,
     SessionOtpCreateRequest,
     SessionOtpCreateResponse,
     SessionOtpVerifyRequest,
     SessionResponse,
     SessionUpdateRequest,
+    UpdateSessionInternalServerErrorErrorResponse,
+    UpdateSessionNotFoundErrorResponse,
+    UpdateSessionUnprocessableEntityErrorResponse,
     UserContactIndexResponse,
+    UserCreateRequest,
+    UserCreateResponse,
     UserHistoryIndexResponse,
     UserInfoShowResponse,
+    VerifySessionOtpInternalServerErrorErrorResponse,
+    VerifySessionOtpNotFoundErrorResponse,
+    VerifySessionOtpUnprocessableEntityErrorResponse,
 
 )
 VERSION="0.0.8"
@@ -97,16 +123,23 @@ def health_check() -> Health:
     '/session',
     response_model=SessionResponse,
     responses={
-        '422': {'model': InlineResponse4221},
-        '500': {'model': InlineResponse500},
+        '401': {'model': CreateSessionUnauthorizedErrorResponse},
+        '422': {'model': CreateSessionUnprocessableEntityErrorResponse},
+        '500': {'model': CreateSessionInternalServerErrorErrorResponse},
     },
     tags=['session'],
 )
 def create_session(
     body: SessionCreateRequest,
     # to retrieve user agent and tenant id from the request
-    request: Request
- ) -> Union[SessionResponse, InlineResponse4221, InlineResponse500]:
+    request: Request,
+    x_webtrit_tenant_id: Optional[str] = Header(None, alias='X-WebTrit-Tenant-ID'),
+ ) -> Union[
+    SessionResponse,
+    CreateSessionUnauthorizedErrorResponse,
+    CreateSessionUnprocessableEntityErrorResponse,
+    CreateSessionInternalServerErrorErrorResponse,
+]:
     """
     Login user using username and password
     """
@@ -114,7 +147,7 @@ def create_session(
     if not (body.login and body.password):
         # missing parameters
         raise WebTritErrorException(
-            status_code=422, code = LoginErrCode.validation_error ,
+            status_code=422, code = CreateSessionUnprocessableEntityErrorResponse.validation_error ,
             error_message="Missing login & password"
         )
     
@@ -125,40 +158,52 @@ def create_session(
     session = bss.authenticate(user, body.password)
     return session
 
-
-@router.put(
+@router.patch(
     '/session',
     response_model=SessionResponse,
     responses={
-        '404': {'model': InlineResponse404},
-        '422': {'model': InlineResponse422},
-        '500': {'model': InlineResponse500},
+        '404': {'model': UpdateSessionNotFoundErrorResponse},
+        '422': {'model': UpdateSessionUnprocessableEntityErrorResponse},
+        '500': {'model': UpdateSessionInternalServerErrorErrorResponse},
     },
     tags=['session'],
 )
-def refresh_session(
+def update_session(
     body: SessionUpdateRequest,
-) -> Union[SessionResponse, InlineResponse404, InlineResponse422, InlineResponse500]:
+) -> Union[
+    SessionResponse,
+    UpdateSessionNotFoundErrorResponse,
+    UpdateSessionUnprocessableEntityErrorResponse,
+    UpdateSessionInternalServerErrorErrorResponse,
+]:
     """
     Refresh user's API session and retrieve new tokens
     """
     global bss
-    user = UserInfo(user_id = body.user_id)
-    return bss.refresh_session(user, body.refresh_token.__root__)
+
+    return bss.refresh_session(body.refresh_token.__root__)
+
 
 
 @router.delete(
     '/session',
     response_model=None,
     responses={
-        '401': {'model': InlineResponse401},
-        '404': {'model': InlineResponse404},
-        '500': {'model': InlineResponse500},
+        '401': {'model': DeleteSessionUnauthorizedErrorResponse},
+        '404': {'model': DeleteSessionNotFoundErrorResponse},
+        '500': {'model': DeleteSessionInternalServerErrorErrorResponse},
     },
     tags=['session'],
 )
-def delete_session(auth_data: HTTPAuthorizationCredentials = Depends(security)) -> (
-    Union[None, InlineResponse401, InlineResponse404, InlineResponse500]
+def delete_session(
+    auth_data: HTTPAuthorizationCredentials = Depends(security),
+) -> (
+    Union[
+        None,
+        DeleteSessionUnauthorizedErrorResponse,
+        DeleteSessionNotFoundErrorResponse,
+        DeleteSessionInternalServerErrorErrorResponse,
+    ]
 ):
     """
     Sign out the user
@@ -179,21 +224,22 @@ def delete_session(auth_data: HTTPAuthorizationCredentials = Depends(security)) 
     '/session/otp-create',
     response_model=SessionOtpCreateResponse,
     responses={
-        '404': {'model': InlineResponse4041},
-        '405': {'model': InlineResponse405},
-        '422': {'model': InlineResponse4222},
-        '500': {'model': InlineResponse500},
+        '404': {'model': CreateSessionOtpNotFoundErrorResponse},
+        '405': {'model': CreateSessionOtpMethodNotAllowedErrorResponse},
+        '422': {'model': CreateSessionOtpUnprocessableEntityErrorResponse},
+        '500': {'model': CreateSessionOtpInternalServerErrorErrorResponse},
     },
     tags=['session'],
 )
-def otp_create_session(
+def create_session_otp(
     body: SessionOtpCreateRequest,
+    x_webtrit_tenant_id: Optional[str] = Header(None, alias='X-WebTrit-Tenant-ID'),
 ) -> Union[
     SessionOtpCreateResponse,
-    InlineResponse4041,
-    InlineResponse405,
-    InlineResponse4222,
-    InlineResponse500,
+    CreateSessionOtpNotFoundErrorResponse,
+    CreateSessionOtpMethodNotAllowedErrorResponse,
+    CreateSessionOtpUnprocessableEntityErrorResponse,
+    CreateSessionOtpInternalServerErrorErrorResponse,
 ]:
     """
     Generate and send an OTP to the user
@@ -205,13 +251,13 @@ def otp_create_session(
             status_code=405, code=42, error_message="Method not supported"
         )
     
-    if hasattr(body.__root__, 'user_ref'):
-        user_ref = body.__root__.user_ref.__root__
-    elif hasattr(body.__root__, 'user_email'):
-        user_ref = body.__root__.user_email.__root__
+    if hasattr(body, 'user_ref'):
+        user_ref = body.user_ref.__root__
     else:
         raise WebTritErrorException(
-            status_code=422, code=42, error_message="Cannot find user ref in the request"
+            status_code=422,
+            code=CreateSessionOtpUnprocessableEntityErrorResponse.validation_error,
+            error_message="Cannot find user_ref in the request"
         )
 
     otp_request = bss.generate_otp(UserInfo(user_id=user_ref))
@@ -222,15 +268,20 @@ def otp_create_session(
     '/session/otp-verify',
     response_model=SessionResponse,
     responses={
-        '404': {'model': InlineResponse4042},
-        '422': {'model': InlineResponse4223},
-        '500': {'model': InlineResponse500},
+        '404': {'model': VerifySessionOtpNotFoundErrorResponse},
+        '422': {'model': VerifySessionOtpUnprocessableEntityErrorResponse},
+        '500': {'model': VerifySessionOtpInternalServerErrorErrorResponse},
     },
     tags=['session'],
 )
-def otp_verify_session(
+def verify_session_otp(
     body: SessionOtpVerifyRequest,
-) -> Union[SessionResponse, InlineResponse4042, InlineResponse4223, InlineResponse500]:
+) -> Union[
+    SessionResponse,
+    VerifySessionOtpNotFoundErrorResponse,
+    VerifySessionOtpUnprocessableEntityErrorResponse,
+    VerifySessionOtpInternalServerErrorErrorResponse,
+]:
     """
     Verify the OTP and sign in the user
     """
@@ -248,10 +299,14 @@ def otp_verify_session(
 @router.get(
     '/system-info',
     response_model=GeneralSystemInfoResponse,
-    responses={'500': {'model': InlineResponse500}},
+    responses={'500': {'model': GetSystemInfoInternalServerErrorErrorResponse}},
     tags=['general'],
 )
-def show_system_info() -> Union[GeneralSystemInfoResponse, InlineResponse500]:
+def get_system_info(
+    request: Request,
+) -> (
+    Union[GeneralSystemInfoResponse, GetSystemInfoInternalServerErrorErrorResponse]
+):
     """
     Supply information about the capabilities of the hosted PBX system and/or BSS adapter
     """
@@ -265,20 +320,22 @@ def show_system_info() -> Union[GeneralSystemInfoResponse, InlineResponse500]:
     '/user',
     response_model=UserInfoShowResponse,
     responses={
-        '401': {'model': InlineResponse401},
-        '404': {'model': InlineResponse4043},
-        '422': {'model': InlineResponse4224},
-        '500': {'model': InlineResponse500},
+        '401': {'model': GetUserInfoUnauthorizedErrorResponse},
+        '404': {'model': GetUserInfoNotFoundErrorResponse},
+        '422': {'model': GetUserInfoUnprocessableEntityErrorResponse},
+        '500': {'model': GetUserInfoInternalServerErrorErrorResponse},
     },
     tags=['user'],
 )
-def show_info(auth_data: HTTPAuthorizationCredentials = Depends(security)) -> (
+def get_user_info(
+    auth_data: HTTPAuthorizationCredentials = Depends(security),
+) -> (
     Union[
         UserInfoShowResponse,
-        InlineResponse401,
-        InlineResponse4043,
-        InlineResponse4224,
-        InlineResponse500,
+        GetUserInfoUnauthorizedErrorResponse,
+        GetUserInfoNotFoundErrorResponse,
+        GetUserInfoUnprocessableEntityErrorResponse,
+        GetUserInfoInternalServerErrorErrorResponse,
     ]
 ):
     """
@@ -292,25 +349,51 @@ def show_info(auth_data: HTTPAuthorizationCredentials = Depends(security)) -> (
 
     return user
 
+@router.post(
+    '/user',
+    response_model=UserCreateResponse,
+    responses={
+        '405': {'model': CreateUserMethodNotAllowedErrorResponse},
+        '422': {'model': CreateUserUnprocessableEntityErrorResponse},
+        '500': {'model': CreateUserInternalServerErrorErrorResponse},
+    },
+    tags=['user'],
+)
+def create_user(
+    body: UserCreateRequest,
+    auth_data: HTTPAuthorizationCredentials = Depends(security),
+) -> Union[
+    UserCreateResponse,
+    CreateUserMethodNotAllowedErrorResponse,
+    CreateUserUnprocessableEntityErrorResponse,
+    CreateUserInternalServerErrorErrorResponse,
+]:
+    """
+    Create a new user
+    """
+    pass
+
 
 @router.get(
     '/user/contacts',
     response_model=UserContactIndexResponse,
     responses={
-        '401': {'model': InlineResponse401},
-        '404': {'model': InlineResponse4043},
-        '422': {'model': InlineResponse4224},
-        '500': {'model': InlineResponse500},
+        '401': {'model': GetUserContactListUnauthorizedErrorResponse},
+        '404': {'model': GetUserContactListNotFoundErrorResponse},
+        '422': {'model': GetUserContactListUnprocessableEntityErrorResponse},
+        '500': {'model': GetUserContactListInternalServerErrorErrorResponse},
     },
     tags=['user'],
 )
-def index_contact(auth_data: HTTPAuthorizationCredentials = Depends(security)) -> (
+def get_user_contact_list(
+    auth_data: HTTPAuthorizationCredentials = Depends(security),
+) -> (
     Union[
         UserContactIndexResponse,
-        InlineResponse401,
-        InlineResponse4043,
-        InlineResponse4224,
-        InlineResponse500,
+        GetUserContactListUnauthorizedErrorResponse,
+        GetUserContactListNotFoundErrorResponse,
+        GetUserContactListUnprocessableEntityErrorResponse,
+        GetUserContactListInternalServerErrorErrorResponse,
     ]
 ):
     """
@@ -324,7 +407,7 @@ def index_contact(auth_data: HTTPAuthorizationCredentials = Depends(security)) -
     if Capabilities.extensions in bss.get_capabilities():
         contacts = bss.retrieve_contacts(session,
                         UserInfo( user_id = session.user_id.__root__))
-        return contacts
+        return UserContactIndexResponse(items = contacts)
 
     # not supported by hosted PBX / BSS, return empty list
     return UserContactIndexResponse(items = [])
@@ -334,25 +417,25 @@ def index_contact(auth_data: HTTPAuthorizationCredentials = Depends(security)) -
     '/user/history',
     response_model=UserHistoryIndexResponse,
     responses={
-        '401': {'model': InlineResponse401},
-        '404': {'model': InlineResponse4043},
-        '422': {'model': InlineResponse4224},
-        '500': {'model': InlineResponse500},
+        '401': {'model': GetUserHistoryListUnauthorizedErrorResponse},
+        '404': {'model': GetUserHistoryListNotFoundErrorResponse},
+        '422': {'model': GetUserHistoryListUnprocessableEntityErrorResponse},
+        '500': {'model': GetUserHistoryListInternalServerErrorErrorResponse},
     },
     tags=['user'],
 )
-def index_history(
-    auth_data: HTTPAuthorizationCredentials = Depends(security),
+def get_user_history_list(
     page: Optional[conint(ge=1)] = 1,
     items_per_page: Optional[conint(ge=1)] = 100,
     time_from: Optional[datetime] = None,
     time_to: Optional[datetime] = None,
+    auth_data: HTTPAuthorizationCredentials = Depends(security),
 ) -> Union[
     UserHistoryIndexResponse,
-    InlineResponse401,
-    InlineResponse4043,
-    InlineResponse4224,
-    InlineResponse500,
+    GetUserHistoryListUnauthorizedErrorResponse,
+    GetUserHistoryListNotFoundErrorResponse,
+    GetUserHistoryListUnprocessableEntityErrorResponse,
+    GetUserHistoryListInternalServerErrorErrorResponse,
 ]:
     """
     Get user's call history
@@ -377,27 +460,26 @@ def index_history(
     # not supported by hosted PBX / BSS, return empty list
     return UserHistoryIndexResponse(__root__=[])
 
-
 @router.get(
     '/user/recordings/{recording_id}',
     response_model=BinaryResponse,
     responses={
-        '401': {'model': InlineResponse401},
-        '404': {'model': InlineResponse4043},
-        '422': {'model': InlineResponse4224},
-        '500': {'model': InlineResponse500},
+        '401': {'model': GetUserRecordingUnauthorizedErrorResponse},
+        '404': {'model': GetUserRecordingNotFoundErrorResponse},
+        '422': {'model': GetUserRecordingUnprocessableEntityErrorResponse},
+        '500': {'model': GetUserRecordingInternalServerErrorErrorResponse},
     },
     tags=['user'],
 )
-def show_recording(
+def get_user_recording(
     recording_id: str,
     auth_data: HTTPAuthorizationCredentials = Depends(security)
 ) -> Union[
     BinaryResponse,
-    InlineResponse401,
-    InlineResponse4043,
-    InlineResponse4224,
-    InlineResponse500,
+    GetUserRecordingUnauthorizedErrorResponse,
+    GetUserRecordingNotFoundErrorResponse,
+    GetUserRecordingUnprocessableEntityErrorResponse,
+    GetUserRecordingInternalServerErrorErrorResponse,
 ]:
     global bss
 
