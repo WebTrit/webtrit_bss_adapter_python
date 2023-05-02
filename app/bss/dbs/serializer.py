@@ -13,6 +13,7 @@ class SerializerBase(ABC):
     OBJ_TYPE = "_*object_type*_"
     OBJ_DATA = "_*object_data*_"
     OBJ_PACKER = "_*object_packer*_"
+    OBJ_ID = '_*id*_'  # attribute to store object ID
     # constrcutors to product objects of a given class
     factories = {}
 
@@ -111,10 +112,10 @@ class SerializerDict(SerializerBase):
 
     @classmethod
     def unpack(cls, d) -> object:
-        """Convert the object to a format that can be stored as
-        document in NoSQL DB"""
+        """Convert the data from the format stored in NoSQL DB to a dict"""
         d.pop(SerializerBase.OBJ_TYPE, None)
         d.pop(SerializerBase.OBJ_PACKER, None)
+        d.pop(SerializerBase.OBJ_ID, None)
         return d
 
 
@@ -138,6 +139,10 @@ class SerializerDataclass(SerializerBase):
         document in NoSQL DB"""
         obj_type = d.pop(SerializerBase.OBJ_TYPE, "None")
         d.pop(SerializerBase.OBJ_PACKER, None)
+        d.pop(SerializerBase.OBJ_ID, None)
+        # TODO: fix this. now it is just a quick hack
+        if 'User' in obj_type:
+            d.pop('tenant_id', None)
         return cls.produce_object(obj_type, d)
 
 

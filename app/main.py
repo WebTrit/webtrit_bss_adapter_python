@@ -6,6 +6,7 @@ import sys
 from fastapi import FastAPI, APIRouter, Depends, Response, Request, Header
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 
+import bss.dbs.firestore
 # from fastapi.responses import JSONResponse
 import logging
 from pydantic import conint

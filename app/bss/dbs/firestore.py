@@ -1,7 +1,8 @@
 from bss.dbs import TiedKeyValue
 from google.cloud import firestore
 from google.oauth2 import service_account
-
+import json
+import logging
 # from firebase_admin import credentials, firestore
 import os
 from bss.dbs.serializer import Serializer
@@ -21,6 +22,11 @@ class FirestoreKeyValue(TiedKeyValue):
         if credentials_file is None:
             # no specific credentials file was provided, use
             # env variable if available
+            if env_var := os.environ.get("GOOGLE_APPLICATION_CREDENTIALS_JSON", None):
+                # credentials provided via env var - default mode for cloud run
+                credentials_dict = json.loads(env_var)
+                return service_account.Credentials.from_service_account_info(credentials_dict)
+            
             if env_var := os.environ.get("GOOGLE_APPLICATION_CREDENTIALS", None):
                 # we are running in the cloud
                 credentials_file = env_var
