@@ -924,6 +924,10 @@ class Contact(BaseModel):
     numbers: Optional[Numbers] = None
     sip: Optional[SipStatus] = None
 
+class UserStatus(Enum):
+    active = 'active'
+    limited = 'limited'
+    blocked = 'blocked'
 
 class UserInfoShowResponse(BaseModel):
     balance: Optional[Balance] = None
@@ -938,6 +942,10 @@ class UserInfoShowResponse(BaseModel):
     )
     last_name: Optional[str] = Field(
         None, description="The user's last name.", example='Anderson'
+    )
+    status: Optional[UserStatus] = Field(
+        description="Whether this user is active or blocked", example='active',
+        default_factory=UserStatus.active
     )
     numbers: Optional[Numbers] = None
     sip: SipInfo

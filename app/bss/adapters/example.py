@@ -62,6 +62,7 @@ class ExampleBSSAdapter(BSSAdapterExternalDB):
             "firstname": "John",
             "lastname": "Doe",
             "email": "contact@webtrit.com",
+            "status": "active",
             "company_name": "WebTrit, Inc",
             "sip": {
                 "login": "12065551234",
