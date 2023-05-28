@@ -32,7 +32,7 @@ class WebTritErrorException(HTTPException):
         self,
         status_code: int,
         error_message: str,
-        code: str = None,
+        code = None,
         bss_request_trace: dict = None,
         bss_response_trace: dict = None,
     ):

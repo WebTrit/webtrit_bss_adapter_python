@@ -2,7 +2,8 @@ from bss.adapters import BSSAdapterExternalDB
 from bss.dbs import TiedKeyValue, FileStoredKeyValue
 from bss.types import (Capabilities, UserInfo, EndUser, Contacts, ContactInfo,
                        Calls, CDRInfo, ConnectStatus, SIPStatus, SessionInfo,
-                       Numbers)
+                       Numbers, FailedAuthIncorrectDataCode)
+from report_error import WebTritErrorException
 from typing import List
 from bss.sessions import configure_session_storage
 from app_config import AppConfig
@@ -102,9 +103,10 @@ class ExampleBSSAdapter(BSSAdapterExternalDB):
             # obtain the list of other extensions in the PBX
             Capabilities.extensions,
             # download call recordings - currently not supported
-            # SupportedEnum.recordings
+            # Capabilities.recordings
+            # create a new user
+            Capabilities.signup
         ]
-
 
 
     def retrieve_contacts(self, session: SessionInfo, user: UserInfo) -> List[ContactInfo]:
@@ -177,3 +179,21 @@ class ExampleBSSAdapter(BSSAdapterExternalDB):
         """Get the media file for a previously recorded call."""
         # not yet implemented
         pass
+
+    def create_new_user(self, user_data, tenant_id: str = None):
+        """Create a new user as a part of the sign-up process"""
+        if hasattr(user_data, 'attributes') and isinstance(user_data.attributes, dict) \
+                and 'user_id' in user_data.attributes and 'password' in user_data.attributes:
+            # add this record to the internal DB
+            attr = user_data.attributes
+            self.user_db[attr['user_id']] = attr
+            # and log the user in
+            return self.authenticate(UserInfo(login=attr['user_id'],
+                                              user_id=attr['user_id']),
+                                            attr['password'])
+        
+        raise WebTritErrorException(
+            status_code=422,
+            code = FailedAuthIncorrectDataCode.validation_error,
+            error_message="Wrong data strcuture"
+        )

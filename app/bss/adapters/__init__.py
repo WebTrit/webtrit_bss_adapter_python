@@ -6,7 +6,7 @@ from abc import ABC, abstractmethod
 from datetime import datetime, timedelta
 
 from bss.types import (UserInfo, EndUser, ContactInfo, Calls, OTP,
-                       OTPCreateResponse, OTPVerifyRequest, OTPDeliveryChannel,
+                       OTPCreateResponse, OTPVerifyRequest, OTPDeliveryChannel, UserCreateResponse,
                        FailedAuthCode, UserNotFoundCode, SessionNotFoundCode, TokenErrorCode,
                        RefreshTokenErrorCode, TokenErrorCode2, OTPIDNotFoundCode, OTPValidationErrCode)
 from bss.sessions import SessionStorage, SessionInfo
@@ -94,7 +94,7 @@ class SessionManagement(ABC):
         raise WebTritErrorException(
             status_code=401,
             code=TokenErrorCode2.session_not_found,
-            error_message="Error closing the session",
+            error_message=f"Error closing the session {access_token}",
         )
 
 class OTPHandler(ABC):
@@ -144,7 +144,6 @@ class BSSAdapter(SessionManagement, OTPHandler):
         further requests."""
         raise NotImplementedError("Override this method in your sub-class")
 
-
     @abstractmethod
     def retrieve_user(self, session: SessionInfo, user: UserInfo) -> EndUser:
         """Obtain user's information - most importantly, his/her SIP credentials."""
@@ -175,6 +174,11 @@ class BSSAdapter(SessionManagement, OTPHandler):
         """Get the media file for a previously recorded call."""
         raise NotImplementedError("Override this method in your sub-class")
 
+    @abstractmethod
+    def create_new_user(self, user_data, tenant_id: str = None) -> UserCreateResponse:
+        """Create a new user as a part of the sign-up process"""
+        raise NotImplementedError("Override this method in your sub-class")
+
     @classmethod
     def remap_dict(self, mapping: List[AttrMap], data: dict) -> dict:
         """Remap the keys of the dictionary"""
@@ -189,7 +193,7 @@ class BSSAdapter(SessionManagement, OTPHandler):
         return tenant_id if tenant_id else "default"
 
 class SampleOTPHandler(OTPHandler):
-    """This is a demo class for handling OTPss, it does not send any
+    """This is a demo class for handling OTPs, it does not send any
     data to the end-user (only prints it in the log), so it is useful
     for debugging your own application while you are working on establishing
     a way to send real OTPs via SMS or other channel."""
@@ -216,7 +220,7 @@ class SampleOTPHandler(OTPHandler):
         otp = OTP(
             user_id=user.user_id,
             otp_expected_code="{:06d}".format(code),
-            expires_at=datetime.now() + timedelta(minutes=10),
+            expires_at=datetime.now() + timedelta(minutes=15),
         )
         # memorize it
         self.otp_db[otp_id] = otp

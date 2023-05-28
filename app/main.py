@@ -70,6 +70,11 @@ from bss.types import (
     VerifySessionOtpInternalServerErrorErrorResponse,
     VerifySessionOtpNotFoundErrorResponse,
     VerifySessionOtpUnprocessableEntityErrorResponse,
+    SessionNotFoundCode,
+    ExternalErrorCode,
+    OTPValidationErrCode,
+    FailedAuthIncorrectDataCode
+
 
 )
 VERSION="0.0.8"
@@ -108,7 +113,7 @@ security = HTTPBearer()
 router = APIRouter(route_class=RouteWithLogging)
 
 bss = initialize_bss_adapter(bss.adapters.__name__, config)
-
+bss_capabilities = bss.get_capabilities()
 
 @app.get(
     "/health-check",
@@ -149,7 +154,8 @@ def create_session(
     if not (body.login and body.password):
         # missing parameters
         raise WebTritErrorException(
-            status_code=422, code = CreateSessionUnprocessableEntityErrorResponse.validation_error,
+            status_code=422,
+            code = FailedAuthIncorrectDataCode.validation_error,
             error_message="Missing login & password"
         )
     
@@ -219,7 +225,9 @@ def delete_session(
         # we were unable to delete the session - perhaps wrong
         # or expired access token was provided
         raise WebTritErrorException(
-            status_code=500, code=42, error_message="Logout failed"
+            status_code=500,
+            code=ExternalErrorCode.external_api_issue,
+            error_message="Logout failed"
         )
 
     return Response(content="", status_code=204)
@@ -248,11 +256,13 @@ def create_session_otp(
     """
     Generate and send an OTP to the user
     """
-    global bss
+    global bss, bss_capabilities
 
-    if Capabilities.otpSignin not in bss.get_capabilities():
+    if Capabilities.otpSignin not in bss_capabilities:
         raise WebTritErrorException(
-            status_code=405, code=42, error_message="Method not supported"
+            status_code=405, 
+            error_message="Method not supported",
+            code=OTPValidationErrCode.validation_error, 
         )
     
     if hasattr(body, 'user_ref'):
@@ -260,7 +270,7 @@ def create_session_otp(
     else:
         raise WebTritErrorException(
             status_code=422,
-            code=CreateSessionOtpUnprocessableEntityErrorResponse.validation_error,
+            code=OTPValidationErrCode.validation_error,
             error_message="Cannot find user_ref in the request"
         )
 
@@ -290,11 +300,13 @@ def verify_session_otp(
     """
     Verify the OTP and sign in the user
     """
-    global bss
+    global bss, bss_capabilities
 
-    if Capabilities.otpSignin not in bss.get_capabilities():
+    if Capabilities.otpSignin not in bss_capabilities:
         raise WebTritErrorException(
-            status_code=401, code=42, error_message="Method not supported"
+            status_code=401,
+            code=OTPValidationErrCode.validation_error,
+            error_message="Method not supported"
         )
 
     otp_response = bss.validate_otp(body)
@@ -315,9 +327,9 @@ def get_system_info(
     """
     Supply information about the capabilities of the hosted PBX system and/or BSS adapter
     """
-    global bss
+    global bss, bss_capabilities
     return GeneralSystemInfoResponse(
-        name=bss.name(), version=bss.version(), supported=bss.get_capabilities()
+        name=bss.name(), version=bss.version(), supported=bss_capabilities
     )
 
 
@@ -370,7 +382,7 @@ def get_user_info(
 )
 def create_user(
     body: UserCreateRequest,
-    auth_data: HTTPAuthorizationCredentials = Depends(security),
+#    auth_data: HTTPAuthorizationCredentials = Depends(security),
     x_webtrit_tenant_id: Optional[str] = Header(None, alias='X-WebTrit-Tenant-ID'),
 ) -> Union[
     UserCreateResponse,
@@ -379,10 +391,32 @@ def create_user(
     CreateUserInternalServerErrorErrorResponse,
 ]:
     """
-    Create a new user
-    """
-    pass
+    Create a new user on the BSS / hosted PBX side as a part of the sign-up process.
+    The input data depends on the specifics of your application (e.g. one would sign
+    up users just using their mobile phone number, while another would require address,
+    email, credit card info, etc.) - so it is not defined by the schema and passed "as is".
 
+    Returns:
+        UserCreateResponse, which (upon success) can contain one of the following objects:
+            - SessionResponse means that a new user was created and signed in, the object
+                contains the access token to be used for subsequent requests
+            - SessionOtpCreateResponse means that a new user was created and an OTP
+                (email, SMS, etc.) was sent to the user, the object contains the OTP
+                request ID. The user should be prompted for the OTP code and then it
+                will be validated with OTP request ID.
+            - freeform dictionary with the data to be interpreted by the front-end app
+
+    """
+    global bss, bss_capabilities
+
+    if Capabilities.signup not in bss_capabilities:
+        raise WebTritErrorException(
+            status_code=401,
+            code=OTPValidationErrCode.validation_error,
+            error_message="Method not supported"
+        )
+    # TODO: think about extra authentification measures
+    return bss.create_new_user(body, tenant_id = x_webtrit_tenant_id)
 
 @router.get(
     '/user/contacts',
@@ -410,12 +444,12 @@ def get_user_contact_list(
     """
     Get corporate directory (contacts of other users in the same PBX)
     """
-    global bss
+    global bss, bss_capabilities
 
     access_token = auth_data.credentials
     session = bss.validate_session(access_token)
 
-    if Capabilities.extensions in bss.get_capabilities():
+    if Capabilities.extensions in bss_capabilities:
         contacts = bss.retrieve_contacts(session,
                         ExtendedUserInfo(
                             user_id = session.user_id.__root__,
@@ -454,12 +488,12 @@ def get_user_history_list(
     """
     Get user's call history
     """
-    global bss
+    global bss, bss_capabilities
 
     access_token = auth_data.credentials
     session = bss.validate_session(access_token)
 
-    if Capabilities.callHistory in bss.get_capabilities():
+    if Capabilities.callHistory in bss_capabilities:
         calls = bss.retrieve_calls(
             session,
             ExtendedUserInfo( user_id = session.user_id.__root__,
@@ -497,11 +531,11 @@ def get_user_recording(
     GetUserRecordingUnprocessableEntityErrorResponse,
     GetUserRecordingInternalServerErrorErrorResponse,
 ]:
-    global bss
+    global bss, bss_capabilities
 
     access_token = auth_data.credentials
     session = bss.validate_session(access_token)
-    if Capabilities.recordings in bss.get_capabilities():
+    if Capabilities.recordings in bss_capabilities:
         return bss.retrieve_call_recording(
             session, CallRecordingId(__root__=recording_id)
         )

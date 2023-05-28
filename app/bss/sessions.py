@@ -16,7 +16,7 @@ class SessionStorage:
     def __init__(self, session_db = None):
         """Initialize the object using the provided object
         for storing the sessions"""
-        self.session_db = session_db if session_db else TiedKeyValue()
+        self.session_db = session_db if session_db is not None else TiedKeyValue()
 
     def __refresh_token_index(self, id: str) -> str:
         """Change the value of refresh token so it still will

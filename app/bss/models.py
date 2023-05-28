@@ -446,7 +446,7 @@ class CreateUserUnprocessableEntityErrorResponse(ErrorResponse):
 
 
 class UserCreateRequest(BaseModel):
-    pass
+    attributes: Dict = {}
 
 
 class Code29(Enum):

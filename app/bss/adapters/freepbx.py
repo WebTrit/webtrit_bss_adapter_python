@@ -3,8 +3,8 @@ from bss.adapters import (
 )
 from bss.types import (Capabilities, UserInfo, EndUser, Contacts, ContactInfo,
                        Calls, CDRInfo, ConnectStatus, SIPStatus, SessionInfo,
-                       Numbers, OTPCreateResponse, OTPVerifyRequest,
-                       SIPServer, SIPInfo)
+                       Numbers, OTPCreateResponse, OTPVerifyRequest, FailedAuthCode,
+                       UserNotFoundCode, SIPServer, SIPInfo)
 
 
 from bss.sessions import configure_session_storage
@@ -255,7 +255,7 @@ class FreePBXAdapter(BSSAdapter):
 
             raise WebTritErrorException(
                 status_code=401,
-                code=42,
+                code=FailedAuthCode.invalid_credentials,
                 error_message="Invalid password",
             )
 
@@ -263,7 +263,7 @@ class FreePBXAdapter(BSSAdapter):
         # error message to simplify the process of fixing the problem
         raise WebTritErrorException(
             status_code=401,
-            code=42,
+            code=FailedAuthCode.invalid_credentials,
             error_message="User authentication error",
         )
 
@@ -282,10 +282,11 @@ class FreePBXAdapter(BSSAdapter):
 
         # no such session
         raise WebTritErrorException(
-            status_code=404, code=42, error_message="User not found"
+            status_code=404, code=UserNotFoundCode.user_not_found,
+            error_message="User not found"
         )
 
-    def retrieve_contacts(self, session: SessionInfo, user: UserInfo) -> Contacts:
+    def retrieve_contacts(self, session: SessionInfo, user: UserInfo) -> List[ContactInfo]:
         """List of other extensions in the PBX"""
 
         ext_list = self.api_client.get_all_extensions()
@@ -296,7 +297,7 @@ class FreePBXAdapter(BSSAdapter):
             if x.get("extensionId", "") != user.user_id
         ]
 
-        return Contacts(items=contacts)
+        return contacts
 
     def retrieve_calls(self, session: SessionInfo, user: UserInfo, **kwargs) -> Calls:
         pass
@@ -366,3 +367,7 @@ class FreePBXAdapter(BSSAdapter):
             )
 
             return ContactInfo(**data)
+
+    def create_new_user(self, user_data, tenant_id: str = None):
+        """Create a new user as a part of the sign-up process - not supported yet"""
+        pass
