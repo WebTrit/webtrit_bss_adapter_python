@@ -6,7 +6,9 @@ from abc import ABC, abstractmethod
 from datetime import datetime, timedelta
 
 from bss.types import (UserInfo, EndUser, ContactInfo, Calls, OTP,
-                       OTPCreateResponse, OTPVerifyRequest, OTPDeliveryChannel)
+                       OTPCreateResponse, OTPVerifyRequest, OTPDeliveryChannel,
+                       FailedAuthCode, UserNotFoundCode, SessionNotFoundCode, TokenErrorCode,
+                       RefreshTokenErrorCode, TokenErrorCode2, OTPIDNotFoundCode, OTPValidationErrCode)
 from bss.sessions import SessionStorage, SessionInfo
 from app_config import AppConfig
 from report_error import WebTritErrorException
@@ -56,7 +58,7 @@ class SessionManagement(ABC):
                 # raise an error
                 raise WebTritErrorException(
                     status_code=401,
-                    code=42,
+                    code=TokenErrorCode.access_token_expired,
                     error_message="Access token expired",
                 )
 
@@ -64,7 +66,7 @@ class SessionManagement(ABC):
 
         raise WebTritErrorException(
             status_code=401,
-            code=42,
+            code=TokenErrorCode.access_token_invalid,
             error_message="Invalid access token",
         )
 
@@ -75,7 +77,7 @@ class SessionManagement(ABC):
         if not session:
             raise WebTritErrorException(
                 status_code=401,
-                code=42,
+                code=RefreshTokenErrorCode.refresh_token_invalid,
                 error_message="Invalid refresh token",
             )
         # everything is in order, create a new session
@@ -91,7 +93,7 @@ class SessionManagement(ABC):
 
         raise WebTritErrorException(
             status_code=401,
-            code=42,
+            code=TokenErrorCode2.session_not_found,
             error_message="Error closing the session",
         )
 
@@ -178,11 +180,13 @@ class BSSAdapter(SessionManagement, OTPHandler):
         """Remap the keys of the dictionary"""
         new_dict = {}
         for x in mapping:
-            value = data.get(x.old_key, None)
+            value = data.get(x.old_key if x.old_key else x.new_key, None)
             new_dict[x.new_key] = value if not x.converter else x.converter(value)
         return new_dict
 
-
+    def default_id_if_none(self, tenant_id: str) -> str:
+        """Provide a defaut value for tenant ID if none is supplied in HTTP headers"""
+        return tenant_id if tenant_id else "default"
 
 class SampleOTPHandler(OTPHandler):
     """This is a demo class for handling OTPss, it does not send any
@@ -232,21 +236,21 @@ class SampleOTPHandler(OTPHandler):
         if not original:
             raise WebTritErrorException(
                 status_code=401,
-                code=42,
+                code=OTPIDNotFoundCode.otp_id_not_found,
                 error_message="Invalid OTP ID",
             )
 
         if original.expires_at < datetime.now():
             raise WebTritErrorException(
                 status_code=419,
-                code=42,
+                code=OTPValidationErrCode.otp_id_timeout,
                 error_message="OTP has expired",
             )
 
         if original.otp_expected_code != otp.code:
             raise WebTritErrorException(
                 status_code=401,
-                code=42,
+                code=OTPValidationErrCode.code_incorrect,
                 error_message="Invalid OTP",
             )
 
@@ -300,7 +304,6 @@ class BSSAdapterExternalDB(BSSAdapter, SampleOTPHandler):
     def authenticate(self, user: UserInfo, password: str = None) -> SessionInfo:
         """Authenticate user with username and password and
         produce an API token for further requests."""
-
         
         user_data = self.find_user_by_login(user)
         if user_data:
@@ -313,7 +316,7 @@ class BSSAdapterExternalDB(BSSAdapter, SampleOTPHandler):
 
             raise WebTritErrorException(
                 status_code=401,
-                code=42,
+                code=FailedAuthCode.invalid_credentials,
                 error_message="Invalid password",
             )
 
@@ -321,7 +324,7 @@ class BSSAdapterExternalDB(BSSAdapter, SampleOTPHandler):
         # error message to simplify the process of fixing the problem
         raise WebTritErrorException(
             status_code=401,
-            code=42,
+            code=FailedAuthCode.invalid_credentials,
             error_message="User authentication error",
         )
 
@@ -362,7 +365,9 @@ class BSSAdapterExternalDB(BSSAdapter, SampleOTPHandler):
 
         # no such session
         raise WebTritErrorException(
-            status_code=404, code=42, error_message="User not found"
+            status_code=404,
+            code=UserNotFoundCode.user_not_found,
+            error_message="User not found"
         )
 
     @abstractmethod

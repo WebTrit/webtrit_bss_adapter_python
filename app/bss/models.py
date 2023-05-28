@@ -945,7 +945,7 @@ class UserInfoShowResponse(BaseModel):
     )
     status: Optional[UserStatus] = Field(
         description="Whether this user is active or blocked", example='active',
-        default_factory=UserStatus.active
+        default_factory=lambda: UserStatus.active
     )
     numbers: Optional[Numbers] = None
     sip: SipInfo

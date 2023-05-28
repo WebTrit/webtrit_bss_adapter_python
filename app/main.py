@@ -109,6 +109,7 @@ router = APIRouter(route_class=RouteWithLogging)
 
 bss = initialize_bss_adapter(bss.adapters.__name__, config)
 
+
 @app.get(
     "/health-check",
     response_model=Health,
@@ -148,7 +149,7 @@ def create_session(
     if not (body.login and body.password):
         # missing parameters
         raise WebTritErrorException(
-            status_code=422, code = CreateSessionUnprocessableEntityErrorResponse.validation_error ,
+            status_code=422, code = CreateSessionUnprocessableEntityErrorResponse.validation_error,
             error_message="Missing login & password"
         )
     
@@ -171,6 +172,7 @@ def create_session(
 )
 def update_session(
     body: SessionUpdateRequest,
+    x_webtrit_tenant_id: Optional[str] = Header(None, alias='X-WebTrit-Tenant-ID'),
 ) -> Union[
     SessionResponse,
     UpdateSessionNotFoundErrorResponse,
@@ -198,6 +200,7 @@ def update_session(
 )
 def delete_session(
     auth_data: HTTPAuthorizationCredentials = Depends(security),
+    x_webtrit_tenant_id: Optional[str] = Header(None, alias='X-WebTrit-Tenant-ID'),
 ) -> (
     Union[
         None,
@@ -277,6 +280,7 @@ def create_session_otp(
 )
 def verify_session_otp(
     body: SessionOtpVerifyRequest,
+    x_webtrit_tenant_id: Optional[str] = Header(None, alias='X-WebTrit-Tenant-ID'),
 ) -> Union[
     SessionResponse,
     VerifySessionOtpNotFoundErrorResponse,
@@ -330,6 +334,7 @@ def get_system_info(
 )
 def get_user_info(
     auth_data: HTTPAuthorizationCredentials = Depends(security),
+    x_webtrit_tenant_id: Optional[str] = Header(None, alias='X-WebTrit-Tenant-ID'),
 ) -> (
     Union[
         UserInfoShowResponse,
@@ -346,7 +351,10 @@ def get_user_info(
     access_token = auth_data.credentials
     session = bss.validate_session(access_token)
 
-    user = bss.retrieve_user(session, UserInfo( user_id = session.user_id.__root__))
+    user = bss.retrieve_user(session, ExtendedUserInfo(
+        user_id = session.user_id.__root__,
+        tenant_id=bss.default_id_if_none(x_webtrit_tenant_id)
+        ))
 
     return user
 
@@ -363,6 +371,7 @@ def get_user_info(
 def create_user(
     body: UserCreateRequest,
     auth_data: HTTPAuthorizationCredentials = Depends(security),
+    x_webtrit_tenant_id: Optional[str] = Header(None, alias='X-WebTrit-Tenant-ID'),
 ) -> Union[
     UserCreateResponse,
     CreateUserMethodNotAllowedErrorResponse,
@@ -388,6 +397,7 @@ def create_user(
 )
 def get_user_contact_list(
     auth_data: HTTPAuthorizationCredentials = Depends(security),
+    x_webtrit_tenant_id: Optional[str] = Header(None, alias='X-WebTrit-Tenant-ID'),
 ) -> (
     Union[
         UserContactIndexResponse,
@@ -407,7 +417,9 @@ def get_user_contact_list(
 
     if Capabilities.extensions in bss.get_capabilities():
         contacts = bss.retrieve_contacts(session,
-                        UserInfo( user_id = session.user_id.__root__))
+                        ExtendedUserInfo(
+                            user_id = session.user_id.__root__,
+                            tenant_id=bss.default_id_if_none(x_webtrit_tenant_id)))
         return UserContactIndexResponse(items = contacts)
 
     # not supported by hosted PBX / BSS, return empty list
@@ -431,6 +443,7 @@ def get_user_history_list(
     time_from: Optional[datetime] = None,
     time_to: Optional[datetime] = None,
     auth_data: HTTPAuthorizationCredentials = Depends(security),
+    x_webtrit_tenant_id: Optional[str] = Header(None, alias='X-WebTrit-Tenant-ID'),
 ) -> Union[
     UserHistoryIndexResponse,
     GetUserHistoryListUnauthorizedErrorResponse,
@@ -449,7 +462,8 @@ def get_user_history_list(
     if Capabilities.callHistory in bss.get_capabilities():
         calls = bss.retrieve_calls(
             session,
-            UserInfo( user_id = session.user_id.__root__),
+            ExtendedUserInfo( user_id = session.user_id.__root__,
+                             tenant_id=bss.default_id_if_none(x_webtrit_tenant_id)),
             items_per_page=items_per_page,
             page=page,
             date_from=time_from,
@@ -474,7 +488,8 @@ def get_user_history_list(
 )
 def get_user_recording(
     recording_id: str,
-    auth_data: HTTPAuthorizationCredentials = Depends(security)
+    auth_data: HTTPAuthorizationCredentials = Depends(security),
+    x_webtrit_tenant_id: Optional[str] = Header(None, alias='X-WebTrit-Tenant-ID'),
 ) -> Union[
     BinaryResponse,
     GetUserRecordingUnauthorizedErrorResponse,

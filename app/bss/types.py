@@ -1,7 +1,11 @@
 from dataclasses import dataclass, field
-from datetime import datetime
-from typing import List, Dict, Any, Optional, List
+from typing import List, Dict, Any, Optional, List, Union
 from pydantic import BaseModel, Field
+from fastapi import Response
+import enum
+from datetime import datetime, timedelta
+import random
+import orjson
 
 # for now these are just "clones" but we may extend them in the future
 # plus we do not want to depend on the names of the objects in the schema too much
@@ -61,8 +65,14 @@ from bss.models import (
     VerifySessionOtpInternalServerErrorErrorResponse1 as VerifySessionOtpInternalServerErrorErrorResponse,
     VerifySessionOtpNotFoundErrorResponse1 as VerifySessionOtpNotFoundErrorResponse,
     VerifySessionOtpUnprocessableEntityErrorResponse1 as VerifySessionOtpUnprocessableEntityErrorResponse,
-
-
+    Code9 as FailedAuthCode,
+    Code35 as UserNotFoundCode,
+    Code39 as TokenErrorCode,
+    Code40 as TokenErrorCode2,
+    Code41 as SessionNotFoundCode,
+    Code43 as RefreshTokenErrorCode,
+    Code49 as OTPIDNotFoundCode,
+    Code50 as OTPValidationErrCode
 )
 
 from .models import (
@@ -124,3 +134,117 @@ class Health(BaseModel):
     status: Optional[str] = Field(
         None, description="A response from the server.", example="OK"
     )
+
+
+
+
+
+def orjson_dumps(v, *, default):
+    return orjson.dumps(v, default=default).decode('utf-8')
+ 
+class Serialiazable(BaseModel):
+    """Object that can be converted into JSON structure"""
+
+    class Config:
+        json_loads = orjson.loads
+        json_dumps = orjson_dumps
+
+class VoIPSystemType(enum.Enum):
+    HOSTED_SERVICE = 'Hosted'
+    OWN = 'Own'
+    CPAAS = 'CPaaS'
+
+class VoIPSystemInfo(Serialiazable):
+    "SIP server parameters"
+    name: str = ""
+    # issues with serializing enums
+    type: Optional[str] = None
+    vendor: Optional[str] = None
+    url: Optional[str] = None
+
+class SIPServerInfo(Serialiazable):
+    "SIP server parameters"
+    host: str = ""
+    port: int = 5060
+    use_tcp: bool = False
+
+class SIPUserInfo(Serialiazable):
+    """The information about a user that is stored in the proprietary DB"""
+    user_id: str
+    login: Optional[str] = None
+    password: Optional[str] = None
+    first_name: Optional[str] = None
+    last_name: Optional[str] = None
+    email: Optional[str] = None
+    sip_username: Optional[str] = ""
+    sip_password: Optional[str] = ""
+    sip: Optional[SIPServerInfo] = None
+    ext_number: Optional[str] = None
+    outgoing_cli: Optional[str] = None
+    dids: List[str] = Field(default_factory=list)
+
+class TenantInfo(Serialiazable):
+    """The information about a user that is stored in the proprietary DB"""
+    tenant_id: str
+    login: str = ""
+    password: str = ""
+    email_validated: bool = False
+    first_name: Optional[str] = None
+    last_name: Optional[str] = None
+    email: Optional[str] = None
+    company_name: Optional[str] = None
+    website: Optional[str] = None
+    otp_sent: Optional[str] = None
+    otp_expires: Optional[datetime] = None
+    # custom BSS adapeter
+    adapter_url: Optional[str] = None
+    voip_system: Optional[VoIPSystemInfo] = None
+    # default SIP settings
+    sip: Optional[SIPServerInfo] = None
+    users: List[SIPUserInfo] = Field(default_factory=list)
+
+    def generate_otp(self) -> str:
+        self.otp_sent = str(random.randint(100000, 999999))
+        self.otp_expires = datetime.now() + timedelta(minutes = 5)
+        return self.otp_sent
+
+    def check_otp(self, otp: str) -> int:
+        """Check if the OTP is valid
+        
+        Returns:
+        0 if success
+        1 if no OTP was assigned
+        2 if OTP has expired
+        3 if OTP is incorrect"""
+        if self.otp_sent is None:
+            return 1
+        if self.otp_expires and self.otp_expires < datetime.now():
+            return 2
+        if self.otp_sent != otp:
+            return 3
+        
+        return 0
+    
+    
+class SuccessResponse(Response):
+    """The success response"""
+    message: Optional[str] = None
+
+class SuccessResponseCreate(SuccessResponse):
+    """The success response"""
+    id: Optional[str] = None
+
+class StatusResponse(BaseModel):
+    """The status response"""
+    status: Optional[str] = None
+    message: Optional[str] = None
+
+class ListResponse(BaseModel):
+    """The status response"""
+    count: int = 0
+    items: List[Any] = []
+
+def is_scalar(obj) -> bool:
+    """Return True if the object is a scalar"""
+    return isinstance(obj, (str, int, float, bool))
+
