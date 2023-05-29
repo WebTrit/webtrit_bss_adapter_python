@@ -139,15 +139,20 @@ class ExampleBSSAdapter(BSSAdapterExternalDB):
 
         return contacts
 
-    def retrieve_calls(self, session: SessionInfo, user: UserInfo, **kwargs) -> Calls:
+    def retrieve_calls(self, session: SessionInfo, user: UserInfo,
+                        time_from: datetime = None,
+                        time_to: datetime = None) -> List[CDRInfo]:
         """Obtain CDRs (call history) of the user"""
-        min_calls = 5
-        max_calls = 20
-        calls = random.randint(min_calls, max_calls)
+        if time_from and time_from < datetime.datetime(2020, 1, 1):
+            # return fixed number of calls to test pagination
+            calls = 250
+        else:
+            min_calls = 20
+            max_calls = 200
+            calls = random.randint(min_calls, max_calls)
         directions = ["incoming", "outgoing"]
         statuses = ["accepted", "declined", "missed", "error"]
-        cdrs = {
-            "items": [
+        cdrs = [
                 CDRInfo(
                     recording_id=str(uuid.uuid1()),
                     connect_time=datetime.datetime.now()
@@ -163,13 +168,7 @@ class ExampleBSSAdapter(BSSAdapterExternalDB):
                     disconnected_reason="Unknown"
                 )
                 for n in range(calls)
-            ],
-            "pagination": {
-                "items_per_page": calls,
-                "items_total": calls * random.randint(3, 10),
-                "page": random.randint(1, 3),
-            },
-        }
+            ]
         return cdrs
 
     # call recording is not supported in this example

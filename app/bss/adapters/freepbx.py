@@ -299,7 +299,7 @@ class FreePBXAdapter(BSSAdapter):
 
         return contacts
 
-    def retrieve_calls(self, session: SessionInfo, user: UserInfo, **kwargs) -> Calls:
+    def retrieve_calls(self, session: SessionInfo, user: UserInfo, **kwargs) -> List[CDRInfo]:
         pass
 
     # call recording is not supported in this example

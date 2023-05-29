@@ -5,7 +5,7 @@ import uuid
 from abc import ABC, abstractmethod
 from datetime import datetime, timedelta
 
-from bss.types import (UserInfo, EndUser, ContactInfo, Calls, OTP,
+from bss.types import (UserInfo, EndUser, ContactInfo, CDRInfo, OTP,
                        OTPCreateResponse, OTPVerifyRequest, OTPDeliveryChannel, UserCreateResponse,
                        FailedAuthCode, UserNotFoundCode, SessionNotFoundCode, TokenErrorCode,
                        RefreshTokenErrorCode, TokenErrorCode2, OTPIDNotFoundCode, OTPValidationErrCode)
@@ -159,11 +159,9 @@ class BSSAdapter(SessionManagement, OTPHandler):
         self,
         session: SessionInfo,
         user: UserInfo,
-        page: None,
-        items_per_page: None,
-        date_from: None,
-        date_to: None,
-    ) -> Calls:
+        date_from: datetime = None,
+        date_to: datetime = None,
+    ) -> List[CDRInfo]:
         """Obtain CDRs (call history) of the user"""
         raise NotImplementedError("Override this method in your sub-class")
 
@@ -384,11 +382,9 @@ class BSSAdapterExternalDB(BSSAdapter, SampleOTPHandler):
         self,
         session: SessionInfo,
         user: UserInfo,
-        page: None,
-        items_per_page: None,
-        date_from: None,
-        date_to: None,
-    ) -> Calls:
+        date_from: datetime = None,
+        date_to: datetime = None,
+    ) -> List[CDRInfo]:
         """Obtain CDRs (call history) of the user"""
         raise NotImplementedError("Override this method in your sub-class")
 

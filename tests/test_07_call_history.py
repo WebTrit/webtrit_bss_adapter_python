@@ -76,3 +76,41 @@ def test_cdrs(api_url, call_history_path, attr):
 
     for x in items:
         verify_attribute_in_json(attr, x)
+
+@pytest.mark.parametrize(
+    "page",
+    [
+        { "page": 1, "items_per_page": 40, "items_total": 250, "items": 40}, # first page
+        { "page": 5, "items_per_page": 40, "items_total": 250, "items": 40}, # middle page
+        { "page": 7, "items_per_page": 40, "items_total": 250, "items": 10}, # last page
+        { "page": 8, "items_per_page": 40, "items_total": 250, "items": 0}, # empty page
+    ],
+)
+def test_call_history_pagination(api_url, call_history_path, page):
+    global response2, access_token
+    headers = {"Authorization": "Bearer " + access_token}
+
+    response2 = requests.get(
+        api_url + call_history_path,
+        headers=headers,
+        params = { "time_from": "1974-01-01 00:00:00",
+                    "items_per_page": page["items_per_page"],
+                    "page": page["page"]
+                    }
+        # json = { }
+    )
+    try:
+        body = response2.json()
+    except json.JSONDecodeError as e:
+        body = None
+    logging.info("response:" + pp.pformat(body))
+    assert response2.status_code == 200
+    assert isinstance(body, dict)
+    assert 'items' in body and isinstance(body['items'], list)
+    assert 'pagination' in body and isinstance(body['pagination'], dict)
+    pagination = body['pagination']
+    assert pagination["page"] == page["page"]
+    assert pagination["items_per_page"] == page["items_per_page"]
+    assert pagination["items_total"] == page["items_total"]
+    assert len(body['items']) == page["items"]
+    # we got an object (dict)

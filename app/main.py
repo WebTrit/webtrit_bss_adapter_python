@@ -70,6 +70,7 @@ from bss.types import (
     VerifySessionOtpInternalServerErrorErrorResponse,
     VerifySessionOtpNotFoundErrorResponse,
     VerifySessionOtpUnprocessableEntityErrorResponse,
+    Pagination,
     SessionNotFoundCode,
     ExternalErrorCode,
     OTPValidationErrCode,
@@ -457,7 +458,7 @@ def get_user_contact_list(
         return UserContactIndexResponse(items = contacts)
 
     # not supported by hosted PBX / BSS, return empty list
-    return UserContactIndexResponse(items = [])
+    return UserContactIndexResponse(items = [], )
 
 
 @router.get(
@@ -498,16 +499,29 @@ def get_user_history_list(
             session,
             ExtendedUserInfo( user_id = session.user_id.__root__,
                              tenant_id=bss.default_id_if_none(x_webtrit_tenant_id)),
-            items_per_page=items_per_page,
-            page=page,
-            date_from=time_from,
-            date_to=time_to,
+            time_from=time_from,
+            time_to=time_to,
         )
+        # chose the required subset according to the pagination parameters
+        total = len(calls)
+        skip_items = (page - 1) * items_per_page
+        calls = calls[skip_items:]
+        if len(calls) > items_per_page:
+            calls = calls[:items_per_page]
+        return UserHistoryIndexResponse(items = calls,
+                                        pagination=Pagination(
+                                            page=page,
+                                            items_total=total,
+                                            items_per_page=items_per_page)
+                                    )
 
-        return calls
-
-    # not supported by hosted PBX / BSS, return empty list
-    return UserHistoryIndexResponse(__root__=[])
+    # not supported by hosted PBX / BSS, return an empty list
+    return UserHistoryIndexResponse(items = [],
+                                    pagination=Pagination(
+                                        page=1,
+                                        items_total=0,
+                                        items_per_page=100
+                                    ))
 
 @router.get(
     '/user/recordings/{recording_id}',

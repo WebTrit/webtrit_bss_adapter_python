@@ -66,6 +66,7 @@ from bss.models import (
     VerifySessionOtpInternalServerErrorErrorResponse1 as VerifySessionOtpInternalServerErrorErrorResponse,
     VerifySessionOtpNotFoundErrorResponse1 as VerifySessionOtpNotFoundErrorResponse,
     VerifySessionOtpUnprocessableEntityErrorResponse1 as VerifySessionOtpUnprocessableEntityErrorResponse,
+    UserHistoryIndexResponsePagination as Pagination,
     Code9 as FailedAuthCode,
     Code11 as SessionNotFoundCode,
     Code35 as UserNotFoundCode,
