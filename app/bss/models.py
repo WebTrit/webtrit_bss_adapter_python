@@ -888,7 +888,7 @@ class UserHistoryIndexResponsePagination(BaseModel):
     items_per_page: Optional[conint(ge=1)] = Field(
         None, description='Number of items per page.', example=100
     )
-    items_total: Optional[conint(ge=1)] = Field(
+    items_total: Optional[int] = Field(
         None,
         description='Total number of CDRs within the selected time period\nor within the entire history if no time period is provided.\n',
         example=1000,

@@ -5,7 +5,7 @@ import os
 import sys
 from fastapi import FastAPI, APIRouter, Depends, Response, Request, Header
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
-
+import uuid
 import bss.dbs.firestore
 # from fastapi.responses import JSONResponse
 import logging
@@ -18,6 +18,7 @@ from bss.adapters import initialize_bss_adapter
 from bss.constants import TENANT_ID_HTTP_HEADER
 from bss.types import Capabilities, UserInfo, ExtendedUserInfo, Health
 from request_trace import RouteWithLogging
+from contextvars import ContextVar
 
 from bss.types import (
     BinaryResponse,
@@ -91,15 +92,37 @@ if config.get_conf_val("Debug", default = "False").upper() == "TRUE":
     log_level = logging.DEBUG
 else:
     log_level = logging.INFO
+
+
+request_id: ContextVar[str] = ContextVar('request_id', default='')
+request_id.set('STARTUP')
+
+class CustomFormatter(logging.Formatter):
+    def format(self, record):
+        record.request_id = request_id.get()  # Add your custom field here
+        return super().format(record)
+
+# Create a custom formatter instance
 if not os.environ.get('PORT'):
     # we are running locally so it is useful to add timestamps
     # since when running in GCP, logs already have timestamps
-    logging.basicConfig(level=log_level, format='[%(asctime)s] %(levelname)s: %(message)s')
+    log_prefix='[%(asctime)s] %(levelname)s '
+else:
+    # cloud debug
+    log_prefix='%(levelname)s '
+formatter = CustomFormatter(fmt= log_prefix +'RQ-ID:%(request_id)s %(message)s')
 
+# Create a handler and add the formatter to it
+handler = logging.StreamHandler()
+handler.setFormatter(formatter)
+
+# Add the handler to the logger
+logger = logging.getLogger()
+logger.addHandler(handler)
 # Propagate the root logger configuration to all child loggers
-logging.getLogger().setLevel(log_level)
-logging.getLogger().handlers = logging.getLogger().handlers
-logging.getLogger().propagate = True
+logger.setLevel(log_level)
+logger.handlers = logging.getLogger().handlers
+logger.propagate = True
 
 
 app = FastAPI(
@@ -111,7 +134,11 @@ app = FastAPI(
     #    servers=[{'url': '/api/v1', 'variables': {}}],
 )
 security = HTTPBearer()
+
+
 router = APIRouter(route_class=RouteWithLogging)
+
+
 
 bss = initialize_bss_adapter(bss.adapters.__name__, config)
 bss_capabilities = bss.get_capabilities()
@@ -561,6 +588,22 @@ def get_user_recording(
 @app.exception_handler(WebTritErrorException)
 async def handle_webtrit_error(request, exc):
     return exc.response()
+
+
+def get_request_id(request: Request):
+    for id in [
+        request.headers.get('X-Request-ID', None),
+        request.headers.get('X-Cloud-Trace-Context', None),
+    ]:
+        if id is not None:
+            return id
+    return 'WEBTRIT'+str(uuid.uuid4())
+
+@app.middleware("http")
+async def add_request_id(request: Request, call_next):
+    request_id.set(get_request_id(request))
+    response = await call_next(request)
+    return response
 
 
 app.include_router(router, prefix=API_VERSION_PREFIX)

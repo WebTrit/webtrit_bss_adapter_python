@@ -30,7 +30,8 @@ response2 = None
 
 def test_call_history(api_url, call_history_path):
     global response2, access_token
-    headers = {"Authorization": "Bearer " + access_token}
+    headers = {"Authorization": "Bearer " + access_token,
+               "X-Request-ID": "test" + call_history_path + "1" }
 
     response2 = requests.get(
         api_url + call_history_path,
