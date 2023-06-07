@@ -36,6 +36,7 @@ def log_info(req_body, res_body):
 
 
 class RouteWithLogging(APIRoute):
+    """Custom route class that logs request and response bodies """
     def get_route_handler(self) -> Callable:
         original_route_handler = super().get_route_handler()
 

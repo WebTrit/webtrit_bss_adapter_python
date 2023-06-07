@@ -128,3 +128,6 @@ dmypy.json
 
 # Pyre type checker
 .pyre/
+
+# multi-tenant adapter resides in another git repo
+app/bss/adapters/multi_tenant.py*

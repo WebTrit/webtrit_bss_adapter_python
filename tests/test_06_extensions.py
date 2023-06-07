@@ -35,7 +35,7 @@ def test_extensions(api_url, extensions_path):
     response2 = requests.get(
         api_url + extensions_path,
         headers={"Authorization": "Bearer " + access_token,
-                  "X-Request-ID": "test" + extensions_path + "1" },
+                  },
     )
 
     logging.info("response:" + response2.content.decode("utf-8"))
