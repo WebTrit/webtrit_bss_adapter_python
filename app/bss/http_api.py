@@ -3,6 +3,7 @@ import requests
 from datetime import datetime, timedelta
 from abc import ABC, abstractmethod
 from report_error import WebTritErrorException
+from bss.types import ExternalErrorCode
 
 class HTTPAPIConnector(ABC):
     """Extract data from a remote server via REST/GRAPHQL or other HTTP-based API"""
@@ -85,7 +86,7 @@ class HTTPAPIConnector(ABC):
             logging.debug(f"Connection to {self.api_server} timed out")
             raise WebTritErrorException(
                     status_code=500,
-                    code=42,
+                    code=ExternalErrorCode.external_api_issue,
                     error_message="Request execution error on the other side",
                     bss_request_trace = {
                         'method': method,
@@ -102,7 +103,7 @@ class HTTPAPIConnector(ABC):
             logging.debug(f"Request error: {e}")
             raise WebTritErrorException(
                     status_code=500,
-                    code=42,
+                    code=ExternalErrorCode.external_api_issue,
                     error_message="Request execution error on the other side",
                     bss_request_trace = {
                         'method': method,
