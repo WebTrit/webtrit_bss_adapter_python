@@ -12,7 +12,9 @@ def orjson_dumps(v, *, default):
  
 class Serialiazable(BaseModel):
     """Object that can be converted into JSON structure"""
-
+    def is_serializable(self) -> bool:
+        return True
+    
     class Config:
         json_loads = orjson.loads
         json_dumps = orjson_dumps
@@ -238,7 +240,8 @@ class Serializer:
             serializer = SerializerDict
         elif is_dataclass(obj):
             serializer = SerializerDataclass
-        elif isinstance(obj, Serialiazable ):
+        elif isinstance(obj, Serialiazable) or \
+            (hasattr(obj, 'is_serializable') and obj.is_serializable()):
             serializer = SerializerPydantic
         else:
             # use pickle to serialize a complex object

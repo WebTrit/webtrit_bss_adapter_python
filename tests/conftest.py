@@ -99,6 +99,11 @@ def userinfo_path():
     global API_PREFIX
     return API_PREFIX + "/user"
 
+@pytest.fixture
+def signup_path():
+    global API_PREFIX
+    return API_PREFIX + "/user"
+
 
 @pytest.fixture
 def extensions_path():

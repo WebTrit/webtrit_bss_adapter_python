@@ -131,3 +131,4 @@ dmypy.json
 
 # multi-tenant adapter resides in another git repo
 app/bss/adapters/multi_tenant.py*
+app/common/

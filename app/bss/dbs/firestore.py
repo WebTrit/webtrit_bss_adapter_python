@@ -1,17 +1,25 @@
 from bss.dbs import TiedKeyValue
 from google.cloud import firestore
+from google.cloud.firestore_v1.base_query import FieldFilter
 #from google.oauth2 import service_account
 import json
 import logging
 # from firebase_admin import credentials, firestore
-import os
 from bss.dbs.serializer import Serializer
+from pydantic import BaseModel, Field
+from typing import List, Dict, Any, Optional, Union
+
+class QueryFilter(BaseModel):
+    field: str = Field( description="Field name", example="tenant_id")
+    value: str = Field( description="Field value", example="1234")
+    op: Optional[str] = Field( description="Comparison operator (== by default)",
+                                default=u"==", example="!=")
 
 
 class FirestoreKeyValue(TiedKeyValue):
     """Access user data stored in Firestore"""
 
-    def __init__(self, credentials_file: str, collection_name: str):
+    def __init__(self, collection_name: str):
         """Initialize the database connection"""
         # cred = self.__credentials__(credentials_file)
         # default mode - it will use GOOGLE_APPLICATION_CREDENTIALS env
@@ -107,3 +115,34 @@ class FirestoreKeyValue(TiedKeyValue):
     def keys(self):
         """Iterate over the keys"""
         return iter(self)
+
+    def search(self, *args) -> list:
+        """Search for an object based on criteria.
+        
+        Returns a list of objects which match the criteria or an empty list"""
+        query = self.db.collection(self.collection)
+        logging.debug(f"Searching in {self.collection}")
+        for f in args:
+            if not isinstance(f, QueryFilter):
+                raise TypeError(f"Search parameter must be a QueryFilter object, got {f}")
+            filter = FieldFilter(field_path = f.field,
+                                        op_string = u"==" if not f.op else f.op,
+                                        value = f.value)
+            logging.debug(f"Adding filter {f}")
+            query = query.where(filter=filter)
+    
+        # Get the first matching document
+        docs = query.get()
+        if isinstance(docs, list):
+            if (x := len(docs)) > 0:
+                logging.debug(f"{x} items returned by the search")
+                return [ self.__unpack_from_store__(x.to_dict()) for x in docs ]
+            
+        elif docs:
+            # still cannot figure out when a single object and when a list
+            # is returned
+            logging.debug("A single item returned by the search")
+            return [ self.__unpack_from_store__(docs.to_dict()) ]
+        
+        logging.debug("No items returned by the search")
+        return []
