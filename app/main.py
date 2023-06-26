@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Optional, Union
+from typing import Optional, Union, Dict
 import os
 import sys
 from fastapi import FastAPI, APIRouter, Depends, Response, Request, Header
@@ -75,8 +75,8 @@ from bss.types import (
     SessionNotFoundCode,
     ExternalErrorCode,
     OTPValidationErrCode,
-    FailedAuthIncorrectDataCode
-
+    FailedAuthIncorrectDataCode,
+    SessionInfo
 
 )
 VERSION="0.0.8"
@@ -308,7 +308,7 @@ def create_session_otp(
 
 @router.post(
     '/session/otp-verify',
-    response_model=SessionResponse,
+    response_model=SessionInfo,
     responses={
         '404': {'model': VerifySessionOtpNotFoundErrorResponse},
         '422': {'model': VerifySessionOtpUnprocessableEntityErrorResponse},
@@ -320,7 +320,7 @@ def verify_session_otp(
     body: SessionOtpVerifyRequest,
     x_webtrit_tenant_id: Optional[str] = Header(None, alias='X-WebTrit-Tenant-ID'),
 ) -> Union[
-    SessionResponse,
+    SessionInfo,
     VerifySessionOtpNotFoundErrorResponse,
     VerifySessionOtpUnprocessableEntityErrorResponse,
     VerifySessionOtpInternalServerErrorErrorResponse,
@@ -409,7 +409,8 @@ def get_user_info(
     tags=['user'],
 )
 def create_user(
-    body: UserCreateRequest,
+#   body: UserCreateRequest,
+    body: Dict,
 #    auth_data: HTTPAuthorizationCredentials = Depends(security),
     x_webtrit_tenant_id: Optional[str] = Header(None, alias='X-WebTrit-Tenant-ID'),
 ) -> Union[
@@ -423,6 +424,8 @@ def create_user(
     The input data depends on the specifics of your application (e.g. one would sign
     up users just using their mobile phone number, while another would require address,
     email, credit card info, etc.) - so it is not defined by the schema and passed "as is".
+
+    **body** - dictionary with the user's data
 
     Returns:
         UserCreateResponse, which (upon success) can contain one of the following objects:

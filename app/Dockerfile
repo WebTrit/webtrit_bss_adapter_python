@@ -14,10 +14,11 @@ RUN chown root:root /var/db
 RUN chmod 777 /var/db
 
 # add required Python modules
-COPY ./requirements.txt /app/
+COPY app/requirements.txt /app/
 RUN pip install --no-cache-dir --upgrade -r requirements.txt
 
-COPY . /app/
+COPY app /app/
+COPY app/common2/ /app/common/
 RUN chmod 755 /app/start-web-server.sh
 
 USER httpd
