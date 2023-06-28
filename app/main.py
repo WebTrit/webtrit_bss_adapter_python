@@ -16,7 +16,7 @@ from app_config import AppConfig
 import bss.adapters
 from bss.adapters import initialize_bss_adapter
 from bss.constants import TENANT_ID_HTTP_HEADER
-from bss.types import Capabilities, UserInfo, ExtendedUserInfo, Health
+from bss.types import Capabilities, UserInfo, ExtendedUserInfo, Health, safely_extract_scalar_value
 from request_trace import RouteWithLogging
 from contextvars import ContextVar
 
@@ -218,7 +218,7 @@ def update_session(
     """
     global bss
 
-    return bss.refresh_session(body.refresh_token.__root__)
+    return bss.refresh_session(safely_extract_scalar_value(body.refresh_token))
 
 
 
@@ -294,7 +294,7 @@ def create_session_otp(
         )
     
     if hasattr(body, 'user_ref'):
-        user_ref = body.user_ref.__root__
+        user_ref = safely_extract_scalar_value(body.user_ref)
     else:
         raise WebTritErrorException(
             status_code=422,
@@ -302,7 +302,9 @@ def create_session_otp(
             error_message="Cannot find user_ref in the request"
         )
 
-    otp_request = bss.generate_otp(UserInfo(user_id=user_ref))
+    otp_request = bss.generate_otp(ExtendedUserInfo(
+                        user_id=user_ref,
+                        tenant_id=bss.default_id_if_none(x_webtrit_tenant_id)))
     return otp_request
 
 
@@ -392,7 +394,7 @@ def get_user_info(
     session = bss.validate_session(access_token)
 
     user = bss.retrieve_user(session, ExtendedUserInfo(
-        user_id = session.user_id.__root__,
+        user_id = safely_extract_scalar_value(session.user_id),
         tenant_id=bss.default_id_if_none(x_webtrit_tenant_id)
         ))
 
@@ -447,7 +449,7 @@ def create_user(
             error_message="Method not supported"
         )
     # TODO: think about extra authentification measures
-    return bss.create_new_user(body, tenant_id = x_webtrit_tenant_id)
+    return bss.create_new_user(body, tenant_id = bss.default_id_if_none(x_webtrit_tenant_id))
 
 @router.get(
     '/user/contacts',
@@ -483,7 +485,7 @@ def get_user_contact_list(
     if Capabilities.extensions in bss_capabilities:
         contacts = bss.retrieve_contacts(session,
                         ExtendedUserInfo(
-                            user_id = session.user_id.__root__,
+                            user_id = safely_extract_scalar_value(session.user_id),
                             tenant_id=bss.default_id_if_none(x_webtrit_tenant_id)))
         return UserContactIndexResponse(items = contacts)
 
@@ -527,7 +529,7 @@ def get_user_history_list(
     if Capabilities.callHistory in bss_capabilities:
         calls = bss.retrieve_calls(
             session,
-            ExtendedUserInfo( user_id = session.user_id.__root__,
+            ExtendedUserInfo( user_id = safely_extract_scalar_value(session.user_id),
                              tenant_id=bss.default_id_if_none(x_webtrit_tenant_id)),
             time_from=time_from,
             time_to=time_to,

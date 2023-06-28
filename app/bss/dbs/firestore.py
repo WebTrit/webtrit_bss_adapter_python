@@ -121,14 +121,18 @@ class FirestoreKeyValue(TiedKeyValue):
         
         Returns a list of objects which match the criteria or an empty list"""
         query = self.db.collection(self.collection)
-        logging.debug(f"Searching in {self.collection}")
+        filters = ', '.join([
+                 f"{x.field}{'==' if not x.op else x.op}'{x.value}'"
+                 for x in args if isinstance(x, QueryFilter)
+                ])
+        logging.debug(f"Searching in {self.collection} with filters {filters}")
         for f in args:
             if not isinstance(f, QueryFilter):
                 raise TypeError(f"Search parameter must be a QueryFilter object, got {f}")
             filter = FieldFilter(field_path = f.field,
                                         op_string = u"==" if not f.op else f.op,
                                         value = f.value)
-            logging.debug(f"Adding filter {f}")
+            # logging.debug(f"Adding filter {f}")
             query = query.where(filter=filter)
     
         # Get the first matching document

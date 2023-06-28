@@ -181,3 +181,12 @@ def is_scalar(obj) -> bool:
     """Return True if the object is a scalar"""
     return isinstance(obj, (str, int, float, bool))
 
+def safely_extract_scalar_value(obj: object):
+    """When dealing with scalar types in auto-generated models, the value is
+     stored in __root__ attribute. This function extracts it - or returns the
+     actual value for a scalar"""
+    if is_scalar(obj):
+        return obj
+    if hasattr(obj, "__root__"):
+        return obj.__root__
+    raise ValueError(f"Cannot extract scalar value from {type(obj)} {obj}")

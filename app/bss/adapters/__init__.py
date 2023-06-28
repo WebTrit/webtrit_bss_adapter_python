@@ -8,7 +8,8 @@ from datetime import datetime, timedelta
 from bss.types import (UserInfo, EndUser, ContactInfo, CDRInfo, OTP,
                        OTPCreateResponse, OTPVerifyRequest, OTPDeliveryChannel, UserCreateResponse,
                        FailedAuthCode, UserNotFoundCode, SessionNotFoundCode, TokenErrorCode,
-                       RefreshTokenErrorCode, TokenErrorCode2, OTPIDNotFoundCode, OTPValidationErrCode)
+                       RefreshTokenErrorCode, TokenErrorCode2, OTPIDNotFoundCode, OTPValidationErrCode,
+                       safely_extract_scalar_value)
 from bss.sessions import SessionStorage, SessionInfo
 from app_config import AppConfig
 from report_error import WebTritErrorException
@@ -53,13 +54,14 @@ class SessionManagement(ABC):
             if not session.still_active():
                 # remove it from the DB
                 self.sessions.delete_session(
-                    access_token=access_token, refresh_token=session.refresh_token
+                    access_token=access_token,
+                    refresh_token=safely_extract_scalar_value(session.refresh_token)
                 )
                 # raise an error
                 raise WebTritErrorException(
                     status_code=401,
                     code=TokenErrorCode.access_token_expired,
-                    error_message="Access token expired",
+                    error_message=f"Access token {access_token} expired",
                 )
 
             return session
@@ -67,7 +69,7 @@ class SessionManagement(ABC):
         raise WebTritErrorException(
             status_code=401,
             code=TokenErrorCode.access_token_invalid,
-            error_message="Invalid access token",
+            error_message=f"Invalid access token {access_token}",
         )
 
     def refresh_session(self, refresh_token: str) -> SessionInfo:
@@ -78,12 +80,15 @@ class SessionManagement(ABC):
             raise WebTritErrorException(
                 status_code=401,
                 code=RefreshTokenErrorCode.refresh_token_invalid,
-                error_message="Invalid refresh token",
+                error_message=f"Invalid refresh token {refresh_token}",
             )
         # everything is in order, create a new session
-        session = self.sessions.create_session(UserInfo(user_id=session.user_id))
-        self.sessions.store_session(session)
-        return session
+        new_session = self.sessions.create_session(UserInfo(user_id=session.user_id))
+        self.sessions.store_session(new_session)
+        logging.debug(f"Authentincated user {new_session.user_id} via refresh token {refresh_token}, session {new_session.access_token} created")
+        # remove the old session
+        self.sessions.delete_session(session.access_token)
+        return new_session
 
     def close_session(self, access_token: str) -> bool:
         """Close the API session and logout the user."""
@@ -186,6 +191,13 @@ class BSSAdapter(SessionManagement, OTPHandler):
             new_dict[x.new_key] = value if not x.converter else x.converter(value)
         return new_dict
 
+    @classmethod
+    def compose_display_name(cls, first_name: str, last_name: str) -> str:
+        """Compose the display name from the first and last name"""
+        if first_name and last_name:
+            return f"{last_name}, {first_name}"
+        return first_name if first_name else last_name
+    
     def default_id_if_none(self, tenant_id: str) -> str:
         """Provide a defaut value for tenant ID if none is supplied in HTTP headers"""
         return tenant_id if tenant_id else "default"
