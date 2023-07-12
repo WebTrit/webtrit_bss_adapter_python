@@ -97,7 +97,8 @@ class SessionManagement(ABC):
         # everything is in order, create a new session
         new_session = self.sessions.create_session(UserInfo(user_id=session.user_id))
         self.sessions.store_session(new_session)
-        logging.debug(f"Authenticated user {new_session.user_id} via refresh token {refresh_token}, session {new_session.access_token} created")
+        logging.debug(f"Authenticated user {new_session.user_id} via refresh token " +
+                      f"{refresh_token}, session {new_session.access_token} created")
         # remove the old session and old refresh token
         self.sessions.delete_session(session.access_token, refresh_token=refresh_token)
         return new_session

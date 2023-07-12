@@ -15,16 +15,16 @@ class SessionStorage:
     be stored in some SQL/no-SQL database, external REST services, etc.)"""
 
     # default time (in hours) after which the session expires, 1 day by default
-    SESSION_EXPIRATION = config.get_conf_val(
+    SESSION_EXPIRATION = int(config.get_conf_val(
         "Sessions", "Storage", "Expiration",
         default = 24
-    ) 
+    ))
     # default time (in hours) during which a refresh token is valid and can be exchanged
     # to a new access token, 365 days by default
-    REFRESH_TOKEN_EXPIRATION = config.get_conf_val(
+    REFRESH_TOKEN_EXPIRATION = int(config.get_conf_val(
         "Sessions", "Refresh", "Expiration",
         default = 24 * 365
-    ) 
+    )) 
 
     def __init__(self, session_db=None):
         """Initialize the object using the provided object
