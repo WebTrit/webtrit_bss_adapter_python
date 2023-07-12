@@ -55,7 +55,7 @@ class SessionManagement(ABC):
                 # remove it from the DB
                 self.sessions.delete_session(
                     access_token=access_token,
-                    refresh_token=safely_extract_scalar_value(session.refresh_token)
+                    refresh_token=None # keep the refresh token
                 )
                 # raise an error
                 raise WebTritErrorException(
@@ -82,12 +82,24 @@ class SessionManagement(ABC):
                 code=RefreshTokenErrorCode.refresh_token_invalid,
                 error_message=f"Invalid refresh token {refresh_token}",
             )
+        if not session.still_active():
+            # remove it from the DB
+            self.sessions.delete_session(
+                access_token=session.access_token,
+                refresh_token=refresh_token 
+            )
+            # raise an error
+            raise WebTritErrorException(
+                status_code=401,
+                code=TokenErrorCode.access_token_expired,
+                error_message=f"Refresh token {refresh_token} expired",
+            )
         # everything is in order, create a new session
         new_session = self.sessions.create_session(UserInfo(user_id=session.user_id))
         self.sessions.store_session(new_session)
-        logging.debug(f"Authentincated user {new_session.user_id} via refresh token {refresh_token}, session {new_session.access_token} created")
-        # remove the old session
-        self.sessions.delete_session(session.access_token)
+        logging.debug(f"Authenticated user {new_session.user_id} via refresh token {refresh_token}, session {new_session.access_token} created")
+        # remove the old session and old refresh token
+        self.sessions.delete_session(session.access_token, refresh_token=refresh_token)
         return new_session
 
     def close_session(self, access_token: str) -> bool:

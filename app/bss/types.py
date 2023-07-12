@@ -18,6 +18,7 @@ from bss.models import (
     SupportedEnum as Capabilities,
     UserCreateResponse as UserCreateResponse,
     CDRInfo as CDRInfo,
+    Status as SIPRegistrationStatus,
     SipStatus as SIPStatus,
     SipServer as SIPServer,
     SipInfo as SIPInfo,
@@ -80,18 +81,15 @@ from bss.models import (
 )
 
 from bss.models import (
-    BinaryResponse,
     CallRecordingId,
     GeneralSystemInfoResponse,
     SessionCreateRequest,
     SessionOtpCreateRequest,
     SessionOtpCreateResponse,
     SessionOtpVerifyRequest,
-    SessionResponse,
     SessionUpdateRequest,
     UserContactIndexResponse,
     UserCreateRequest,
-    UserCreateResponse,
     UserHistoryIndexResponse,
     UserInfoShowResponse,
 )
@@ -132,6 +130,7 @@ class OTP:
 
 class SessionInfo(SessionResponse):
     """Info about a session, initiated by WebTrit core on behalf of user"""
+    long_life_refresh: bool = False
     expires_at: Optional[datetime] = None
     tenant_id: Optional[str] = None
     def still_active(self, timestamp=datetime.now()) -> bool:

@@ -97,7 +97,7 @@ response2 = None
 
 
 def test_refresh(api_url, login_path, tenant_id):
-    global response, response2
+    global response, response2, access_token
     body = response.json()
 
     response2 = requests.patch(
@@ -108,6 +108,7 @@ def test_refresh(api_url, login_path, tenant_id):
     print(response2.content)
     assert response2.status_code == 200
     assert isinstance(body := response2.json(), dict)
+    access_token = body["access_token"]
 
 
 @pytest.mark.parametrize(
@@ -136,3 +137,18 @@ def test_refresh_userid(api_url, login_path, username, tenant_id, attr):
     attr.expected = username
     print('attr = ', attr)
     verify_attribute_in_json(attr, body)
+
+
+def test_extensions(api_url, tenant_id, extensions_path):
+    global response2, body, access_token
+    response2 = requests.get(
+        api_url + extensions_path,
+        headers={"Authorization": "Bearer " + access_token,
+                 TENANT_ID_HEADER: tenant_id
+                  },
+    )
+
+    assert response2.status_code == 200
+    print(response2.content)
+    assert isinstance(body, dict)
+    assert 'items' in body
