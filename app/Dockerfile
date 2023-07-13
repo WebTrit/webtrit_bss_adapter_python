@@ -18,7 +18,6 @@ COPY app/requirements.txt /app/
 RUN pip install --no-cache-dir --upgrade -r requirements.txt
 
 COPY app /app/
-COPY app/common2/ /app/common/
 RUN chmod 755 /app/start-web-server.sh
 
 USER httpd
@@ -31,13 +30,11 @@ ARG BASE_PATH
 ENV BASE_PATH=${BASE_PATH:-"/"}
 
 ARG BSS_CONNECTOR_MODULE
-ENV BSS_CONNECTOR_MODULE=${BSS_CONNECTOR_MODULE:-"bss.connectors.example"}
+ENV BSS_CONNECTOR_MODULE=${BSS_CONNECTOR_MODULE:-"bss.adapters.example"}
 
 ARG BSS_CONNECTOR_CLASS
 ENV BSS_CONNECTOR_CLASS=${BSS_CONNECTOR_CLASS:-"ExampleBSSConnector"}
 
 EXPOSE $API_PORT
 
-# CMD ["sh", "-c", "uvicorn 'main:app' --host '0.0.0.0' --port ${API_PORT} --root-path ${BASE_PATH}"]
-# CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "${API_PORT}"]
 CMD ["./start-web-server.sh"]

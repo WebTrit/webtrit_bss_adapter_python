@@ -6,8 +6,7 @@ import sys
 from fastapi import FastAPI, APIRouter, Depends, Response, Request, Header
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 import uuid
-import bss.dbs.firestore
-# from fastapi.responses import JSONResponse
+
 import logging
 from pydantic import conint
 from datetime import datetime
@@ -411,7 +410,7 @@ def get_user_info(
     tags=['user'],
 )
 def create_user(
-#   body: UserCreateRequest,
+#   body: UserCreateRequest, # cannot figure out how to define this in Pydantic
     body: Dict,
 #    auth_data: HTTPAuthorizationCredentials = Depends(security),
     x_webtrit_tenant_id: Optional[str] = Header(None, alias='X-WebTrit-Tenant-ID'),

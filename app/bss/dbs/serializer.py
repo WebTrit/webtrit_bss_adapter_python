@@ -5,20 +5,8 @@ import sys
 from abc import ABC, abstractmethod
 from dataclasses import is_dataclass, asdict
 from pydantic import BaseModel
+from bss.types import Serialiazable
 import orjson
-
-def orjson_dumps(v, *, default):
-    return orjson.dumps(v, default=default).decode('utf-8')
- 
-class Serialiazable(BaseModel):
-    """Object that can be converted into JSON structure"""
-    def is_serializable(self) -> bool:
-        return True
-    
-    class Config:
-        json_loads = orjson.loads
-        json_dumps = orjson_dumps
-
 
 class SerializerBase(ABC):
     """Store/recall scalar objects (strings, numbers) in a NoSQL DB"""
