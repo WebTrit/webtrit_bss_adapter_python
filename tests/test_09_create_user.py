@@ -32,7 +32,7 @@ user_info = {
 def test_create(api_url, userinfo_path):
     global response, body, access_token  # so we can re-use it in later tests
     response = requests.post(
-        api_url + userinfo_path, json={ 'attributes': user_info }
+        api_url + userinfo_path, json= user_info
     )
     print(response.content)
     assert response.status_code == 200

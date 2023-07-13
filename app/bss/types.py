@@ -1,7 +1,6 @@
 from dataclasses import dataclass, field
 from typing import List, Dict, Any, Optional, List, Union
 from pydantic import BaseModel, Field
-import enum
 from datetime import datetime, timedelta
 import orjson
 

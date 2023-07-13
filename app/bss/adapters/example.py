@@ -181,15 +181,14 @@ class ExampleBSSAdapter(BSSAdapterExternalDB):
 
     def create_new_user(self, user_data, tenant_id: str = None):
         """Create a new user as a part of the sign-up process"""
-        if hasattr(user_data, 'attributes') and isinstance(user_data.attributes, dict) \
-                and 'user_id' in user_data.attributes and 'password' in user_data.attributes:
+        if isinstance(user_data, dict) \
+                and 'user_id' in user_data and 'password' in user_data:
             # add this record to the internal DB
-            attr = user_data.attributes
-            self.user_db[attr['user_id']] = attr
+            self.user_db[user_data['user_id']] = user_data
             # and log the user in
-            return self.authenticate(UserInfo(login=attr['user_id'],
-                                              user_id=attr['user_id']),
-                                            attr['password'])
+            return self.authenticate(UserInfo(login=user_data['user_id'],
+                                                user_id=user_data['user_id']),
+                                                user_data['password'])
         
         raise WebTritErrorException(
             status_code=422,
