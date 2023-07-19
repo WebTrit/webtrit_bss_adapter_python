@@ -14,7 +14,13 @@ def pytest_addoption(parser):
         "--user",
         action="store",
         default="john",
-        help="""User ID of the user to be used during the tests""",
+        help="""Login of the user to be used during the tests""",
+    )
+    parser.addoption(
+        "--userid",
+        action="store",
+        default="john",
+        help="""User ID (in case if it differs from the login) of the user to be used during the tests""",
     )
     parser.addoption(
         "--password",
@@ -120,6 +126,11 @@ def call_history_path():
 @pytest.fixture
 def username(request):
     got_option = str(request.config.getoption("--user"))
+    return got_option
+
+@pytest.fixture
+def userid(request):
+    got_option = str(request.config.getoption("--userid"))
     return got_option
 
 

@@ -3,6 +3,7 @@ import pytest
 
 
 def test_get_system_info_200(api_url, system_info_path):
+    print(f"sending req to {api_url + system_info_path}")
     response = requests.get(api_url + system_info_path)
     assert response.status_code == 200
 

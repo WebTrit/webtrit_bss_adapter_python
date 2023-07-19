@@ -44,9 +44,10 @@ response2 = None
 def test_verify_otp(api_url, otp_verify_path, otp_code):
     global response2
     body = response.json()
-
+    json_data = {"otp_id": body["otp_id"], "code": otp_code}
+    print(f"sending req to {api_url + otp_verify_path} with {json_data}")
     response2 = requests.post(
-        api_url + otp_verify_path, json={"otp_id": body["otp_id"], "code": otp_code}
+        api_url + otp_verify_path, json=json_data
     )
     assert response2.status_code == 200
 
@@ -57,8 +58,7 @@ def test_verify_otp(api_url, otp_verify_path, otp_code):
         ("access_token", ""),
         ("expires_at", ""),
         ("refresh_token", None),
-        ("user_id", "john"),
-    ],
+     ],
 )
 def test_verify_otp_attr(api_url, login_path, attr, expected):
     global response2
@@ -70,3 +70,10 @@ def test_verify_otp_attr(api_url, login_path, attr, expected):
         assert body[attr]  # not empty
         assert type(expected) == type(body[attr])  # same type
         assert body[attr] == expected
+
+def test_verify_otp_userid(api_url, login_path, userid):
+    global response2
+    body = response2.json()
+
+    assert 'user_id' in body
+    assert body['user_id']  == userid

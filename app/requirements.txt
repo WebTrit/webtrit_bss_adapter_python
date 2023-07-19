@@ -4,6 +4,6 @@ protobuf==4.22.3
 pydantic==1.10.2
 requests==2.28.1
 starlette==0.26.1
-pydantic[email]
+pydantic[email]==1.10.2
 uvicorn==0.20.0
 orjson==3.8.12

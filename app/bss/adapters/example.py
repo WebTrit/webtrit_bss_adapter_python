@@ -193,5 +193,5 @@ class ExampleBSSAdapter(BSSAdapterExternalDB):
         raise WebTritErrorException(
             status_code=422,
             code = FailedAuthIncorrectDataCode.validation_error,
-            error_message="Wrong data strcuture"
+            error_message="Wrong data structure"
         )

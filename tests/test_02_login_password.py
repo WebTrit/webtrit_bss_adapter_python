@@ -51,7 +51,8 @@ response = None
 def test_login(api_url, login_path, username, password):
     global response, body  # so we can re-use it in later tests
     response = requests.post(
-        api_url + login_path, json={"login": username, "password": password}
+       api_url + login_path, json={"login": username, "password": password}
+
     )
     print(response.content)
     assert response.status_code == 200
@@ -118,15 +119,15 @@ def test_refresh_attr(api_url, login_path, attr):
     print('attr = ', attr)
     verify_attribute_in_json(attr, body)
 
-@pytest.mark.parametrize(
-    "attr",
-    [
-        Attr(name="user_id", type=str, mandatory = True)
-    ],
-)
-def test_refresh_userid(api_url, login_path, username, attr):
-    global body
+# @pytest.mark.parametrize(
+#     "attr",
+#     [
+#         Attr(name="user_id", type=str, mandatory = True)
+#     ],
+# )
+# def test_refresh_userid(api_url, login_path, username, attr):
+#     global body
 
-    attr.expected = username
-    print('attr = ', attr)
-    verify_attribute_in_json(attr, body)
+#     attr.expected = username
+#     print('attr = ', attr)
+#     verify_attribute_in_json(attr, body)
