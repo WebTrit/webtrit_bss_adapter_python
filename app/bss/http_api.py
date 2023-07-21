@@ -73,7 +73,7 @@ class HTTPAPIConnector(ABC):
                 'json': json.copy() if json else None
         }
         params_final = self.add_auth_info(url, params)
-        
+
         try:
             logging.debug(f"Sending {method} request to {url} " + \
                           f"with parameters {params_final}")
@@ -94,13 +94,14 @@ class HTTPAPIConnector(ABC):
                         **params
                         },
                     bss_response_trace = {
-                        'status_code': response.status_code,
+                        'status_code': 408,
                         'text': 'Timed out'
                     }
                 )
             return None
         except requests.exceptions.RequestException as e:
             logging.debug(f"Request error: {e}")
+
             raise WebTritErrorException(
                     status_code=500,
                     code=ExternalErrorCode.external_api_issue,
@@ -111,8 +112,8 @@ class HTTPAPIConnector(ABC):
                         **params
                         },
                     bss_response_trace = {
-                        'status_code': response.status_code,
-                        'text': response.text
+                        'status_code': 'unknown',
+                        'text': f"{e}"
                     }
                 )
 
