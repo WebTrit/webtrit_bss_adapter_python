@@ -59,7 +59,7 @@ class HTTPAPIConnector(ABC):
                           json = None,
                           headers = { 'Content-Type': 'application/json'},
                           turn_off_login = False) -> dict:
-        """Send a REST request to the server and return the JSON response as a dict"""
+        """Send a HTTP request to the server and return the JSON response as a dict"""
         if not turn_off_login and self.have_to_login():
             # we do not have an access token, need to log in first
             if not self.login():
@@ -105,14 +105,13 @@ class HTTPAPIConnector(ABC):
             raise WebTritErrorException(
                     status_code=500,
                     code=ExternalErrorCode.external_api_issue,
-                    error_message="Request execution error on the other side",
+                    error_message="Request execution error on the BSS/VoIP system side",
                     bss_request_trace = {
                         'method': method,
                         'url': url,
-                        **params
-                        },
+                        } | params,
                     bss_response_trace = {
-                        'status_code': 'unknown',
+                        'status_code': 500,
                         'text': f"{e}"
                     }
                 )
@@ -163,7 +162,8 @@ class HTTPAPIConnectorWithLogin(HTTPAPIConnector):
                     logging.debug("The access token expired, logging in again")
                     self.login()
             elif self.access_token_expires_at - datetime.now() < \
-                timedelta(minutes=self.REFRESH_TOKEN_IN_ADVANCE):
+                timedelta(minutes=self.REFRESH_TOKEN_IN_ADVANCE) \
+                    and self.refresh_token:
                 # proactiveluy refresh the token a bit before the expiration time
                 logging.debug("The access token will expire soon " + 
                     f"{self.access_token_expires_at.isoformat()}, refreshing it")
