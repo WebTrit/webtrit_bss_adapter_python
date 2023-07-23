@@ -1,12 +1,13 @@
 from bss.adapters import (
-    BSSAdapter
+    BSSAdapter, SampleOTPHandler
 )
 from bss.types import (Capabilities, UserInfo, EndUser, Contacts, ContactInfo,
                        Calls, CDRInfo, ConnectStatus, SIPStatus, SessionInfo,
-                       Numbers, OTPCreateResponse, OTPVerifyRequest, FailedAuthCode,
-                       UserNotFoundCode, SIPServer, SIPInfo)
+                       Balance, BalanceType, Numbers, SIPServer, SIPInfo,
+                       OTPCreateResponse, OTPVerifyRequest,
+                       FailedAuthCode,UserNotFoundCode, )
 
-
+from bss.dbs import TiedKeyValue
 from bss.sessions import configure_session_storage
 from report_error import WebTritErrorException
 from app_config import AppConfig
@@ -27,6 +28,7 @@ class FreePBXAPI(HTTPAPIConnectorWithLogin):
             self.graphql_path = kwargs["graphql_path"]
         else:
             self.graphql_path = "/admin/api/api/gql"
+
 
     def access_token_path(self) -> str:
         return "/admin/api/api/token"
@@ -185,7 +187,7 @@ class FreePBXAPI(HTTPAPIConnectorWithLogin):
     
 
 
-class FreePBXAdapter(BSSAdapter):
+class FreePBXAdapter(BSSAdapter, SampleOTPHandler):
     """Connect WebTrit and FreePBX. Authenticate a user using his/her
     data in FreePBX, retrieve user's SIP credentials to be used by
     WebTrit and return a list of other configured extenstions (to
@@ -207,6 +209,8 @@ class FreePBXAdapter(BSSAdapter):
             api_server=api_server, api_user=api_user, api_password=api_password
         )
         self.sessions = configure_session_storage(config)
+        # for debugging only
+        self.otp_db = TiedKeyValue()
 
     @classmethod
     def name(cls) -> str:
@@ -223,7 +227,7 @@ class FreePBXAdapter(BSSAdapter):
             # log in user with username / password
             Capabilities.passwordSignin,
             # log in user using one-time-password generated on the BSS side
-            # Capabilities.otpSignin,
+            Capabilities.otpSignin,
             # obtain user's call history
             # Capabilities.callHistory,
             # obtain the list of other extensions in the PBX
@@ -266,12 +270,6 @@ class FreePBXAdapter(BSSAdapter):
             code=FailedAuthCode.invalid_credentials,
             error_message="User authentication error",
         )
-
-    def generate_otp(self, user: UserInfo) -> OTPCreateResponse:
-        pass
-
-    def validate_otp(self, otp: OTPVerifyRequest) -> SessionInfo:
-        pass
 
     def retrieve_user(self, session: SessionInfo, user: UserInfo) -> EndUser:
         """Obtain user's information - most importantly, his/her SIP credentials."""
@@ -330,6 +328,8 @@ class FreePBXAdapter(BSSAdapter):
         parts = ext_info.get("name", "").split()
         firstname = parts[0]
         lastname = " ".join(parts[1:])
+        lastname = "" if not lastname else lastname
+
         outbound_id = ext_info.get("outboundCid", f"<{ext.get('extensionId', '')}>")
         match = re.search(r"<(\d+)>", outbound_id)
         if match:
@@ -337,26 +337,33 @@ class FreePBXAdapter(BSSAdapter):
         else:
             main_number = ext.get("extensionId", "")
         data = {
-            "firstname": firstname,
-            "lastname": lastname,
-            "email": ext.get("vm", {}).get("email", None),
+            "company_name": "FreePBX",
+            "first_name": firstname,
+            "last_name": lastname,
+            "email": ext.get("vm", {}).get("email", 'test@webtrit.com'),
             "numbers": Numbers(
                 ext=ext.get("extensionId", ""),
-                main=main_number
-            )
+                main=main_number,
+                additional=[]
+            ),
+            "balance": Balance( balance_type=BalanceType.inapplicable, )
         }
-        if firstname and lastname:
-            display_name = lastname + ', ' + firstname 
+        if firstname or lastname:
+            display_name = lastname if lastname else ""
+            if display_name:
+                display_name = display_name + ", "
+            display_name = display_name + firstname 
         else:
-            display_name = 'Ext ' + ext.get("extensionId", "???")
+            display_name = "Ext " + ext.get("extensionId", "???")
 
         if produce_user_info:
             data["sip"] = SIPInfo(
                 login=ext.get("extensionId", ""),
+                display_name=display_name,
                 password=ext_info.get("extPassword", ""),
                 sip_server=SIPServer(host=self.sip_server, port=5060),
             )
-            return EndUser(**data)
+            return EndUser(**data,)
         else:
             data["sip"] = SIPStatus(
                 display_name=display_name,

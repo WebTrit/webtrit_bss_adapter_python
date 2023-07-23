@@ -24,7 +24,8 @@ from bss.models import (
     ConnectStatus as ConnectStatus,
     SessionResponse as SessionResponse,
     Numbers as Numbers,
-
+    Balance as Balance,
+    BalanceType as BalanceType,
     SessionOtpVerifyRequest as OTPVerifyRequest,
     DeliveryChannel as OTPDeliveryChannel,
     # error codes
