@@ -82,6 +82,15 @@ class SessionManagement(ABC):
                 code=RefreshTokenErrorCode.refresh_token_invalid,
                 error_message=f"Invalid refresh token {refresh_token}",
             )
+        if not isinstance(session, SessionInfo):
+            # accessing some old objects in the DB which do not store refresh token
+            # as a separate full object
+            raise WebTritErrorException(
+                status_code=401,
+                code=RefreshTokenErrorCode.refresh_token_invalid,
+                error_message=f"Outdated refresh token {refresh_token} - was stored in the old format",
+            )
+        
         if not session.still_active():
             # remove it from the DB
             self.sessions.delete_session(
@@ -97,7 +106,8 @@ class SessionManagement(ABC):
         # everything is in order, create a new session
         new_session = self.sessions.create_session(UserInfo(user_id=session.user_id))
         self.sessions.store_session(new_session)
-        logging.debug(f"Authenticated user {new_session.user_id} via refresh token " +
+        logging.debug(f"Authenticated user {safely_extract_scalar_value(new_session.user_id)}" +
+                      " via refresh token " +
                       f"{refresh_token}, session {new_session.access_token} created")
         # remove the old session and old refresh token
         self.sessions.delete_session(session.access_token, refresh_token=refresh_token)
@@ -437,5 +447,5 @@ def initialize_bss_adapter(root_package: str, config: AppConfig) -> BSSAdapter:
     )
     adapter = class_ref(config=config)
     adapter.initialize()
-    logging.info(f"Initialized BSS adapter: {bss_class_name}")
+    logging.info(f"Initialized BSS adapter: {bss_class_name} v{adapter.version()}")
     return adapter

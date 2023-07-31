@@ -1,5 +1,6 @@
 FROM python:3.11-slim
 
+RUN mkdir /app
 WORKDIR /app
 
 #RUN apt update
@@ -15,6 +16,7 @@ RUN chmod 777 /var/db
 
 # add required Python modules
 COPY app/requirements.txt /app/
+
 RUN pip install --no-cache-dir --upgrade -r requirements.txt
 
 COPY app /app/
