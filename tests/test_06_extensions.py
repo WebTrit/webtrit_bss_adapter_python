@@ -57,10 +57,11 @@ def test_extensions(api_url, extensions_path):
     [
         Attr(name="company_name", type=type("")),
         Attr(name="email", type=type("")),
-        Attr(name="firstname", type=type("")),
-        Attr(name="lastname", type=type("")),
-        Attr(name="numbers", type=type({})),
-        Attr(name="sip", type=type({}), mandatory=True),
+        Attr(name="first_name", type=type("")),
+        Attr(name="last_name", type=type("")),
+        Attr(name="alias_name", type=type("")),
+        Attr(name="numbers", type=type({}), mandatory=True),
+        Attr(name="sip_status", type=type("")),
     ],
 )
 def test_extensions_elements(api_url, extensions_path, attr):

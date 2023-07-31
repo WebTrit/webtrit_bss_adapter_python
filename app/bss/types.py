@@ -1,6 +1,7 @@
 from dataclasses import dataclass, field
 from typing import List, Dict, Any, Optional, List, Union
 from pydantic import BaseModel, Field
+import enum
 from datetime import datetime, timedelta
 import orjson
 
@@ -18,7 +19,6 @@ from bss.models import (
     UserCreateResponse as UserCreateResponse,
     CDRInfo as CDRInfo,
     Status as SIPRegistrationStatus,
-    SipStatus as SIPStatus,
     SipServer as SIPServer,
     SipInfo as SIPInfo,
     ConnectStatus as ConnectStatus,

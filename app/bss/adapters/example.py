@@ -1,7 +1,7 @@
 from bss.adapters import BSSAdapterExternalDB
 from bss.dbs import TiedKeyValue, FileStoredKeyValue
 from bss.types import (Capabilities, UserInfo, EndUser, Contacts, ContactInfo,
-                       Calls, CDRInfo, ConnectStatus, SIPStatus, SessionInfo,
+                       Calls, CDRInfo, ConnectStatus, SessionInfo,
                        Numbers, FailedAuthIncorrectDataCode)
 from report_error import WebTritErrorException
 from typing import List
@@ -114,11 +114,11 @@ class ExampleBSSAdapter(BSSAdapterExternalDB):
 
         min_contacts = 4
         max_contacts = 10
-        statuses = ["unknown", "registered", "notregistered"]
+        statuses = ["registered", "notregistered"]
         contacts = [
             ContactInfo(
-                firstname=self.fake.random_name(),
-                lastname=self.fake.random_lastname(),
+                first_name=self.fake.random_name(),
+                last_name=self.fake.random_lastname(),
                 email=self.fake.email(),
                 company_name=self.fake.company(),
                 numbers=Numbers(
@@ -129,10 +129,7 @@ class ExampleBSSAdapter(BSSAdapterExternalDB):
                         for i in range(random.randint(0, 3))
                     ],
                 ),
-                sip=SIPStatus(
-                    display_name=self.fake.name(),
-                    status=self.fake.random_list_member(statuses),
-                ),
+                sip_status=self.fake.random_list_member(statuses),
             )
             for n in range(random.randint(min_contacts, max_contacts))
         ]

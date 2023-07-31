@@ -2,7 +2,7 @@ from bss.adapters import (
     BSSAdapter, SampleOTPHandler
 )
 from bss.types import (Capabilities, UserInfo, EndUser, Contacts, ContactInfo,
-                       Calls, CDRInfo, ConnectStatus, SIPStatus, SessionInfo,
+                       Calls, CDRInfo, ConnectStatus, SessionInfo, SIPRegistrationStatus,
                        Balance, BalanceType, Numbers, SIPServer, SIPInfo,
                        OTPCreateResponse, OTPVerifyRequest,
                        FailedAuthCode,UserNotFoundCode, )
@@ -18,7 +18,7 @@ import logging
 
 import re
 
-VERSION = "0.0.1"
+VERSION = "0.0.2"
 
 
 class FreePBXAPI(HTTPAPIConnectorWithLogin):
@@ -187,7 +187,8 @@ class FreePBXAPI(HTTPAPIConnectorWithLogin):
     
 
 
-class FreePBXAdapter(BSSAdapter, SampleOTPHandler):
+# class FreePBXAdapter(BSSAdapter, SampleOTPHandler):
+class FreePBXAdapter(BSSAdapter):
     """Connect WebTrit and FreePBX. Authenticate a user using his/her
     data in FreePBX, retrieve user's SIP credentials to be used by
     WebTrit and return a list of other configured extenstions (to
@@ -227,7 +228,7 @@ class FreePBXAdapter(BSSAdapter, SampleOTPHandler):
             # log in user with username / password
             Capabilities.passwordSignin,
             # log in user using one-time-password generated on the BSS side
-            Capabilities.otpSignin,
+            # Capabilities.otpSignin,
             # obtain user's call history
             # Capabilities.callHistory,
             # obtain the list of other extensions in the PBX
@@ -235,6 +236,15 @@ class FreePBXAdapter(BSSAdapter, SampleOTPHandler):
             # download call recordings - currently not supported
             # SupportedEnum.recordings
         ]
+
+    def generate_otp(self, user: UserInfo) -> OTPCreateResponse:
+        """Not supported"""
+        pass
+
+    def validate_otp(self, otp: OTPVerifyRequest) -> SessionInfo:
+        """Not supported"""
+        pass
+
 
     def extract_user_id(self, user_data: object) -> str:
         """Extract user_id (unique and unmutable identifier of the user)
@@ -365,13 +375,10 @@ class FreePBXAdapter(BSSAdapter, SampleOTPHandler):
             )
             return EndUser(**data,)
         else:
-            data["sip"] = SIPStatus(
-                display_name=display_name,
-                # TODO: find out whether we can get the real
-                # registration status via API - for now all extensions
-                # are assumed to be registered
-                status="registered",
-            )
+            # TODO: find out whether we can get the real
+            # registration status via API - for now all extensions
+            # are assumed to be registered
+            data["sip_status"] = SIPRegistrationStatus.registered
 
             return ContactInfo(**data)
 

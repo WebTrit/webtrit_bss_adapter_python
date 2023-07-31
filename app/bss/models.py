@@ -133,16 +133,16 @@ class Status(Enum):
     notregistered = 'notregistered'
 
 
-class SipStatus(BaseModel):
-    display_name: str = Field(
-        ...,
-        description="The user's display name for SIP calls.",
-        example='Annabelle Black',
-    )
-    status: Status = Field(
-        ...,
-        description='The current registration status of the user on the SIP server.',
-    )
+# class SipStatus(BaseModel):
+#     display_name: str = Field(
+#         ...,
+#         description="The user's display name for SIP calls.",
+#         example='Annabelle Black',
+#     )
+#     status: Status = Field(
+#         ...,
+#         description='The current registration status of the user on the SIP server.',
+#     )
 
 
 class Code8(Enum):
@@ -905,7 +905,25 @@ class SessionOtpVerifyRequest(BaseModel):
     )
     otp_id: OtpId
 
+# class Contact(BaseModel):
+#     company_name: Optional[str] = Field(
+#         None,
+#         description='The name of the company the user is associated with.',
+#         example='Matrix',
+#     )
+#     email: Optional[EmailStr] = Field(
+#         None, description="The user's email address.", example='a.black@matrix.com'
+#     )
+#     first_name: Optional[str] = Field(
+#         None, description="The user's first name.", example='Annabelle'
+#     )
+#     last_name: Optional[str] = Field(
+#         None, description="The user's last name.", example='Black'
+#     )
+#     numbers: Optional[Numbers] = None
+#     sip: Optional[SipStatus] = None
 
+# new schema
 class Contact(BaseModel):
     company_name: Optional[str] = Field(
         None,
@@ -921,8 +939,11 @@ class Contact(BaseModel):
     last_name: Optional[str] = Field(
         None, description="The user's last name.", example='Black'
     )
-    numbers: Optional[Numbers] = None
-    sip: Optional[SipStatus] = None
+    alias_name: Optional[str] = Field(
+        None, description="Alternative name for the user", example='Receptionist'
+    )
+    numbers: Numbers = None
+    sip_status: Optional[Status] = None
 
 class UserStatus(Enum):
     active = 'active'
