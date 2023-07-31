@@ -1,30 +1,27 @@
-from bss.adapters import (
-    BSSAdapterExternalDB,
+from bss.adapters import (BSSAdapterExternalDB, AttrMap)
+from bss.types import (
     SessionInfo,
+    UserInfo,
     EndUser,
-    Contacts,
     Calls,
     ContactInfo,
     Capabilities,
-    AttrMap,
-)
-from bss.models import (
-    NumbersSchema,
-    OtpCreateResponseSchema,
-    OtpVerifyRequestSchema,
-    SipInfoSchema,
-    ServerSchema,
+    Numbers,
+    SIPServer,
+    SIPInfo,
+    SIPRegistrationStatus,
+    OTPCreateResponse,
+    OTPVerifyRequest,
+    UserCreateResponse
 )
 
-from bss.models import SipStatusSchema as SIPStatus
 from bss.sessions import SessionStorage
 from bss.dbs.firestore import FirestoreKeyValue
 from report_error import WebTritErrorException
 from app_config import AppConfig
 import re
-
-import logging
 from typing import List
+import logging
 
 VERSION = "0.0.1"
 
@@ -88,15 +85,9 @@ class BSS3CXAdapter(BSSAdapterExternalDB):
             )
         )
 
-        cred_file = config.get_conf_val("Firestore", "Credentials", default=None)
-        self.user_db = FirestoreKeyValue(
-            credentials_file=cred_file, collection_name="3CX"
-        )
-
+        self.user_db = FirestoreKeyValue(collection_name="3CX")
         self.sessions = SessionStorage(
-            session_db=FirestoreKeyValue(
-                credentials_file=cred_file, collection_name="Sessions"
-            )
+            session_db=FirestoreKeyValue(collection_name="Sessions")
         )
 
     @classmethod
@@ -134,9 +125,9 @@ class BSS3CXAdapter(BSSAdapterExternalDB):
             return m.group(0)
         return default
 
-    def sip_server_info(self) -> ServerSchema:
+    def sip_server_info(self) -> SIPServer:
         """Return the SIP server information."""
-        return ServerSchema(host=self.sip_server, port=5060)
+        return SIPServer(host=self.sip_server, port=5060)
 
     def verify_password(self, user_data, password: str) -> bool:
         """Verify that the password is correct"""
@@ -144,6 +135,11 @@ class BSS3CXAdapter(BSSAdapterExternalDB):
 
         return passw_in_db == password
 
+    def extract_user_id(self, user_data: object) -> str:
+        """Extract user_id (unique and unmutable identifier of the user)
+        from the data in the DB. Please override it in your sub-class"""
+        return user_data.get("Number", None)
+        
     def produce_user_object(self, db_data) -> EndUser:
         """Create an EndUser object (as defined by WebTrit) from the
         data stored in the proprietary DB, provided as OurUserInfo"""
@@ -152,12 +148,12 @@ class BSS3CXAdapter(BSSAdapterExternalDB):
         # the WebTrit EndUser object where we have a direct mapping
         user_data = self.remap_dict(BSS3CXAdapter.ATTR_MAP, db_data)
         # step 2: more complex cases, e.g. the SIP credentials which need to go
-        # as SipInfoSchema object into the "sip" attribute of the EndUser object
+        # as SIPInfo object into the "sip" attribute of the EndUser object
         sip_data = self.remap_dict(BSS3CXAdapter.SIP_ATTR_MAP, db_data)
-        user_data["sip"] = SipInfoSchema(**sip_data)
+        user_data["sip"] = SIPInfo(**sip_data)
         # numbers that the user owns
         number_data = self.remap_dict(BSS3CXAdapter.NUMBERS_ATTR_MAP, db_data)
-        user_data["numbers"] = NumbersSchema(**number_data)
+        user_data["numbers"] = Numbers(**number_data)
         logging.debug(f"Re-mapped {db_data}\n to {user_data}")
         return EndUser(**user_data)
 
@@ -168,35 +164,28 @@ class BSS3CXAdapter(BSSAdapterExternalDB):
         # step 1: map the attributes from the proprietary DB to
         # the WebTrit EndUser object where we have a direct mapping
         user_data = self.remap_dict(BSS3CXAdapter.ATTR_MAP, db_data)
-        # step 2: more complex cases, e.g. the SIP credentials which need to go
-        # as SipInfoSchema object into the "sip" attribute of the EndUser object
-        user_data["sip"] = SIPStatus(
-            **{
-                "status": "registered",
-                "display_name": db_data.get("last_name", "?")
-                + ", "
-                + db_data.get("first_name", "?"),
-            }
-        )
+        # fake the SIP registration status as always on
+        user_data["sip_status"] = SIPRegistrationStatus.registered
+
         # numbers that the user owns
         number_data = self.remap_dict(BSS3CXAdapter.NUMBERS_ATTR_MAP, db_data)
-        user_data["numbers"] = NumbersSchema(**number_data)
+        user_data["numbers"] = Numbers(**number_data)
         logging.debug(f"Re-mapped {db_data}\n to {user_data}")
         return ContactInfo(**user_data)
 
     # retrieve_user is provided by the superclass
 
-    def generate_otp(self, user_id: str) -> OtpCreateResponseSchema:
-        """Request that a remote hosted PBX system / BSS generates a new
+    def generate_otp(self, user: UserInfo) -> OTPCreateResponse:
+        """Request that the remote hosted PBX system / BSS generates a new
         one-time-password (OTP) and sends it to the user via the
         configured communication channel (e.g. SMS)"""
         pass
 
-    def validate_otp(self, otp: OtpVerifyRequestSchema) -> SessionInfo:
+    def validate_otp(self, otp: OTPVerifyRequest) -> SessionInfo:
         """Verify that the OTP code, provided by the user, is correct."""
         pass
 
-    def retrieve_contacts(self, session: SessionInfo, user_id: str) -> Contacts:
+    def retrieve_contacts(self, session: SessionInfo, user_id: str) -> List[ContactInfo]:
         """List of other extensions in the PBX"""
 
         contacts = [
@@ -205,7 +194,7 @@ class BSS3CXAdapter(BSSAdapterExternalDB):
             if ext_id != user_id
         ]
 
-        return Contacts(__root__=contacts)
+        return contacts
 
     def retrieve_calls(
         self,
@@ -224,3 +213,7 @@ class BSS3CXAdapter(BSSAdapterExternalDB):
     ) -> bytes:
         """Get the media file for a previously recorded call."""
         pass
+
+    def create_new_user(self, user_data, tenant_id: str = None) -> UserCreateResponse:
+        """Create a new user as a part of the sign-up process"""
+        raise NotImplementedError("Override this method in your sub-class")

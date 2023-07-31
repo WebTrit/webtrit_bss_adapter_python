@@ -1,9 +1,10 @@
 from bss.dbs import TiedKeyValue
 from google.cloud import firestore
 from google.cloud.firestore_v1.base_query import FieldFilter
-#from google.oauth2 import service_account
+from google.oauth2 import service_account
 import json
 import logging
+import os
 # from firebase_admin import credentials, firestore
 from bss.dbs.serializer import Serializer
 from pydantic import BaseModel, Field
@@ -21,27 +22,17 @@ class FirestoreKeyValue(TiedKeyValue):
 
     def __init__(self, collection_name: str):
         """Initialize the database connection"""
-        # cred = self.__credentials__(credentials_file)
+
         # default mode - it will use GOOGLE_APPLICATION_CREDENTIALS env
         # var whan running locally; in cloud run it should use ADC
+        # if env_var := os.environ.get("GOOGLE_APPLICATION_CREDENTIALS", None):
+        #             # we are running in the cloud
+        #     cred = service_account.Credentials.from_service_account_file(env_var)
+        #     self.db = firestore.Client(credentials=cred)
+        # else:
+        #     self.db = firestore.Client()
         self.db = firestore.Client()
         self.collection = collection_name
-    # apparently it is better to let the client library to extract credentials
-    # this way we can use ADC in cloud run and a file locally
-    # def __credentials__(self, credentials_file: str):
-    #     """Get the credentials for the database"""
-    #     if credentials_file is None:
-    #         # no specific credentials file was provided, use
-    #         # env variable if available
-    #         if env_var := os.environ.get("GOOGLE_APPLICATION_CREDENTIALS_JSON", None):
-    #             # credentials provided via env var - default mode for cloud run
-    #             credentials_dict = json.loads(env_var)
-    #             return service_account.Credentials.from_service_account_info(credentials_dict)
-            
-    #         if env_var := os.environ.get("GOOGLE_APPLICATION_CREDENTIALS", None):
-    #             # we are running in the cloud
-    #             credentials_file = env_var
-    #     return service_account.Credentials.from_service_account_file(credentials_file)
 
     def __pack2store__(self, value):
         """Pack the data into a format suitable for storage"""
