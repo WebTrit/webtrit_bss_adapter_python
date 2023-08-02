@@ -5,7 +5,8 @@ import logging
 import pprint
 import json
 
-from utils4testing import Attr, verify_attribute_in_json, verify_attribute_value
+from utils4testing import (Attr, verify_attribute_in_json,
+                           verify_attribute_value, compose_headers)
 
 pp = pprint.PrettyPrinter(indent=4)
 
@@ -13,10 +14,12 @@ response = None
 access_token = None
 
 
-def test_do_login(api_url, login_path, username, password):
+def test_do_login(api_url, login_path, username, password, tenant_id):
     global response, access_token  # so we can re-use it in later tests
     response = requests.post(
-        api_url + login_path, json={"login": username, "password": password}
+        api_url + login_path,
+        json={"login": username, "password": password},
+        headers=compose_headers(tenant_id=tenant_id)
     )
     assert response.status_code == 200
     # memorize
@@ -30,12 +33,11 @@ def test_do_login(api_url, login_path, username, password):
 response2 = None
 
 
-def test_extensions(api_url, extensions_path):
+def test_extensions(api_url, extensions_path, tenant_id):
     global response2, body, access_token
     response2 = requests.get(
         api_url + extensions_path,
-        headers={"Authorization": "Bearer " + access_token,
-                  },
+        headers=compose_headers(tenant_id=tenant_id, access_token=access_token)
     )
 
     logging.info("response:" + response2.content.decode("utf-8"))

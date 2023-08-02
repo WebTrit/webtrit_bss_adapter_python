@@ -5,7 +5,8 @@ import pprint
 from dataclasses import dataclass
 import json
 
-from utils4testing import Attr, verify_attribute_in_json, verify_attribute_value
+from utils4testing import (Attr, verify_attribute_in_json, 
+                           verify_attribute_value, compose_headers)
 
 
 pp = pprint.PrettyPrinter(indent=4)
@@ -14,10 +15,12 @@ response = None
 access_token = None
 
 
-def test_do_login(api_url, login_path, username, password):
+def test_do_login(api_url, login_path, username, password, tenant_id):
     global response, access_token  # so we can re-use it in later tests
     response = requests.post(
-        api_url + login_path, json={"login": username, "password": password}
+        api_url + login_path,
+        json={"login": username, "password": password},
+        headers=compose_headers(tenant_id=tenant_id)
     )
     assert response.status_code == 200
     # memorize
@@ -28,14 +31,16 @@ def test_do_login(api_url, login_path, username, password):
 response2 = None
 
 
-def test_call_history(api_url, call_history_path):
+def test_call_history(api_url, call_history_path, tenant_id):
     global response2, access_token
     headers = {"Authorization": "Bearer " + access_token,
-               "X-Request-ID": "test" + call_history_path + "1" }
+                }
 
     response2 = requests.get(
         api_url + call_history_path,
-        headers=headers,
+        headers=compose_headers(tenant_id=tenant_id,
+                                access_token=access_token,
+                                other = { "X-Request-ID": "test" + call_history_path + "1"} ),
         # json = { }
     )
     try:

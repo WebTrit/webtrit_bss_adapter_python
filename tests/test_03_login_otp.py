@@ -1,14 +1,18 @@
 import requests
 import pytest
 import datetime
+from utils4testing import Attr, verify_attribute_in_json, compose_headers
+
 
 
 response = None
 
 
-def test_otp_create(api_url, otp_create_path, username):
+def test_otp_create(api_url, otp_create_path, username, tenant_id):
     global response  # so we can re-use it in later tests
-    response = requests.post(api_url + otp_create_path, json={"user_ref": username})
+    response = requests.post(api_url + otp_create_path,
+                             json={"user_ref": username},
+                             headers=compose_headers(tenant_id=tenant_id))
     assert response.status_code == 200
 
 
@@ -29,11 +33,13 @@ def test_gen_otp_attr(api_url, otp_create_path, attr, expected):
         assert body[attr] == expected
 
 
-def test_verify_otp_fail(api_url, otp_verify_path):
+def test_verify_otp_fail(api_url, otp_verify_path, tenant_id):
     global response
     body = response.json()
     response2 = requests.post(
-        api_url + otp_verify_path, json={"otp_id": body["otp_id"], "code": "wrong"}
+        api_url + otp_verify_path,
+        json={"otp_id": body["otp_id"], "code": "wrong"},
+        headers=compose_headers(tenant_id=tenant_id)
     )
     assert response2.status_code == 401
 
@@ -41,13 +47,15 @@ def test_verify_otp_fail(api_url, otp_verify_path):
 response2 = None
 
 
-def test_verify_otp(api_url, otp_verify_path, otp_code):
+def test_verify_otp(api_url, otp_verify_path, otp_code, tenant_id):
     global response2
     body = response.json()
     json_data = {"otp_id": body["otp_id"], "code": otp_code}
     print(f"sending req to {api_url + otp_verify_path} with {json_data}")
     response2 = requests.post(
-        api_url + otp_verify_path, json=json_data
+        api_url + otp_verify_path,
+        json=json_data,
+        headers=compose_headers(tenant_id=tenant_id)
     )
     assert response2.status_code == 200
 

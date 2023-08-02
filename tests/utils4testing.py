@@ -1,5 +1,7 @@
 from dataclasses import dataclass
 
+TENANT_ID_HEADER = 'X-WebTrit-Tenant-ID'
+
 @dataclass
 class Attr:
     name: str
@@ -20,3 +22,13 @@ def verify_attribute_value(attr: Attr, value):
     if attr.expected:
         expected_value = attr.expected() if callable(attr.expected) else attr.expected
         assert value == expected_value
+
+def compose_headers(access_token: str = None, tenant_id: str = None, other: dict = {}):
+    """Create a proper structure of HTTP headers for the request."""
+    h = other
+    if access_token:
+        h["Authorization"] = "Bearer " + access_token
+    if tenant_id:
+        h[TENANT_ID_HEADER] = tenant_id
+
+    return h

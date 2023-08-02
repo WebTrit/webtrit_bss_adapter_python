@@ -1,6 +1,6 @@
 import requests
 import pytest
-from utils4testing import Attr, verify_attribute_in_json
+from utils4testing import Attr, verify_attribute_in_json, compose_headers
 
 def test_missing_data(api_url, login_path):
     global body    
@@ -48,10 +48,12 @@ def test_failed_login(api_url, login_path):
 response = None
 
 
-def test_login(api_url, login_path, username, password):
+def test_login(api_url, login_path, username, password, tenant_id):
     global response, body  # so we can re-use it in later tests
     response = requests.post(
-       api_url + login_path, json={"login": username, "password": password}
+       api_url + login_path,
+       json={"login": username, "password": password},
+       headers=compose_headers(tenant_id=tenant_id)
 
     )
     print(response.content)
@@ -92,13 +94,14 @@ def test_login_userid(api_url, login_path, username, attr):
 response2 = None
 
 
-def test_refresh(api_url, login_path):
+def test_refresh(api_url, login_path, tenant_id):
     global response, response2
     body = response.json()
 
     response2 = requests.patch(
         api_url + login_path,
         json={"refresh_token": body["refresh_token"], "user_id": body["user_id"]},
+        headers=compose_headers(tenant_id=tenant_id),
     )
     print(response2.content)
     assert response2.status_code == 200

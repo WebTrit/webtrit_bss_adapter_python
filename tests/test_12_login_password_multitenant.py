@@ -1,9 +1,9 @@
 import requests
 import pytest
-from utils4testing import Attr, verify_attribute_in_json
+from utils4testing import Attr, verify_attribute_in_json, compose_headers
 
+# OBSOLETE - added multi-tenant to standard tests
 
-TENANT_ID_HEADER = 'X-WebTrit-Tenant-ID'
 # def test_missing_data(api_url, login_path):
 #     global body    
 #     response = requests.post(
@@ -42,7 +42,7 @@ TENANT_ID_HEADER = 'X-WebTrit-Tenant-ID'
 def test_failed_login(api_url, login_path, tenant_id):
     response = requests.post(
         api_url + login_path, json={"login": "hacker", "password": "12345"},
-        headers={ TENANT_ID_HEADER: tenant_id, 'User-Agent': 'Self-test'}
+        headers=compose_headers( tenant_id = tenant_id )
     )
     print(response.content)
     assert response.status_code == 401
@@ -55,7 +55,7 @@ def test_login(api_url, login_path, username, password,  tenant_id):
     global response, body  # so we can re-use it in later tests
     response = requests.post(
         api_url + login_path, json={"login": username, "password": password},
-        headers={ TENANT_ID_HEADER: tenant_id, 'User-Agent': 'Self-test'}
+        headers=compose_headers( tenant_id = tenant_id )
     )
     print(response.content)
     assert response.status_code == 200
@@ -103,7 +103,7 @@ def test_refresh(api_url, login_path, tenant_id):
     response2 = requests.patch(
         api_url + login_path,
         json={"refresh_token": body["refresh_token"], "user_id": body["user_id"]},
-        headers={ TENANT_ID_HEADER: tenant_id, 'User-Agent': 'Self-test'}
+        headers=compose_headers( tenant_id = tenant_id )
     )
     print(response2.content)
     assert response2.status_code == 200
@@ -143,12 +143,10 @@ def test_extensions(api_url, tenant_id, extensions_path):
     global response2, body, access_token
     response2 = requests.get(
         api_url + extensions_path,
-        headers={"Authorization": "Bearer " + access_token,
-                 TENANT_ID_HEADER: tenant_id
-                  },
+        headers=compose_headers( access_token = access_token, tenant_id = tenant_id )
     )
 
     assert response2.status_code == 200
     print(response2.content)
-    assert isinstance(body, dict)
+    assert isinstance(body := response2.json(), dict)
     assert 'items' in body

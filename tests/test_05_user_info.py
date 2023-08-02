@@ -5,7 +5,7 @@ import logging
 import pprint
 import json
 
-from utils4testing import Attr, verify_attribute_in_json
+from utils4testing import Attr, verify_attribute_in_json, compose_headers
 
 pp = pprint.PrettyPrinter(indent=4)
 
@@ -13,10 +13,12 @@ response = None
 access_token = None
 
 
-def test_do_login(api_url, login_path, username, password):
+def test_do_login(api_url, login_path, username, password, tenant_id):
     global response, access_token, pp  # so we can re-use it in later tests
     response = requests.post(
-        api_url + login_path, json={"login": username, "password": password}
+        api_url + login_path,
+        json={"login": username, "password": password},
+        headers=compose_headers(tenant_id=tenant_id)
     )
 
     assert response.status_code == 200
@@ -28,12 +30,12 @@ def test_do_login(api_url, login_path, username, password):
 response2 = None
 
 
-def test_userinfo(api_url, userinfo_path):
+def test_userinfo(api_url, userinfo_path, tenant_id):
     global response2, access_token, pp
 
     response2 = requests.get(
         api_url + userinfo_path,
-        headers={"Authorization": "Bearer " + access_token},
+        headers=compose_headers(tenant_id=tenant_id, access_token=access_token)
     )
     if len(response2.content) > 0:
         logging.warning("Reply from the server:" + response2.content.decode("utf-8"))
@@ -48,8 +50,8 @@ def test_userinfo(api_url, userinfo_path):
         Attr(name="sip", type=type({}), mandatory=True),
         Attr(name="company_name", type=str),
         Attr(name="email", type=str),
-        Attr(name="firstname", type=str),
-        Attr(name="lastname", type=str),
+        Attr(name="first_name", type=str),
+        Attr(name="last_name", type=str),
         Attr(name="time_zone", type=str),
         Attr(name="numbers", type=dict)
     ],
