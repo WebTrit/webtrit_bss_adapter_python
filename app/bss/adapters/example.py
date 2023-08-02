@@ -1,7 +1,7 @@
 from bss.adapters import BSSAdapterExternalDB
 from bss.dbs import TiedKeyValue, FileStoredKeyValue
 from bss.types import (Capabilities, UserInfo, EndUser, Contacts, ContactInfo,
-                       Calls, CDRInfo, ConnectStatus, SessionInfo,
+                       Calls, CDRInfo, ConnectStatus, SIPRegistrationStatus, SessionInfo,
                        Numbers, FailedAuthIncorrectDataCode)
 from report_error import WebTritErrorException
 from typing import List
@@ -114,11 +114,11 @@ class ExampleBSSAdapter(BSSAdapterExternalDB):
 
         min_contacts = 4
         max_contacts = 10
-        statuses = ["registered", "notregistered"]
+        statuses = [ SIPRegistrationStatus.registered, SIPRegistrationStatus.notregistered ]
         contacts = [
             ContactInfo(
-                first_name=self.fake.random_name(),
-                last_name=self.fake.random_lastname(),
+                firstname=self.fake.random_name(),
+                lastname=self.fake.random_lastname(),
                 email=self.fake.email(),
                 company_name=self.fake.company(),
                 numbers=Numbers(
@@ -178,17 +178,18 @@ class ExampleBSSAdapter(BSSAdapterExternalDB):
 
     def create_new_user(self, user_data, tenant_id: str = None):
         """Create a new user as a part of the sign-up process"""
-        if isinstance(user_data, dict) \
-                and 'user_id' in user_data and 'password' in user_data:
+        if hasattr(user_data, 'attributes') and isinstance(user_data.attributes, dict) \
+                and 'user_id' in user_data.attributes and 'password' in user_data.attributes:
             # add this record to the internal DB
-            self.user_db[user_data['user_id']] = user_data
+            attr = user_data.attributes
+            self.user_db[attr['user_id']] = attr
             # and log the user in
-            return self.authenticate(UserInfo(login=user_data['user_id'],
-                                                user_id=user_data['user_id']),
-                                                user_data['password'])
+            return self.authenticate(UserInfo(login=attr['user_id'],
+                                              user_id=attr['user_id']),
+                                            attr['password'])
         
         raise WebTritErrorException(
             status_code=422,
             code = FailedAuthIncorrectDataCode.validation_error,
-            error_message="Wrong data structure"
+            error_message="Wrong data strcuture"
         )
