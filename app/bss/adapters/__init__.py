@@ -1,23 +1,21 @@
 from dataclasses import dataclass
 import logging
-import random
-import uuid
 from abc import ABC, abstractmethod
-from datetime import datetime, timedelta
-
+from datetime import datetime
+from pydantic import BaseModel, Field
 from bss.types import (UserInfo, EndUser, ContactInfo, CDRInfo, OTP,
                        OTPCreateResponse, OTPVerifyRequest, OTPDeliveryChannel, UserCreateResponse,
                        FailedAuthCode, UserNotFoundCode, SessionNotFoundCode, TokenErrorCode,
-                       RefreshTokenErrorCode, TokenErrorCode2, OTPIDNotFoundCode, OTPValidationErrCode,
+                       RefreshTokenErrorCode, TokenErrorCode2,                       
                        safely_extract_scalar_value)
 from bss.sessions import SessionStorage, SessionInfo
+from bss.adapters.otp import OTPHandler, SampleOTPHandler
 from app_config import AppConfig
 from report_error import WebTritErrorException
 from module_loader import ModuleLoader
-from typing import List, Dict, Any, Optional, List
+from typing import List, Dict, Any, Optional, Callable
 
-@dataclass
-class AttrMap:
+class AttrMap(BaseModel):
     """Define how to map the attributes of one data structure
     (e.g. how user data is stored in external system) to the
     naming used in WebTrit.
@@ -34,8 +32,8 @@ class AttrMap:
         converter = lambda x: x[1:] if x.startswith("+") else x
     """
     new_key: str
-    old_key: str = None  # if not provided, the old name is used
-    converter: callable = None  # custom conversion function
+    old_key: Optional[str] = None  # if not provided, the old name is used
+    converter: Optional[Callable] = None  # custom conversion function
 
 
 class SessionManagement(ABC):
@@ -125,18 +123,6 @@ class SessionManagement(ABC):
             error_message=f"Error closing the session {access_token}",
         )
 
-class OTPHandler(ABC):
-    @abstractmethod
-    def generate_otp(self, user: UserInfo) -> OTPCreateResponse:
-        """Request that the remote hosted PBX system / BSS generates a new
-        one-time-password (OTP) and sends it to the user via the
-        configured communication channel (e.g. SMS)"""
-        pass
-    @abstractmethod
-    def validate_otp(self, otp: OTPVerifyRequest) -> SessionInfo:
-        """Verify that the OTP code, provided by the user, is correct."""
-        pass
-
 class BSSAdapter(SessionManagement, OTPHandler):
     def __init__(self, config: AppConfig):
         self.config = config
@@ -225,79 +211,9 @@ class BSSAdapter(SessionManagement, OTPHandler):
         """Provide a defaut value for tenant ID if none is supplied in HTTP headers"""
         return tenant_id if tenant_id else "default"
 
-class SampleOTPHandler(OTPHandler):
-    """This is a demo class for handling OTPs, it does not send any
-    data to the end-user (only prints it in the log), so it is useful
-    for debugging your own application while you are working on establishing
-    a way to send real OTPs via SMS or other channel."""
-
-    def generate_otp(self, user: UserInfo) -> OTPCreateResponse:
-        """Request that the remote hosted PBX system / BSS generates a new
-        one-time-password (OTP) and sends it to the user via the
-        configured communication channel (e.g. SMS)"""
-
-        # the code that the user should provide to prove that
-        # he/she is who he/she claims to be
-        code = random.randrange(100000, 999999)
-        code_for_tests = self.config.get_conf_val("PERMANENT_OTP_CODE")
-        if code_for_tests:
-            # while running automated tests, we have to produce the
-            # same OTP as configured in the test suite. make sure
-            # this env var is NOT set in production!
-            code = int(code_for_tests)
-        # so we can see it and use during debug
-        logging.info(f"OTP code {code}")
-
-        otp_id = str(uuid.uuid1())
-
-        otp = OTP(
-            user_id=user.user_id,
-            otp_expected_code="{:06d}".format(code),
-            expires_at=datetime.now() + timedelta(minutes=15),
-        )
-        # memorize it
-        self.otp_db[otp_id] = otp
-
-        return OTPCreateResponse(
-            # OTP sender's address so the user can find it easier
-            otp_sent_from="sample@webtrit.com",
-            otp_id=otp_id,
-            otp_sent_type=OTPDeliveryChannel.email,
-        )
-
-    def validate_otp(self, otp: OTPVerifyRequest) -> SessionInfo:
-        """Verify that the OTP code, provided by the user, is correct."""
-
-        otp_id = otp.otp_id.__root__
-        original = self.otp_db.get(otp_id, None)
-        if not original:
-            raise WebTritErrorException(
-                status_code=401,
-                code=OTPIDNotFoundCode.otp_id_not_found,
-                error_message="Invalid OTP ID",
-            )
-
-        if original.expires_at < datetime.now():
-            raise WebTritErrorException(
-                status_code=419,
-                code=OTPValidationErrCode.otp_id_timeout,
-                error_message="OTP has expired",
-            )
-
-        if original.otp_expected_code != otp.code:
-            raise WebTritErrorException(
-                status_code=401,
-                code=OTPValidationErrCode.code_incorrect,
-                error_message="Invalid OTP",
-            )
-
-        # everything is in order, create a session
-        session = self.sessions.create_session(UserInfo(user_id = original.user_id))
-        self.sessions.store_session(session)
-        return session
 
 class BSSAdapterExternalDB(BSSAdapter, SampleOTPHandler):
-    """Supply to WebTrit core the limited information about
+    """Supply to WebTrit core information about
     VoIP users (only their SIP credentials) and the list of
     extensions (other users) in the PBX. This typically is
     required when the VoIP system or PBX does not have a proper
@@ -313,22 +229,6 @@ class BSSAdapterExternalDB(BSSAdapter, SampleOTPHandler):
         self.sessions = None
         self.otp_db = None
 
-    @classmethod
-    def name(cls) -> str:
-        """The name of the adapter"""
-        raise NotImplementedError("Override this method in your sub-class")
-
-    @classmethod
-    def version(cls) -> str:
-        """The version"""
-        raise NotImplementedError("Override this method in your sub-class")
-
-    # these are regular class methods
-    @abstractmethod
-    def get_capabilities(self) -> list:
-        """Capabilities of your hosted PBX / BSS / your API adapter"""
-        raise NotImplementedError("Override this method in your sub-class")
-
     def find_user_by_login(self, user: UserInfo):
         """The same users may use different login IDs, e.g.
         email, phone number or made-up login username.
@@ -337,34 +237,11 @@ class BSSAdapterExternalDB(BSSAdapter, SampleOTPHandler):
         enable more creative search by various options. """
         # important: need to use user.login here, not user.user_id
         return self.user_db.get(user.login, None)
-    
-    def authenticate(self, user: UserInfo, password: str = None) -> SessionInfo:
-        """Authenticate user with username and password and
-        produce an API token for further requests."""
+
+    def retrieve_user_info(self, user: UserInfo):
+        """Get the full user data using user's unique ID - typically user.user_id"""
+        return self.user_db.get(user.user_id, None)
         
-        user_data = self.find_user_by_login(user)
-        if user_data:
-            if self.verify_password(user_data, password):
-                # everything is in order, create a session
-                user.user_id = self.extract_user_id(user_data)
-                session = self.sessions.create_session(user)
-                self.sessions.store_session(session)
-                return session
-
-            raise WebTritErrorException(
-                status_code=401,
-                code=FailedAuthCode.invalid_credentials,
-                error_message="Invalid password",
-            )
-
-        # something is wrong. your code should return a more descriptive
-        # error message to simplify the process of fixing the problem
-        raise WebTritErrorException(
-            status_code=401,
-            code=FailedAuthCode.invalid_credentials,
-            error_message="User authentication error",
-        )
-
     def extract_user_id(self, user_data: object) -> str:
         """Extract user_id (unique and unmutable identifier of the user)
         from the data in the DB. Please override it in your sub-class"""
@@ -393,10 +270,37 @@ class BSSAdapterExternalDB(BSSAdapter, SampleOTPHandler):
         """Create a user object from the data in the DB"""
         return EndUser(**db_data)
 
+    def authenticate(self, user: UserInfo, password: str = None) -> SessionInfo:
+        """Authenticate user with username and password and
+        produce an API token for further requests."""
+        
+        user_data = self.find_user_by_login(user)
+        if user_data:
+            if self.verify_password(user_data, password):
+                # everything is in order, create a session
+                user.user_id = self.extract_user_id(user_data)
+                session = self.sessions.create_session(user)
+                self.sessions.store_session(session)
+                return session
+
+            raise WebTritErrorException(
+                status_code=401,
+                code=FailedAuthCode.invalid_credentials,
+                error_message="Invalid password",
+            )
+
+        # something is wrong. your code should return a more descriptive
+        # error message to simplify the process of fixing the problem
+        raise WebTritErrorException(
+            status_code=401,
+            code=FailedAuthCode.invalid_credentials,
+            error_message="User authentication error",
+        )
+
     def retrieve_user(self, session: SessionInfo, user: UserInfo) -> EndUser:
         """Obtain user's information - most importantly, his/her SIP credentials."""
 
-        user_data = self.user_db.get(user.user_id, None)
+        user_data = self.retrieve_user_info(user)
         if user_data:
             return self.produce_user_object(user_data)
 
@@ -407,6 +311,22 @@ class BSSAdapterExternalDB(BSSAdapter, SampleOTPHandler):
             error_message="User not found"
         )
 
+    # these are the "standard" methods from BSSAdapter you are expected to override
+    @classmethod
+    def version(cls) -> str:
+        """The version"""
+        raise NotImplementedError("Override this method in your sub-class")
+
+    @classmethod
+    def name(cls) -> str:
+        """The name of the adapter"""
+        raise NotImplementedError("Override this method in your sub-class")
+    
+    @abstractmethod
+    def get_capabilities(self) -> list:
+        """Capabilities of your hosted PBX / BSS / your API adapter"""
+        raise NotImplementedError("Override this method in your sub-class")
+    
     @abstractmethod
     def retrieve_contacts(self, session: SessionInfo, user: UserInfo) -> List[ContactInfo]:
         """List of other extensions in the PBX"""
@@ -429,7 +349,10 @@ class BSSAdapterExternalDB(BSSAdapter, SampleOTPHandler):
     ) -> bytes:
         """Get the media file for a previously recorded call."""
         raise NotImplementedError("Override this method in your sub-class")
-
+    
+    def create_new_user(self, user_data, tenant_id: str = None) -> UserCreateResponse:
+        """Create a new user as a part of the sign-up process"""
+        raise NotImplementedError("Override this method in your sub-class")
 
 # initialize BSS Adapter
 def initialize_bss_adapter(root_package: str, config: AppConfig) -> BSSAdapter:

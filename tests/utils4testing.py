@@ -32,3 +32,10 @@ def compose_headers(access_token: str = None, tenant_id: str = None, other: dict
         h[TENANT_ID_HEADER] = tenant_id
 
     return h
+
+def extract_err_msg(response):
+    try:
+        body = response.json()
+        return body['details']['reason']
+    except:
+        return None

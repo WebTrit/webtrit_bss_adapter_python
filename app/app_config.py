@@ -99,3 +99,10 @@ class AppConfig(dict):
                 break
             val = self.get_case_insensitive(val, x, None )
         return AppConfig(val) if val is not None else None
+    
+    def get_mandatory_conf_val(self, *path):
+        """Same as get_conf_val but raises an exception if the value is not found"""
+        val = self.get_conf_val(*path)
+        if val is None:
+            raise Exception(f"Config value {path} is not defined")
+        return val
