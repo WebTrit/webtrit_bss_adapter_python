@@ -1,6 +1,4 @@
-from bss.adapters import (
-    BSSAdapter, SampleOTPHandler
-)
+from bss.adapters import BSSAdapter
 from bss.types import (Capabilities, UserInfo, EndUser, Contacts, ContactInfo,
                        Calls, CDRInfo, ConnectStatus, SessionInfo, SIPRegistrationStatus,
                        Balance, BalanceType, Numbers, SIPServer, SIPInfo,
@@ -19,7 +17,6 @@ import logging
 import re
 
 VERSION = "0.0.2"
-
 
 class FreePBXAPI(HTTPAPIConnectorWithLogin):
     def __init__(self, api_server: str, api_user: str, api_password: str, **kwargs):
@@ -368,12 +365,12 @@ class FreePBXAdapter(BSSAdapter):
 
         if produce_user_info:
             data["sip"] = SIPInfo(
-                login=ext.get("extensionId", ""),
+                username=ext.get("extensionId", ""),
                 display_name=display_name,
                 password=ext_info.get("extPassword", ""),
                 sip_server=SIPServer(host=self.sip_server, port=5060),
             )
-            return EndUser(**data,)
+            return EndUser(**data)
         else:
             # TODO: find out whether we can get the real
             # registration status via API - for now all extensions

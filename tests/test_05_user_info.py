@@ -48,6 +48,7 @@ def test_userinfo(api_url, userinfo_path, tenant_id):
     [
         Attr(name="balance", type=type({})),
         Attr(name="sip", type=type({}), mandatory=True),
+        Attr(name="status", type=str),
         Attr(name="company_name", type=str),
         Attr(name="email", type=str),
         Attr(name="first_name", type=str),
@@ -73,7 +74,8 @@ def test_user_info_attr(api_url, login_path, attr):
     "attr",
     [
         Attr(name="display_name", type=str),
-        Attr(name="login", type=str, mandatory=True),
+        Attr(name="username", type=str, mandatory=True),
+        Attr(name="auth_username", type=str, mandatory=True),
         Attr(name="password", type=str, mandatory=True),
         Attr(name="sip_server", type=dict, mandatory=True),
         Attr(name="registration_server", type=dict)

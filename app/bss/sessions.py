@@ -69,10 +69,12 @@ class SessionStorage:
         return session
 
     def __store_session(self, session: SessionInfo):
-        self.session_db[session.access_token] = session
+        access_token = safely_extract_scalar_value(session.access_token)
+        self.session_db[access_token] = session
         # also add the possibility to find the session by its refresh token
         r_session = session.copy()
-        r_session.long_life_refresh = True
+        # why was it created?
+        # r_session.long_life_refresh = True
         r_session.expires_at = datetime.now() + timedelta(hours=self.REFRESH_TOKEN_EXPIRATION)
         refresh_token_index = self.__refresh_token_index(session.refresh_token)
         self.session_db[refresh_token_index] = r_session

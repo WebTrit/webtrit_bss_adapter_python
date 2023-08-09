@@ -1,8 +1,9 @@
 from bss.adapters import BSSAdapterExternalDB
 from bss.dbs import TiedKeyValue, FileStoredKeyValue
 from bss.types import (Capabilities, UserInfo, EndUser, Contacts, ContactInfo,
-                       Calls, CDRInfo, ConnectStatus, SIPRegistrationStatus, SessionInfo,
-                       Numbers, FailedAuthIncorrectDataCode)
+                       Calls, CDRInfo, ConnectStatus, SIPRegistrationStatus,
+                       Direction,
+                       SessionInfo, Numbers, FailedAuthIncorrectDataCode)
 from report_error import WebTritErrorException
 from typing import List
 from bss.sessions import configure_session_storage
@@ -66,7 +67,8 @@ class ExampleBSSAdapter(BSSAdapterExternalDB):
             "status": "active",
             "company_name": "WebTrit, Inc",
             "sip": {
-                "login": "12065551234",
+                "username": "12065551234",
+                "auth_username": "abc",
                 "password": "SlavaUkraini!",
                 "display_name": "Geroyam Slava!",
                 "sip_server": {"host": "127.0.0.1", "port": 5060},
@@ -136,9 +138,10 @@ class ExampleBSSAdapter(BSSAdapterExternalDB):
 
         return contacts
 
-    def retrieve_calls(self, session: SessionInfo, user: UserInfo,
-                        time_from: datetime = None,
-                        time_to: datetime = None) -> List[CDRInfo]:
+    def retrieve_calls(self, session: SessionInfo,
+                       user: UserInfo,
+                       time_from: datetime = None,
+                       time_to: datetime = None) -> List[CDRInfo]:
         """Obtain CDRs (call history) of the user"""
         if time_from and time_from < datetime.datetime(2020, 1, 1):
             # return fixed number of calls to test pagination
@@ -147,22 +150,24 @@ class ExampleBSSAdapter(BSSAdapterExternalDB):
             min_calls = 20
             max_calls = 200
             calls = random.randint(min_calls, max_calls)
-        directions = ["incoming", "outgoing"]
-        statuses = ["accepted", "declined", "missed", "error"]
+        directions = [x.value for x in Direction]
+        # statuses = ["accepted", "declined", "missed", "error"]
+        statuses = [x.value for x in ConnectStatus]
         cdrs = [
                 CDRInfo(
+                    call_id=str(uuid.uuid1()),
                     recording_id=str(uuid.uuid1()),
                     connect_time=datetime.datetime.now()
-                    + datetime.timedelta(
-                        minutes=n * 5 + random.randint(1, 5),
-                        seconds=random.randint(1, 20),
-                    ),
+                        + datetime.timedelta(
+                            minutes=n * 5 + random.randint(1, 5),
+                            seconds=random.randint(1, 20),
+                        ),
                     callee=self.fake.random_phone_number(),
                     caller=self.fake.random_phone_number(),
                     duration=0 if random.randint(1, 2) == 1 else random.randint(1, 300),
                     direction=self.fake.random_list_member(directions),
                     status=self.fake.random_list_member(statuses),
-                    disconnected_reason="Unknown"
+                    disconnect_reason="Unknown"
                 )
                 for n in range(calls)
             ]
@@ -178,8 +183,10 @@ class ExampleBSSAdapter(BSSAdapterExternalDB):
 
     def create_new_user(self, user_data, tenant_id: str = None):
         """Create a new user as a part of the sign-up process"""
-        if hasattr(user_data, 'attributes') and isinstance(user_data.attributes, dict) \
-                and 'user_id' in user_data.attributes and 'password' in user_data.attributes:
+        if hasattr(user_data, 'attributes') \
+                and isinstance(user_data.attributes, dict) \
+                and 'user_id' in user_data.attributes \
+                and 'password' in user_data.attributes:
             # add this record to the internal DB
             attr = user_data.attributes
             self.user_db[attr['user_id']] = attr

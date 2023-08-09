@@ -24,7 +24,6 @@ from bss.types import (
     CallRecordingId,
     CreateSessionInternalServerErrorErrorResponse,
     CreateSessionOtpInternalServerErrorErrorResponse,
-    CreateSessionOtpMethodNotAllowedErrorResponse,
     CreateSessionOtpNotFoundErrorResponse,
     CreateSessionOtpUnprocessableEntityErrorResponse,
     CreateSessionUnauthorizedErrorResponse,
@@ -62,17 +61,17 @@ from bss.types import (
     UpdateSessionInternalServerErrorErrorResponse,
     UpdateSessionNotFoundErrorResponse,
     UpdateSessionUnprocessableEntityErrorResponse,
-    UserContactIndexResponse,
+    Contacts,
     UserCreateRequest,
     UserCreateResponse,
-    UserHistoryIndexResponse,
-    UserInfoShowResponse,
+    Calls,
+    EndUser,
     VerifySessionOtpInternalServerErrorErrorResponse,
     VerifySessionOtpNotFoundErrorResponse,
     VerifySessionOtpUnprocessableEntityErrorResponse,
     Pagination,
     SessionNotFoundCode,
-    ExternalErrorCode,
+    OTPExtAPIErrorCode,
     OTPValidationErrCode,
     FailedAuthIncorrectDataCode,
     SessionInfo
@@ -134,10 +133,7 @@ app = FastAPI(
 )
 security = HTTPBearer()
 
-
 router = APIRouter(route_class=RouteWithLogging)
-
-
 
 bss = initialize_bss_adapter(bss.adapters.__name__, config)
 bss_capabilities = bss.get_capabilities()
@@ -253,7 +249,7 @@ def delete_session(
         # or expired access token was provided
         raise WebTritErrorException(
             status_code=500,
-            code=ExternalErrorCode.external_api_issue,
+            code=OTPExtAPIErrorCode.external_api_issue,
             error_message="Logout failed"
         )
 
@@ -264,7 +260,6 @@ def delete_session(
     response_model=SessionOtpCreateResponse,
     responses={
         '404': {'model': CreateSessionOtpNotFoundErrorResponse},
-        '405': {'model': CreateSessionOtpMethodNotAllowedErrorResponse},
         '422': {'model': CreateSessionOtpUnprocessableEntityErrorResponse},
         '500': {'model': CreateSessionOtpInternalServerErrorErrorResponse},
     },
@@ -276,7 +271,6 @@ def create_session_otp(
 ) -> Union[
     SessionOtpCreateResponse,
     CreateSessionOtpNotFoundErrorResponse,
-    CreateSessionOtpMethodNotAllowedErrorResponse,
     CreateSessionOtpUnprocessableEntityErrorResponse,
     CreateSessionOtpInternalServerErrorErrorResponse,
 ]:
@@ -287,7 +281,7 @@ def create_session_otp(
 
     if Capabilities.otpSignin not in bss_capabilities:
         raise WebTritErrorException(
-            status_code=405, 
+            status_code=422, 
             error_message="Method not supported",
             code=OTPValidationErrCode.validation_error, 
         )
@@ -364,7 +358,7 @@ def get_system_info(
 
 @router.get(
     '/user',
-    response_model=UserInfoShowResponse,
+    response_model=EndUser,
     responses={
         '401': {'model': GetUserInfoUnauthorizedErrorResponse},
         '404': {'model': GetUserInfoNotFoundErrorResponse},
@@ -378,7 +372,7 @@ def get_user_info(
     x_webtrit_tenant_id: Optional[str] = Header(None, alias='X-WebTrit-Tenant-ID'),
 ) -> (
     Union[
-        UserInfoShowResponse,
+        EndUser,
         GetUserInfoUnauthorizedErrorResponse,
         GetUserInfoNotFoundErrorResponse,
         GetUserInfoUnprocessableEntityErrorResponse,
@@ -452,7 +446,7 @@ def create_user(
 
 @router.get(
     '/user/contacts',
-    response_model=UserContactIndexResponse,
+    response_model=Contacts,
     responses={
         '401': {'model': GetUserContactListUnauthorizedErrorResponse},
         '404': {'model': GetUserContactListNotFoundErrorResponse},
@@ -466,7 +460,7 @@ def get_user_contact_list(
     x_webtrit_tenant_id: Optional[str] = Header(None, alias='X-WebTrit-Tenant-ID'),
 ) -> (
     Union[
-        UserContactIndexResponse,
+        Contacts,
         GetUserContactListUnauthorizedErrorResponse,
         GetUserContactListNotFoundErrorResponse,
         GetUserContactListUnprocessableEntityErrorResponse,
@@ -486,15 +480,15 @@ def get_user_contact_list(
                         ExtendedUserInfo(
                             user_id = safely_extract_scalar_value(session.user_id),
                             tenant_id=bss.default_id_if_none(x_webtrit_tenant_id)))
-        return UserContactIndexResponse(items = contacts)
+        return Contacts(items = contacts)
 
     # not supported by hosted PBX / BSS, return empty list
-    return UserContactIndexResponse(items = [], )
+    return Contacts(items = [], )
 
 
 @router.get(
     '/user/history',
-    response_model=UserHistoryIndexResponse,
+    response_model=Calls,
     responses={
         '401': {'model': GetUserHistoryListUnauthorizedErrorResponse},
         '404': {'model': GetUserHistoryListNotFoundErrorResponse},
@@ -511,7 +505,7 @@ def get_user_history_list(
     auth_data: HTTPAuthorizationCredentials = Depends(security),
     x_webtrit_tenant_id: Optional[str] = Header(None, alias='X-WebTrit-Tenant-ID'),
 ) -> Union[
-    UserHistoryIndexResponse,
+    Calls,
     GetUserHistoryListUnauthorizedErrorResponse,
     GetUserHistoryListNotFoundErrorResponse,
     GetUserHistoryListUnprocessableEntityErrorResponse,
@@ -539,15 +533,15 @@ def get_user_history_list(
         calls = calls[skip_items:]
         if len(calls) > items_per_page:
             calls = calls[:items_per_page]
-        return UserHistoryIndexResponse(items = calls,
-                                        pagination=Pagination(
-                                            page=page,
-                                            items_total=total,
-                                            items_per_page=items_per_page)
-                                    )
+        return Calls(   items = calls,
+                        pagination=Pagination(
+                            page=page,
+                            items_total=total,
+                            items_per_page=items_per_page)
+                    )
 
     # not supported by hosted PBX / BSS, return an empty list
-    return UserHistoryIndexResponse(items = [],
+    return Calls(items = [],
                                     pagination=Pagination(
                                         page=1,
                                         items_total=0,

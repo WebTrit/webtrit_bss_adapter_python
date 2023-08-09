@@ -1,7 +1,6 @@
 from dataclasses import dataclass, field
-from typing import List, Dict, Any, Optional, List, Union
+from typing import List, Dict, Any, Optional, Union
 from pydantic import BaseModel, Field
-import enum
 from datetime import datetime, timedelta
 import orjson
 
@@ -9,108 +8,125 @@ import orjson
 # plus we do not want to depend on the names of the objects in the schema too much
 # so use these in your code instead of the schema objects
 from bss.models import (
-    BinaryResponse as BinaryResponse,
+    # request / response structures
+    SessionCreateRequest as SessionCreateRequest,
+    SessionResponse as SessionResponse,
+
+    SessionOtpCreateRequest as SessionOtpCreateRequest,
+    SessionOtpCreateResponse as SessionOtpCreateResponse,
+    SessionOtpVerifyRequest as SessionOtpVerifyRequest,
+    SessionOtpVerifyRequest as OTPVerifyRequest,
+
+    SessionUpdateRequest as SessionUpdateRequest,
+
+    UserCreateRequest as UserCreateRequest,
+    UserCreateResponse as UserCreateResponse,
+
+    SystemInfoShowResponse as GeneralSystemInfoResponse,
     UserInfoShowResponse as EndUser,
     UserContactIndexResponse as Contacts,
+
+    # data objects
+    BinaryResponse as BinaryResponse,
+
     Contact as ContactInfo,
     UserHistoryIndexResponse as Calls,
     ErrorResponse as ErrorMsg,
     SupportedEnum as Capabilities,
-    UserCreateResponse as UserCreateResponse,
+
     CDRInfo as CDRInfo,
-    Status as SIPRegistrationStatus,
+    Status as UserServiceActiveStatus,
+    SipStatus as SIPRegistrationStatus,
     SipServer as SIPServer,
     SipInfo as SIPInfo,
     ConnectStatus as ConnectStatus,
-    SessionResponse as SessionResponse,
+    Direction as Direction,
     Numbers as Numbers,
     Balance as Balance,
     BalanceType as BalanceType,
-    SessionOtpVerifyRequest as OTPVerifyRequest,
+
     DeliveryChannel as OTPDeliveryChannel,
-    # error codes
-    CreateSessionInternalServerErrorErrorResponse1 as CreateSessionInternalServerErrorErrorResponse,
-    CreateSessionOtpInternalServerErrorErrorResponse1 as CreateSessionOtpInternalServerErrorErrorResponse,
-    CreateSessionOtpMethodNotAllowedErrorResponse1 as CreateSessionOtpMethodNotAllowedErrorResponse,
-    CreateSessionOtpNotFoundErrorResponse1 as CreateSessionOtpNotFoundErrorResponse,
-    CreateSessionOtpUnprocessableEntityErrorResponse1 as CreateSessionOtpUnprocessableEntityErrorResponse,
-    CreateSessionUnauthorizedErrorResponse1 as CreateSessionUnauthorizedErrorResponse,
-    CreateSessionUnprocessableEntityErrorResponse1 as CreateSessionUnprocessableEntityErrorResponse,
-    CreateUserInternalServerErrorErrorResponse1 as CreateUserInternalServerErrorErrorResponse,
-    CreateUserMethodNotAllowedErrorResponse1 as CreateUserMethodNotAllowedErrorResponse,
-    CreateUserUnprocessableEntityErrorResponse1 as CreateUserUnprocessableEntityErrorResponse,
-    DeleteSessionInternalServerErrorErrorResponse1 as DeleteSessionInternalServerErrorErrorResponse,
-    DeleteSessionNotFoundErrorResponse1 as DeleteSessionNotFoundErrorResponse,
-    DeleteSessionUnauthorizedErrorResponse1 as DeleteSessionUnauthorizedErrorResponse,
-    GetSystemInfoInternalServerErrorErrorResponse1 as GetSystemInfoInternalServerErrorErrorResponse,
-    GetUserContactListInternalServerErrorErrorResponse1 as GetUserContactListInternalServerErrorErrorResponse,
-    GetUserContactListNotFoundErrorResponse1 as GetUserContactListNotFoundErrorResponse,
-    GetUserContactListUnauthorizedErrorResponse1 as GetUserContactListUnauthorizedErrorResponse,
-    GetUserContactListUnprocessableEntityErrorResponse1 as GetUserContactListUnprocessableEntityErrorResponse,
-    GetUserHistoryListInternalServerErrorErrorResponse1 as GetUserHistoryListInternalServerErrorErrorResponse,
-    GetUserHistoryListNotFoundErrorResponse1 as GetUserHistoryListNotFoundErrorResponse,
-    GetUserHistoryListUnauthorizedErrorResponse1 as GetUserHistoryListUnauthorizedErrorResponse,
-    GetUserHistoryListUnprocessableEntityErrorResponse1 as GetUserHistoryListUnprocessableEntityErrorResponse,
-    GetUserInfoInternalServerErrorErrorResponse1 as GetUserInfoInternalServerErrorErrorResponse,
-    GetUserInfoNotFoundErrorResponse1 as GetUserInfoNotFoundErrorResponse,
-    GetUserInfoUnauthorizedErrorResponse1 as GetUserInfoUnauthorizedErrorResponse,
-    GetUserInfoUnprocessableEntityErrorResponse1 as GetUserInfoUnprocessableEntityErrorResponse,
-    GetUserRecordingInternalServerErrorErrorResponse1 as GetUserRecordingInternalServerErrorErrorResponse,
-    GetUserRecordingNotFoundErrorResponse1 as GetUserRecordingNotFoundErrorResponse,
-    GetUserRecordingUnauthorizedErrorResponse1 as GetUserRecordingUnauthorizedErrorResponse,
-    GetUserRecordingUnprocessableEntityErrorResponse1 as GetUserRecordingUnprocessableEntityErrorResponse,
-    UpdateSessionInternalServerErrorErrorResponse1 as UpdateSessionInternalServerErrorErrorResponse,
-    UpdateSessionNotFoundErrorResponse1 as UpdateSessionNotFoundErrorResponse,
-    UpdateSessionUnprocessableEntityErrorResponse1 as UpdateSessionUnprocessableEntityErrorResponse,
-    VerifySessionOtpInternalServerErrorErrorResponse1 as VerifySessionOtpInternalServerErrorErrorResponse,
-    VerifySessionOtpNotFoundErrorResponse1 as VerifySessionOtpNotFoundErrorResponse,
-    VerifySessionOtpUnprocessableEntityErrorResponse1 as VerifySessionOtpUnprocessableEntityErrorResponse,
-    UserHistoryIndexResponsePagination as Pagination,
+    Pagination as Pagination,
+    CallRecordingId as CallRecordingId,
+
+    # error responses & codes
+    CreateSessionOtpInternalServerErrorErrorResponse as CreateSessionOtpInternalServerErrorErrorResponse,
+    CreateSessionOtpNotFoundErrorResponse as CreateSessionOtpNotFoundErrorResponse,
+    CreateSessionOtpUnprocessableEntityErrorResponse as CreateSessionOtpUnprocessableEntityErrorResponse,
+
+    CreateSessionInternalServerErrorErrorResponse as CreateSessionInternalServerErrorErrorResponse,
+    CreateSessionUnauthorizedErrorResponse as CreateSessionUnauthorizedErrorResponse,
+    CreateSessionUnprocessableEntityErrorResponse as CreateSessionUnprocessableEntityErrorResponse,
+
+    CreateUserInternalServerErrorErrorResponse as CreateUserInternalServerErrorErrorResponse,
+    CreateUserMethodNotAllowedErrorResponse as CreateUserMethodNotAllowedErrorResponse,
+    CreateUserUnprocessableEntityErrorResponse as CreateUserUnprocessableEntityErrorResponse,
+    DeleteSessionInternalServerErrorErrorResponse as DeleteSessionInternalServerErrorErrorResponse,
+    DeleteSessionNotFoundErrorResponse as DeleteSessionNotFoundErrorResponse,
+    DeleteSessionUnauthorizedErrorResponse as DeleteSessionUnauthorizedErrorResponse,
+    GetSystemInfoInternalServerErrorErrorResponse as GetSystemInfoInternalServerErrorErrorResponse,
+    GetUserContactListInternalServerErrorErrorResponse as GetUserContactListInternalServerErrorErrorResponse,
+    GetUserContactListNotFoundErrorResponse as GetUserContactListNotFoundErrorResponse,
+    GetUserContactListUnauthorizedErrorResponse as GetUserContactListUnauthorizedErrorResponse,
+    GetUserContactListUnprocessableEntityErrorResponse as GetUserContactListUnprocessableEntityErrorResponse,
+    GetUserHistoryListInternalServerErrorErrorResponse as GetUserHistoryListInternalServerErrorErrorResponse,
+    GetUserHistoryListNotFoundErrorResponse as GetUserHistoryListNotFoundErrorResponse,
+    GetUserHistoryListUnauthorizedErrorResponse as GetUserHistoryListUnauthorizedErrorResponse,
+    GetUserHistoryListUnprocessableEntityErrorResponse as GetUserHistoryListUnprocessableEntityErrorResponse,
+    GetUserInfoInternalServerErrorErrorResponse as GetUserInfoInternalServerErrorErrorResponse,
+    GetUserInfoNotFoundErrorResponse as GetUserInfoNotFoundErrorResponse,
+    GetUserInfoUnauthorizedErrorResponse as GetUserInfoUnauthorizedErrorResponse,
+    GetUserInfoUnprocessableEntityErrorResponse as GetUserInfoUnprocessableEntityErrorResponse,
+    GetUserRecordingInternalServerErrorErrorResponse as GetUserRecordingInternalServerErrorErrorResponse,
+    GetUserRecordingNotFoundErrorResponse as GetUserRecordingNotFoundErrorResponse,
+    GetUserRecordingUnauthorizedErrorResponse as GetUserRecordingUnauthorizedErrorResponse,
+    GetUserRecordingUnprocessableEntityErrorResponse as GetUserRecordingUnprocessableEntityErrorResponse,
+    UpdateSessionInternalServerErrorErrorResponse as UpdateSessionInternalServerErrorErrorResponse,
+    UpdateSessionNotFoundErrorResponse as UpdateSessionNotFoundErrorResponse,
+    UpdateSessionUnprocessableEntityErrorResponse as UpdateSessionUnprocessableEntityErrorResponse,
+    VerifySessionOtpInternalServerErrorErrorResponse as VerifySessionOtpInternalServerErrorErrorResponse,
+    VerifySessionOtpNotFoundErrorResponse as VerifySessionOtpNotFoundErrorResponse,
+    VerifySessionOtpUnprocessableEntityErrorResponse as VerifySessionOtpUnprocessableEntityErrorResponse,
+
+    Code  as APIAccessErrorCode,
+    Code2 as UserAccessErrorCode,
+    Code3 as RefreshTokenErrorCode,
+    Code5 as OTPNotFoundErrorCode,
+    Code8 as OTPUserDataErrorCode,
     Code9 as FailedAuthCode,
     Code11 as SessionNotFoundCode,
-    Code35 as UserNotFoundCode,
+    Code13 as OTPValidationErrCode,
+    Code16 as SignupExtAPIErrorCode,
+    Code19 as OTPExtAPIErrorCode,
+    Code21 as AuthorizationFailureCode,
+
     Code32 as FailedAuthIncorrectDataCode,
-    Code39 as TokenErrorCode,
-    Code40 as TokenErrorCode2,
-    Code41 as ExternalErrorCode,
-    Code43 as RefreshTokenErrorCode,
-    Code49 as OTPIDNotFoundCode,
-    Code50 as OTPValidationErrCode,
-    Code58 as SignupValidationErrorCode,
-    Code15 as SignupExtAPIErrorCode
+    Code35 as UserNotFoundCode,
+
+    # Code39 as TokenErrorCode,
+    # Code40 as TokenErrorCode2,
+    # Code41 as ExternalErrorCode,
+    # Code43 as RefreshTokenErrorCode,
+    # Code49 as OTPIDNotFoundCode,
+    # Code50 as OTPValidationErrCode,
+    # Code58 as SignupValidationErrorCode,
+
 )
 
-from bss.models import (
-    CallRecordingId,
-    GeneralSystemInfoResponse,
-    SessionCreateRequest,
-    SessionOtpCreateRequest,
-    SessionOtpCreateResponse,
-    SessionOtpVerifyRequest,
-    SessionUpdateRequest,
-    UserContactIndexResponse,
-    UserCreateRequest,
-    UserHistoryIndexResponse,
-    UserInfoShowResponse,
-)
-
-@dataclass
-class UserInfo:
+class UserInfo(BaseModel):
     """Data about the user, on whose behalf the operation is requested"""
     # 
-    user_id: str = field(metadata={
-        "description": "unique, immutable user ID," +
+    user_id: str = Field(description = "Unique, immutable user ID," +
                          "this is typically uuid or primary key of the user's record"
-        })
+        )
     # 
-    login: Optional[str] = field(default=None,
-                                 metadata={
-        "description": """Unique, immutable user ID
+    login: Optional[str] = Field(default=None,
+                                 description="""Unique, immutable user ID
         utilized by end-user to login, may change or a user can
         utilize diferent logins e.g. phone number and email"""
-        })
+        )
 
-@dataclass
+
 class ExtendedUserInfo(UserInfo):
     """Data about the user, on whose behalf the operation is requested"""
     tenant_id: Optional[str] = None # unique ID of tenant's environment
@@ -120,17 +136,20 @@ class ExtendedUserInfo(UserInfo):
 class OTPCreateResponse(SessionOtpCreateResponse):
     tenant_id: Optional[str] = None # unique ID of tenant's environment   
 
-@dataclass
-class OTP:
+
+class OTP(BaseModel):
     """One-time password for user authentication"""
     otp_expected_code: str
+    attempts: int = Field(default=0,
+                        description="How many times the user has tried to enter the code"
+        )
     user_id: str
     expires_at: datetime
 
 
 class SessionInfo(SessionResponse):
     """Info about a session, initiated by WebTrit core on behalf of user"""
-    long_life_refresh: bool = False
+    # long_life_refresh: bool = False
     expires_at: Optional[datetime] = None
     tenant_id: Optional[str] = None
     def still_active(self, timestamp=datetime.now()) -> bool:

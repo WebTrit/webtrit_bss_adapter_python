@@ -62,9 +62,9 @@ def test_verify_otp_fail_too_many_tries(api_url, otp_verify_path, tenant_id):
         )
         print(f"attempt {i} response: {response2.content}")
         body2 = response.json()
-        if response2.status_code == 429:
+        if response2.status_code == 422:
              break
-    assert response2.status_code == 429 and \
+    assert response2.status_code == 422 and \
             extract_err_msg(response2) == "Too many incorrect attempts to enter OTP"
     # ensure the code was deleted
     response2 = requests.post(

@@ -4,9 +4,8 @@ import random
 import uuid
 from bss.types import (UserInfo, OTP,
                        OTPCreateResponse, OTPVerifyRequest, OTPDeliveryChannel, 
-                       OTPExtAPIErrorCode, OTPUserDataError, OTPIDNotFoundCode,
-                       OTPValidationErrCode, UserNotFoundCode,
-                       safely_extract_scalar_value)
+                       OTPExtAPIErrorCode, OTPValidationErrCode, OTPNotFoundErrorCode,
+                         safely_extract_scalar_value)
 from bss.sessions import SessionInfo
 from report_error import WebTritErrorException
 import logging
@@ -18,6 +17,7 @@ class OTPHandler(ABC):
         one-time-password (OTP) and sends it to the user via the
         configured communication channel (e.g. SMS)"""
         pass
+
     @abstractmethod
     def validate_otp(self, otp: OTPVerifyRequest) -> SessionInfo:
         """Verify that the OTP code, provided by the user, is correct."""
@@ -39,7 +39,6 @@ class SampleOTPHandler(OTPHandler):
             return user_data.get("email", None)
         
         return None
-
 
     def send_otp_email(self, email_address: str, otp: OTP, from_address: str) -> bool:
         """Send an email message with the OTP code to the user.
@@ -69,7 +68,7 @@ class SampleOTPHandler(OTPHandler):
         if not email:
             raise WebTritErrorException(
                 status_code=400,
-                code=OTPUserDataError.validation_error,
+                code=OTPValidationErrCode.validation_error,
                 error_message="User does not have a valid email to receive OTP",
             )
 
@@ -96,6 +95,7 @@ class SampleOTPHandler(OTPHandler):
                                                 default=self.DEFAULT_OTP_VALIDITY))
         otp = OTP(
             user_id=user.user_id,
+            attempts=0,
             otp_expected_code="{:06d}".format(code),
             expires_at=datetime.now() + timedelta(minutes=otp_validity),
         )
@@ -130,7 +130,7 @@ class SampleOTPHandler(OTPHandler):
             logging.debug(f"OTP ID={otp_id} does not exist")
             raise WebTritErrorException(
                 status_code=404,
-                code=OTPIDNotFoundCode.otp_id_not_found,
+                code=OTPNotFoundErrorCode.otp_not_found,
                 error_message="Invalid OTP ID",
             )
         # to avoid problems with comparing datetimes with different timezones
@@ -142,8 +142,8 @@ class SampleOTPHandler(OTPHandler):
             logging.debug(f"OTP ID={otp_id} has expired at {expiration.isoformat()}")
             del self.otp_db[otp_id]
             raise WebTritErrorException(
-                status_code=419,
-                code=OTPValidationErrCode.otp_id_timeout,
+                status_code=422,
+                code=OTPValidationErrCode.otp_expired,
                 error_message="OTP has expired",
             )
 
@@ -154,8 +154,8 @@ class SampleOTPHandler(OTPHandler):
                             f"for OTP ID={otp_id} {original.attempts} - erasing OTP")
                 del self.otp_db[otp_id]
                 raise WebTritErrorException(
-                    status_code=429,
-                    code=OTPValidationErrCode.otp_id_timeout,
+                    status_code=422,
+                    code=OTPValidationErrCode.otp_verification_attempts_exceeded,
                     error_message="Too many incorrect attempts to enter OTP",
                 )
             else:
@@ -165,7 +165,7 @@ class SampleOTPHandler(OTPHandler):
 
             raise WebTritErrorException(
                 status_code=401,
-                code=OTPValidationErrCode.code_incorrect,
+                code=OTPValidationErrCode.incorrect_otp_code,
                 error_message="Invalid OTP",
             )
 

@@ -1,12 +1,11 @@
-from dataclasses import dataclass
 import logging
 from abc import ABC, abstractmethod
 from datetime import datetime
 from pydantic import BaseModel, Field
-from bss.types import (UserInfo, EndUser, ContactInfo, CDRInfo, OTP,
-                       OTPCreateResponse, OTPVerifyRequest, OTPDeliveryChannel, UserCreateResponse,
-                       FailedAuthCode, UserNotFoundCode, SessionNotFoundCode, TokenErrorCode,
-                       RefreshTokenErrorCode, TokenErrorCode2,                       
+from bss.types import (UserInfo, EndUser, ContactInfo, CDRInfo, 
+                       UserCreateResponse,
+                       APIAccessErrorCode, FailedAuthCode, UserNotFoundCode, UserAccessErrorCode,
+                       RefreshTokenErrorCode,                    
                        safely_extract_scalar_value)
 from bss.sessions import SessionStorage, SessionInfo
 from bss.adapters.otp import OTPHandler, SampleOTPHandler
@@ -35,7 +34,6 @@ class AttrMap(BaseModel):
     old_key: Optional[str] = None  # if not provided, the old name is used
     converter: Optional[Callable] = None  # custom conversion function
 
-
 class SessionManagement(ABC):
     """Basic session management on our side."""
     def __init__(self) -> None:
@@ -58,7 +56,7 @@ class SessionManagement(ABC):
                 # raise an error
                 raise WebTritErrorException(
                     status_code=401,
-                    code=TokenErrorCode.access_token_expired,
+                    code=APIAccessErrorCode.access_token_expired,
                     error_message=f"Access token {access_token} expired",
                 )
 
@@ -66,7 +64,7 @@ class SessionManagement(ABC):
 
         raise WebTritErrorException(
             status_code=401,
-            code=TokenErrorCode.access_token_invalid,
+            code=APIAccessErrorCode.access_token_invalid,
             error_message=f"Invalid access token {access_token}",
         )
 
@@ -80,6 +78,7 @@ class SessionManagement(ABC):
                 code=RefreshTokenErrorCode.refresh_token_invalid,
                 error_message=f"Invalid refresh token {refresh_token}",
             )
+
         if not isinstance(session, SessionInfo):
             # accessing some old objects in the DB which do not store refresh token
             # as a separate full object
@@ -88,27 +87,28 @@ class SessionManagement(ABC):
                 code=RefreshTokenErrorCode.refresh_token_invalid,
                 error_message=f"Outdated refresh token {refresh_token} - was stored in the old format",
             )
-        
+        access_token = safely_extract_scalar_value(session.access_token)        
         if not session.still_active():
             # remove it from the DB
             self.sessions.delete_session(
-                access_token=session.access_token,
+                access_token=access_token,
                 refresh_token=refresh_token 
             )
             # raise an error
             raise WebTritErrorException(
                 status_code=401,
-                code=TokenErrorCode.access_token_expired,
+                code=RefreshTokenErrorCode.access_token_expired,
                 error_message=f"Refresh token {refresh_token} expired",
             )
         # everything is in order, create a new session
-        new_session = self.sessions.create_session(UserInfo(user_id=session.user_id))
+        new_session = self.sessions.create_session(UserInfo(
+                            user_id=safely_extract_scalar_value(session.user_id)))
         self.sessions.store_session(new_session)
         logging.debug(f"Authenticated user {safely_extract_scalar_value(new_session.user_id)}" +
                       " via refresh token " +
-                      f"{refresh_token}, session {new_session.access_token} created")
+                      f"{refresh_token}, session {safely_extract_scalar_value(new_session.access_token)} created")
         # remove the old session and old refresh token
-        self.sessions.delete_session(session.access_token, refresh_token=refresh_token)
+        self.sessions.delete_session(access_token, refresh_token=refresh_token)
         return new_session
 
     def close_session(self, access_token: str) -> bool:
@@ -119,7 +119,7 @@ class SessionManagement(ABC):
 
         raise WebTritErrorException(
             status_code=401,
-            code=TokenErrorCode2.session_not_found,
+            code=UserAccessErrorCode.session_not_found,
             error_message=f"Error closing the session {access_token}",
         )
 
@@ -285,7 +285,7 @@ class BSSAdapterExternalDB(BSSAdapter, SampleOTPHandler):
 
             raise WebTritErrorException(
                 status_code=401,
-                code=FailedAuthCode.invalid_credentials,
+                code=FailedAuthCode.incorrect_credentials,
                 error_message="Invalid password",
             )
 
@@ -293,7 +293,7 @@ class BSSAdapterExternalDB(BSSAdapter, SampleOTPHandler):
         # error message to simplify the process of fixing the problem
         raise WebTritErrorException(
             status_code=401,
-            code=FailedAuthCode.invalid_credentials,
+            code=FailedAuthCode.incorrect_credentials,
             error_message="User authentication error",
         )
 

@@ -3,7 +3,7 @@ import requests
 from datetime import datetime, timedelta
 from abc import ABC, abstractmethod
 from report_error import WebTritErrorException
-from bss.types import ExternalErrorCode
+from bss.types import SignupExtAPIErrorCode as ExtAPIErrorCode
 
 class HTTPAPIConnector(ABC):
     """Extract data from a remote server via REST/GRAPHQL or other HTTP-based API"""
@@ -86,7 +86,7 @@ class HTTPAPIConnector(ABC):
             logging.debug(f"Connection to {self.api_server} timed out")
             raise WebTritErrorException(
                     status_code=500,
-                    code=ExternalErrorCode.external_api_issue,
+                    code=ExtAPIErrorCode.external_api_issue,
                     error_message="Request execution error on the other side",
                     bss_request_trace = {
                         'method': method,
@@ -104,7 +104,7 @@ class HTTPAPIConnector(ABC):
 
             raise WebTritErrorException(
                     status_code=500,
-                    code=ExternalErrorCode.external_api_issue,
+                    code=ExtAPIErrorCode.external_api_issue,
                     error_message="Request execution error on the BSS/VoIP system side",
                     bss_request_trace = {
                         'method': method,
@@ -171,7 +171,7 @@ class HTTPAPIConnectorWithLogin(HTTPAPIConnector):
 
         return False if self.access_token else True
   
-   # redefine these in your sub-class
+    # redefine these in your sub-class
     @abstractmethod
     def extract_access_token(self, response: dict) -> bool:
         """Extract the access token and other data (expiration time,
