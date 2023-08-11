@@ -100,8 +100,8 @@ class BSS3CXAdapter(BSSAdapterExternalDB):
     ATTR_MAP = [
         AttrMap(new_key="login", old_key="Number"),
         AttrMap(new_key="password", old_key="SrvcAccessPwd"),
-        AttrMap(new_key="firstname", old_key="FirstName"),
-        AttrMap(new_key="lastname", old_key="LastName"),
+        AttrMap(new_key="first_name", old_key="FirstName"),
+        AttrMap(new_key="last_name", old_key="LastName"),
         AttrMap(new_key="email", old_key="EmailAddress",
                 converter=lambda x: x if x else None ), # pydantic will not allow '' as email
         AttrMap(new_key="company_name", converter=lambda x: "Test 3CX"),
@@ -123,7 +123,7 @@ class BSS3CXAdapter(BSSAdapterExternalDB):
         ),
     ]
     SIP_ATTR_MAP = [
-        AttrMap(new_key="phone_number", old_key="Number"),
+        AttrMap(new_key="username", old_key="Number"),
         AttrMap(new_key="auth_username", old_key="AuthID"),
         AttrMap(new_key="password", old_key="AuthPassword"),
     ]
