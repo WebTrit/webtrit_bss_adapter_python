@@ -19,7 +19,9 @@ def log_formatted_json(label: str, text):
     if len(text) == 0:
         logging.info(f"{label}: Empty")
         return
-
+    logging.info(f"{label}: {text}")
+    return
+    # skip this re-parsing of JSON for now
     try:
         json_data = text.decode("utf-8")
         data = json.loads(json_data)
@@ -34,6 +36,8 @@ def log_info(req_body, res_body):
     log_formatted_json("Request body", req_body)
     log_formatted_json("Reply body", res_body)
 
+def log_with_label(label: str, data):
+    log_formatted_json(label, data)
 
 class RouteWithLogging(APIRoute):
     """Custom route class that logs request and response bodies """
@@ -42,7 +46,17 @@ class RouteWithLogging(APIRoute):
 
         async def custom_route_handler(request: Request) -> Response:
             req_body = await request.body()
-            response = await original_route_handler(request)
+            log_with_label("Request", 
+                           f"'X-Request-ID': {request.headers.get('X-Request-ID')} " + \
+                           f"'X-WebTrit-Tenant-ID': {request.headers.get('X-WebTrit-Tenant-ID')} " + \
+                           f"body: {req_body}"
+                        )
+            try:
+                response = await original_route_handler(request)
+            except Exception as e:
+                logging.error(f"Exception: {e}")
+                # we assume the erro was already logged by the original_route_handler
+                raise e
 
             if isinstance(response, StreamingResponse):
                 res_body = b""
@@ -59,7 +73,7 @@ class RouteWithLogging(APIRoute):
                 )
             else:
                 res_body = response.body
-                response.background = BackgroundTask(log_info, req_body, res_body)
+                response.background = BackgroundTask(log_with_label, "Reply", res_body)
                 return response
 
         return custom_route_handler
