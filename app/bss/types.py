@@ -100,6 +100,7 @@ from bss.models import (
     Code19 as OTPExtAPIErrorCode,
     Code21 as AuthorizationFailureCode,
     Code28 as SignupValidationErrorCode,
+    Code31 as SignupNotAllowedErrorCode,
     Code32 as FailedAuthIncorrectDataCode,
     Code35 as UserNotFoundCode,
 
