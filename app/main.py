@@ -74,7 +74,10 @@ from bss.types import (
     OTPExtAPIErrorCode,
     OTPValidationErrCode,
     FailedAuthIncorrectDataCode,
-    SessionInfo
+    SessionInfo,
+
+    # error responses & codes
+    SignupNotAllowedErrorCode
 
 )
 VERSION="0.0.8"
@@ -438,7 +441,7 @@ def create_user(
     if Capabilities.signup not in bss_capabilities:
         raise WebTritErrorException(
             status_code=401,
-            code=OTPValidationErrCode.validation_error,
+            code=SignupNotAllowedErrorCode.signup_disabled,
             error_message="Method not supported"
         )
     # TODO: think about extra authentification measures
