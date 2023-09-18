@@ -89,6 +89,7 @@ from bss.models import (
     VerifySessionOtpNotFoundErrorResponse as VerifySessionOtpNotFoundErrorResponse,
     VerifySessionOtpUnprocessableEntityErrorResponse as VerifySessionOtpUnprocessableEntityErrorResponse,
 
+<<<<<<< HEAD
     # custom methods
     CustomRequest as CustomRequest,
     CustomResponse as CustomResponse,
@@ -121,6 +122,23 @@ from bss.models import (
     # Code32 as FailedAuthIncorrectDataCode,
     # Code32 as MethodNotAllowedCode, # until we get something more suitable
     # Code35 as UserNotFoundCode,
+=======
+    Code  as APIAccessErrorCode,
+    Code2 as UserAccessErrorCode,
+    Code3 as RefreshTokenErrorCode,
+    Code5 as OTPNotFoundErrorCode,
+    Code8 as OTPUserDataErrorCode,
+    Code9 as FailedAuthCode,
+    Code11 as SessionNotFoundCode,
+    Code13 as OTPValidationErrCode,
+    Code16 as SignupExtAPIErrorCode,
+    Code19 as OTPExtAPIErrorCode,
+    Code21 as AuthorizationFailureCode,
+    Code28 as SignupValidationErrorCode,
+    Code31 as SignupNotAllowedErrorCode,
+    Code32 as FailedAuthIncorrectDataCode,
+    Code35 as UserNotFoundCode,
+>>>>>>> 6828b79 (Fixing changed names of the errcode enums)
 
     # Code39 as TokenErrorCode,
     # Code40 as TokenErrorCode2,
