@@ -2,10 +2,10 @@ import logging
 from abc import ABC, abstractmethod
 from datetime import datetime
 from pydantic import BaseModel, Field
-from bss.types import (UserInfo, EndUser, ContactInfo, CDRInfo, 
+from bss.types import (UserInfo, EndUser, ContactInfo, CDRInfo,
                        UserCreateResponse,
                        APIAccessErrorCode, FailedAuthCode, UserNotFoundCode, UserAccessErrorCode,
-                       RefreshTokenErrorCode,                    
+                       RefreshTokenErrorCode,
                        safely_extract_scalar_value)
 from bss.sessions import SessionStorage, SessionInfo
 from bss.adapters.otp import OTPHandler, SampleOTPHandler
@@ -18,7 +18,7 @@ class AttrMap(BaseModel):
     """Define how to map the attributes of one data structure
     (e.g. how user data is stored in external system) to the
     naming used in WebTrit.
-    
+
     For example, if the external system uses "login" attribute
     to store the customer's username, and WebTrit uses "user_id",
     then the mapping would be:
@@ -87,12 +87,12 @@ class SessionManagement(ABC):
                 code=RefreshTokenErrorCode.refresh_token_invalid,
                 error_message=f"Outdated refresh token {refresh_token} - was stored in the old format",
             )
-        access_token = safely_extract_scalar_value(session.access_token)        
+        access_token = safely_extract_scalar_value(session.access_token)
         if not session.still_active():
             # remove it from the DB
             self.sessions.delete_session(
                 access_token=access_token,
-                refresh_token=refresh_token 
+                refresh_token=refresh_token
             )
             # raise an error
             raise WebTritErrorException(
@@ -115,7 +115,7 @@ class SessionManagement(ABC):
         """Close the API session and logout the user."""
         session = self.sessions.get_session(access_token)
         if session:
-            return self.sessions.delete_session(access_token)
+            return self.sessions.delete_session(access_token, session.refresh_token)
 
         raise WebTritErrorException(
             status_code=401,
@@ -206,7 +206,7 @@ class BSSAdapter(SessionManagement, OTPHandler):
         if first_name and last_name:
             return f"{last_name}, {first_name}"
         return first_name if first_name else last_name
-    
+
     def default_id_if_none(self, tenant_id: str) -> str:
         """Provide a defaut value for tenant ID if none is supplied in HTTP headers"""
         return tenant_id if tenant_id else "default"
@@ -241,7 +241,7 @@ class BSSAdapterExternalDB(BSSAdapter, SampleOTPHandler):
     def retrieve_user_info(self, user: UserInfo):
         """Get the full user data using user's unique ID - typically user.user_id"""
         return self.user_db.get(user.user_id, None)
-        
+
     def extract_user_id(self, user_data: object) -> str:
         """Extract user_id (unique and unmutable identifier of the user)
         from the data in the DB. Please override it in your sub-class"""
@@ -252,7 +252,7 @@ class BSSAdapterExternalDB(BSSAdapter, SampleOTPHandler):
             return user_data.get("user_id", None)
         else:
             return None
-        
+
     def verify_password(self, user_data, password: str) -> bool:
         """Verify that the supplied password is correct - please override it
         in your sub-class to perform a proper vertification using the structure
@@ -265,7 +265,7 @@ class BSSAdapterExternalDB(BSSAdapter, SampleOTPHandler):
         else:
             return False
         return passw_in_db == password
-    
+
     def produce_user_object(self, db_data) -> EndUser:
         """Create a user object from the data in the DB"""
         return EndUser(**db_data)
@@ -273,7 +273,7 @@ class BSSAdapterExternalDB(BSSAdapter, SampleOTPHandler):
     def authenticate(self, user: UserInfo, password: str = None) -> SessionInfo:
         """Authenticate user with username and password and
         produce an API token for further requests."""
-        
+
         user_data = self.find_user_by_login(user)
         if user_data:
             if self.verify_password(user_data, password):
@@ -321,12 +321,12 @@ class BSSAdapterExternalDB(BSSAdapter, SampleOTPHandler):
     def name(cls) -> str:
         """The name of the adapter"""
         raise NotImplementedError("Override this method in your sub-class")
-    
+
     @abstractmethod
     def get_capabilities(self) -> list:
         """Capabilities of your hosted PBX / BSS / your API adapter"""
         raise NotImplementedError("Override this method in your sub-class")
-    
+
     @abstractmethod
     def retrieve_contacts(self, session: SessionInfo, user: UserInfo) -> List[ContactInfo]:
         """List of other extensions in the PBX"""
@@ -349,7 +349,7 @@ class BSSAdapterExternalDB(BSSAdapter, SampleOTPHandler):
     ) -> bytes:
         """Get the media file for a previously recorded call."""
         raise NotImplementedError("Override this method in your sub-class")
-    
+
     def create_new_user(self, user_data, tenant_id: str = None) -> UserCreateResponse:
         """Create a new user as a part of the sign-up process"""
         raise NotImplementedError("Override this method in your sub-class")
