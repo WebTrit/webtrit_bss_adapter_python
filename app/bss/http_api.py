@@ -173,11 +173,6 @@ class HTTPAPIConnectorWithLogin(HTTPAPIConnector):
         pass
 
     @abstractmethod
-    def access_token_path(self) -> str:
-        """The path to the endpoint where the access token is requested"""
-        pass
-
-    @abstractmethod
     def login(self) -> bool:
         """Override this method in your sub-class to provide the ability
         to get a session access token from the remote server."""
