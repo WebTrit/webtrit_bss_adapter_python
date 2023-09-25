@@ -8,21 +8,16 @@ from bss.types import SignupExtAPIErrorCode as ExtAPIErrorCode
 class HTTPAPIConnector(ABC):
     """Extract data from a remote server via REST/GRAPHQL or other HTTP-based API"""
 
-    def __init__(self, api_server: str,
-                 api_user: str,
-                 api_password: str):
+    def __init__(self, api_server: str):
         """Create a new API connector object.
 
         Args:
             api_server (str): The hostname/port portion of the URL where
                 requests will be sent, e.g. http://1.2.3.4:8080
-            api_user (str):  Username (client ID) of the API user
-            api_password (str): Password (client secret) of the API user
+
         """
 
         self.api_server = api_server
-        self.api_user = api_user
-        self.api_password = api_password
 
     def add_auth_info(self, url: str, request_params: dict) -> dict:
         """Change the parameters of requests.request call to add
@@ -111,10 +106,20 @@ class HTTPAPIConnectorWithLogin(HTTPAPIConnector):
     """Use HTTP-based API that requires to login first
     to obtain an access token for this session"""
     REFRESH_TOKEN_IN_ADVANCE = 10 # minutes
+
+    #: str: The login of the API user.
+    api_user = None
+    #: str: The password of the API user.
+    api_password = None
+
     def __init__(self, api_server: str, api_user: str,
-                api_password: str, api_token: str = None,
-                api_token_expires_at: datetime = None):
-        super().__init__(api_server, api_user, api_password)
+                 api_password: str, api_token: str = None,
+                 api_token_expires_at: datetime = None):
+        super().__init__(api_server)
+
+        self.api_user = api_user
+        self.api_password = api_password
+
         # we have the token already, no need to login
         self.access_token = api_token
         self.access_token_expires_at = api_token_expires_at
