@@ -587,7 +587,7 @@ class Contact(BaseModel):
         description='The name of the company the user is associated with.',
         example='Matrix',
     )
-    email: Optional[EmailStr] = Field(
+    email: Optional[str] = Field(
         None, description="The user's email address.", example='a.black@matrix.com'
     )
     first_name: Optional[str] = Field(
@@ -613,7 +613,7 @@ class UserInfoShowResponse(BaseModel):
     company_name: Optional[str] = Field(
         None, description='The company the user is associated with.', example='Matrix'
     )
-    email: Optional[EmailStr] = Field(
+    email: Optional[str] = Field(
         None, description="The user's email address.", example='neo@matrix.com'
     )
     first_name: Optional[str] = Field(
