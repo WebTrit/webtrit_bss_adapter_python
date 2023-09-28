@@ -74,11 +74,19 @@ class HTTPAPIConnector(ABC):
                         },
                     bss_response_trace = {
                         'status_code': 408,
-                        'text': 'Timed out'
+                        'text': 'Timed out',
+                        'response_content': {}
                     }
                 )
         except requests.exceptions.RequestException as e:
             logging.debug(f"Request error: {e}")
+
+            response_content = {}
+            try:
+                if e.response is not None:
+                    response_content = e.response.json()
+            except ValueError:
+                pass
 
             raise WebTritErrorException(
                     status_code=500,
@@ -90,7 +98,8 @@ class HTTPAPIConnector(ABC):
                         } | params,
                     bss_response_trace = {
                         'status_code': 500,
-                        'text': f"{e}"
+                        'text': f"{e}",
+                        'response_content': response_content
                     }
                 )
 
