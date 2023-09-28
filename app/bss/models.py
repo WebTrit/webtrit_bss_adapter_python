@@ -31,6 +31,7 @@ class Code(Enum):
     access_token_invalid = 'access_token_invalid'
     access_token_expired = 'access_token_expired'
     unknown = 'unknown'
+    external_api_issue = 'external_api_issue'
 
 
 class GetUserInfoUnauthorizedErrorResponse(ErrorResponse):
