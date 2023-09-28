@@ -547,7 +547,8 @@ def get_user_history_list(
 
 @router.get(
     '/user/recordings/{recording_id}',
-    response_model=BinaryResponse,
+    # Prevent FastAPI to validate the response as JSON (default response class).
+    response_class=Response,
     responses={
         '401': {'model': GetUserRecordingUnauthorizedErrorResponse},
         '404': {'model': GetUserRecordingNotFoundErrorResponse},
@@ -572,9 +573,11 @@ def get_user_recording(
     access_token = auth_data.credentials
     session = bss.validate_session(access_token)
     if Capabilities.recordings in bss_capabilities:
-        return bss.retrieve_call_recording(
+        recording: bytes = bss.retrieve_call_recording(
             session, CallRecordingId(__root__=recording_id)
         )
+
+        return Response(content = recording)
 
     # not supported by hosted PBX / BSS, return None
     return None
