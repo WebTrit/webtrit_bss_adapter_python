@@ -16,7 +16,7 @@ import bss.adapters
 from bss.adapters import initialize_bss_adapter
 from bss.constants import TENANT_ID_HTTP_HEADER
 from bss.types import Capabilities, UserInfo, ExtendedUserInfo, Health, safely_extract_scalar_value
-from request_trace import RouteWithLogging
+from request_trace import RouteWithLogging, get_request_id
 from contextvars import ContextVar
 
 from bss.types import (
@@ -588,20 +588,11 @@ async def handle_webtrit_error(request, exc):
     return exc.response()
 
 
-def get_request_id(request: Request):
-    for id in [
-        request.headers.get('X-Request-ID', None),
-        request.headers.get('X-Cloud-Trace-Context', None),
-    ]:
-        if id is not None:
-            return id
-    return 'WEBTRIT'+str(uuid.uuid4())
+
+app.include_router(router, prefix=API_VERSION_PREFIX)
 
 @app.middleware("http")
 async def add_request_id(request: Request, call_next):
     request_id.set(get_request_id(request))
     response = await call_next(request)
     return response
-
-
-app.include_router(router, prefix=API_VERSION_PREFIX)

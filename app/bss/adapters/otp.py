@@ -4,8 +4,9 @@ import random
 import uuid
 from bss.types import (UserInfo, OTP,
                        OTPCreateResponse, OTPVerifyRequest, OTPDeliveryChannel, 
-                       OTPExtAPIErrorCode, OTPValidationErrCode, OTPNotFoundErrorCode,
-                         safely_extract_scalar_value)
+                       OTPExtAPIErrorCode, OTPValidationErrCode,
+                       OTPNotFoundErrorCode, OTPUserDataErrorCode,
+                       UserNotFoundCode, safely_extract_scalar_value)
 from bss.sessions import SessionInfo
 from report_error import WebTritErrorException
 import logging
@@ -64,11 +65,17 @@ class SampleOTPHandler(OTPHandler):
         # or your subclass, since OTPHandler does not have access to
         # the DB with user data
         user_data = self.retrieve_user_info(user)
+        if user_data is None:
+            raise WebTritErrorException(
+                status_code=404,
+                code=UserNotFoundCode.user_not_found,
+                error_message="User does not have a valid email to receive OTP",
+            )
         email = self.extract_user_email(user_data) if user_data else None
         if not email:
             raise WebTritErrorException(
-                status_code=400,
-                code=OTPValidationErrCode.validation_error,
+                status_code=422,
+                code=OTPUserDataErrorCode.validation_error,
                 error_message="User does not have a valid email to receive OTP",
             )
 
@@ -110,7 +117,7 @@ class SampleOTPHandler(OTPHandler):
             raise WebTritErrorException(
                 status_code=500,
                 code=OTPExtAPIErrorCode.external_api_issue,
-                error_message="Coudl not send an OTP email",
+                error_message="Could not send an OTP email",
             )
 
         return OTPCreateResponse(
