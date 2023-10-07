@@ -181,7 +181,7 @@ def create_session(
             code = FailedAuthIncorrectDataCode.validation_error,
             error_message="Missing login & password"
         )
-    
+
     user = ExtendedUserInfo(user_id = 'N/A', # do not know it yet
                     client_agent = request.headers.get('User-Agent', 'Unknown'),
                     tenant_id = request.headers.get(TENANT_ID_HTTP_HEADER, None),
@@ -281,11 +281,11 @@ def create_session_otp(
 
     if Capabilities.otpSignin not in bss_capabilities:
         raise WebTritErrorException(
-            status_code=422, 
+            status_code=422,
             error_message="Method not supported",
-            code=OTPValidationErrCode.validation_error, 
+            code=OTPValidationErrCode.validation_error,
         )
-    
+
     if hasattr(body, 'user_ref'):
         user_ref = safely_extract_scalar_value(body.user_ref)
     else:
@@ -520,37 +520,35 @@ def get_user_history_list(
     session = bss.validate_session(access_token)
 
     if Capabilities.callHistory in bss_capabilities:
-        calls = bss.retrieve_calls(
+        calls, total = bss.retrieve_calls(
             session,
-            ExtendedUserInfo( user_id = safely_extract_scalar_value(session.user_id),
+            ExtendedUserInfo(user_id = safely_extract_scalar_value(session.user_id),
                              tenant_id=bss.default_id_if_none(x_webtrit_tenant_id)),
-            time_from=time_from,
-            time_to=time_to,
+            page = page,
+            items_per_page = items_per_page,
+            time_from = time_from,
+            time_to = time_to,
         )
-        # chose the required subset according to the pagination parameters
-        total = len(calls)
-        skip_items = (page - 1) * items_per_page
-        calls = calls[skip_items:]
-        if len(calls) > items_per_page:
-            calls = calls[:items_per_page]
-        return Calls(   items = calls,
-                        pagination=Pagination(
-                            page=page,
-                            items_total=total,
-                            items_per_page=items_per_page)
+
+        return Calls(items = calls,
+                     pagination = Pagination(
+                         page = page,
+                         items_total = total,
+                         items_per_page = items_per_page)
                     )
 
     # not supported by hosted PBX / BSS, return an empty list
     return Calls(items = [],
-                                    pagination=Pagination(
-                                        page=1,
-                                        items_total=0,
-                                        items_per_page=100
-                                    ))
+                 pagination = Pagination(
+                     page = 1,
+                     items_total = 0,
+                     items_per_page = 100
+                 ))
 
 @router.get(
     '/user/recordings/{recording_id}',
-    response_model=BinaryResponse,
+    # Prevent FastAPI to validate the response as JSON (default response class).
+    response_class=Response,
     responses={
         '401': {'model': GetUserRecordingUnauthorizedErrorResponse},
         '404': {'model': GetUserRecordingNotFoundErrorResponse},
@@ -575,9 +573,11 @@ def get_user_recording(
     access_token = auth_data.credentials
     session = bss.validate_session(access_token)
     if Capabilities.recordings in bss_capabilities:
-        return bss.retrieve_call_recording(
+        recording: bytes = bss.retrieve_call_recording(
             session, CallRecordingId(__root__=recording_id)
         )
+
+        return Response(content = recording)
 
     # not supported by hosted PBX / BSS, return None
     return None
