@@ -445,7 +445,7 @@ def create_user(
             error_message="Method not supported"
         )
     # TODO: think about extra authentification measures
-    return bss.create_new_user(body, tenant_id = bss.default_id_if_none(x_webtrit_tenant_id))
+    return bss.signup(body, tenant_id = bss.default_id_if_none(x_webtrit_tenant_id))
 
 @router.get(
     '/user/contacts',
