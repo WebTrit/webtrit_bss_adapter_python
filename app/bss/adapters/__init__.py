@@ -260,7 +260,7 @@ class BSSAdapter(SessionManagement, OTPHandler,
         raise NotImplementedError("Override this method in your sub-class")
 
     @abstractmethod
-    def create_new_user(self, user_data, tenant_id: str = None) -> UserCreateResponse:
+    def signup(self, user_data, tenant_id: str = None) -> UserCreateResponse:
         """Create a new user as a part of the sign-up process"""
         raise NotImplementedError("Override this method in your sub-class")
 
@@ -414,8 +414,8 @@ class BSSAdapterExternalDB(BSSAdapter, SampleOTPHandler):
         """Get the media file for a previously recorded call."""
         raise NotImplementedError("Override this method in your sub-class")
     
-    def signup(self, user_data, tenant_id: str = None) -> UserCreateResponse:
-        """Create a new customer account as a part of the sign-up process"""
+    def create_new_user(self, user_data, tenant_id: str = None) -> UserCreateResponse:
+        """Create a new user as a part of the sign-up process"""
         raise NotImplementedError("Override this method in your sub-class")
 
 # initialize BSS Adapter
