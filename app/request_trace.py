@@ -1,4 +1,4 @@
-from fastapi import Response, Request
+from fastapi import Response, Request, HTTPException
 from starlette.background import BackgroundTask
 from starlette.responses import StreamingResponse
 from fastapi.routing import APIRoute
@@ -46,13 +46,17 @@ class RouteWithLogging(APIRoute):
 
         async def custom_route_handler(request: Request) -> Response:
             req_body = await request.body()
-            log_with_label("Request", 
+            req_body = req_body.decode("utf-8")
+            log_with_label(f"{request.method} request to {request.url.path} ", 
                            f"'X-Request-ID': {request.headers.get('X-Request-ID')} " + \
                            f"'X-WebTrit-Tenant-ID': {request.headers.get('X-WebTrit-Tenant-ID')} " + \
                            f"body: {req_body}"
                         )
             try:
                 response = await original_route_handler(request)
+            except HTTPException as http_exc:
+                logging.error(f"HTTP exception {http_exc.status_code} {http_exc.detail}")
+                raise http_exc
             except Exception as e:
                 logging.error(f"Exception: {e}")
                 # we assume the erro was already logged by the original_route_handler
@@ -73,7 +77,8 @@ class RouteWithLogging(APIRoute):
                 )
             else:
                 res_body = response.body
-                response.background = BackgroundTask(log_with_label, "Reply", res_body)
+                response.background = BackgroundTask(log_with_label,
+                                                     "Reply", res_body.decode("utf-8"))
                 return response
 
         return custom_route_handler
