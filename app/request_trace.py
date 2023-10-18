@@ -73,10 +73,9 @@ class RouteWithLogging(APIRoute):
         original_route_handler = super().get_route_handler()
 
         async def custom_route_handler(request: Request) -> Response:
+            request_id.set(get_request_id(request))
             req_body = await request.body()
             req_body = req_body.decode("utf-8")
-            request_id.set(get_request_id(request))
-            # req_id = get_request_id(request)
             log_with_label(f"{request.method} request to {request.url.path} " + \
 #                           added by the logger
 #                           f"'X-Request-ID': {req_id} " + \
