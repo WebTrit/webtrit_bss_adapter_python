@@ -5,7 +5,6 @@ import os
 import sys
 from fastapi import FastAPI, APIRouter, Depends, Response, Request, Header
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
-import uuid
 
 import logging
 from pydantic import conint
@@ -16,8 +15,7 @@ import bss.adapters
 from bss.adapters import initialize_bss_adapter
 from bss.constants import TENANT_ID_HTTP_HEADER
 from bss.types import Capabilities, UserInfo, ExtendedUserInfo, Health, safely_extract_scalar_value
-from request_trace import RouteWithLogging, get_request_id
-from contextvars import ContextVar
+from request_trace import RouteWithLogging, log_formatter
 
 from bss.types import (
     BinaryResponse,
@@ -77,7 +75,7 @@ from bss.types import (
     SessionInfo
 
 )
-VERSION="0.0.8"
+VERSION="0.0.9"
 API_VERSION_PREFIX = "/api/v1"
 
 my_project_path = os.path.dirname(__file__)
@@ -91,28 +89,9 @@ if config.get_conf_val("Debug", default = "False").upper() == "TRUE":
 else:
     log_level = logging.INFO
 
-
-request_id: ContextVar[str] = ContextVar('request_id', default='')
-request_id.set('STARTUP')
-
-class CustomFormatter(logging.Formatter):
-    def format(self, record):
-        record.request_id = request_id.get()  # Add your custom field here
-        return super().format(record)
-
-# Create a custom formatter instance
-if not os.environ.get('PORT'):
-    # we are running locally so it is useful to add timestamps
-    # since when running in GCP, logs already have timestamps
-    log_prefix='[%(asctime)s] %(levelname)s '
-else:
-    # cloud debug
-    log_prefix='%(levelname)s '
-formatter = CustomFormatter(fmt= log_prefix +'RQ-ID:%(request_id)s %(message)s')
-
 # Create a handler and add the formatter to it
 handler = logging.StreamHandler()
-handler.setFormatter(formatter)
+handler.setFormatter(log_formatter)
 
 # Add the handler to the logger
 logger = logging.getLogger()
@@ -121,7 +100,6 @@ logger.addHandler(handler)
 logger.setLevel(log_level)
 logger.handlers = logging.getLogger().handlers
 logger.propagate = True
-
 
 app = FastAPI(
     description="""Adapter that translates API requests from WebTrit core
@@ -163,7 +141,7 @@ def create_session(
     body: SessionCreateRequest,
     # to retrieve user agent and tenant id from the request
     request: Request,
-    x_webtrit_tenant_id: Optional[str] = Header(None, alias='X-WebTrit-Tenant-ID'),
+    x_webtrit_tenant_id: Optional[str] = Header(None, alias=TENANT_ID_HTTP_HEADER),
  ) -> Union[
     SessionResponse,
     CreateSessionUnauthorizedErrorResponse,
@@ -184,7 +162,7 @@ def create_session(
 
     user = ExtendedUserInfo(user_id = 'N/A', # do not know it yet
                     client_agent = request.headers.get('User-Agent', 'Unknown'),
-                    tenant_id = request.headers.get(TENANT_ID_HTTP_HEADER, None),
+                    tenant_id = bss.default_id_if_none(x_webtrit_tenant_id),
                     login = body.login)
     session = bss.authenticate(user, body.password)
     return session
@@ -201,7 +179,7 @@ def create_session(
 )
 def update_session(
     body: SessionUpdateRequest,
-    x_webtrit_tenant_id: Optional[str] = Header(None, alias='X-WebTrit-Tenant-ID'),
+    x_webtrit_tenant_id: Optional[str] = Header(None, alias=TENANT_ID_HTTP_HEADER),
 ) -> Union[
     SessionResponse,
     UpdateSessionNotFoundErrorResponse,
@@ -229,7 +207,7 @@ def update_session(
 )
 def delete_session(
     auth_data: HTTPAuthorizationCredentials = Depends(security),
-    x_webtrit_tenant_id: Optional[str] = Header(None, alias='X-WebTrit-Tenant-ID'),
+    x_webtrit_tenant_id: Optional[str] = Header(None, alias=TENANT_ID_HTTP_HEADER),
 ) -> (
     Union[
         None,
@@ -267,7 +245,7 @@ def delete_session(
 )
 def create_session_otp(
     body: SessionOtpCreateRequest,
-    x_webtrit_tenant_id: Optional[str] = Header(None, alias='X-WebTrit-Tenant-ID'),
+    x_webtrit_tenant_id: Optional[str] = Header(None, alias=TENANT_ID_HTTP_HEADER),
 ) -> Union[
     SessionOtpCreateResponse,
     CreateSessionOtpNotFoundErrorResponse,
@@ -313,7 +291,7 @@ def create_session_otp(
 )
 def verify_session_otp(
     body: SessionOtpVerifyRequest,
-    x_webtrit_tenant_id: Optional[str] = Header(None, alias='X-WebTrit-Tenant-ID'),
+    x_webtrit_tenant_id: Optional[str] = Header(None, alias=TENANT_ID_HTTP_HEADER),
 ) -> Union[
     SessionInfo,
     VerifySessionOtpNotFoundErrorResponse,
@@ -369,7 +347,7 @@ def get_system_info(
 )
 def get_user_info(
     auth_data: HTTPAuthorizationCredentials = Depends(security),
-    x_webtrit_tenant_id: Optional[str] = Header(None, alias='X-WebTrit-Tenant-ID'),
+    x_webtrit_tenant_id: Optional[str] = Header(None, alias=TENANT_ID_HTTP_HEADER),
 ) -> (
     Union[
         EndUser,
@@ -404,10 +382,11 @@ def get_user_info(
     tags=['user'],
 )
 def create_user(
-#   body: UserCreateRequest, # cannot figure out how to define this in Pydantic
+#   body: UserCreateRequest,
+    # cannot figure out how to define this in Pydantic
     body: Dict,
 #    auth_data: HTTPAuthorizationCredentials = Depends(security),
-    x_webtrit_tenant_id: Optional[str] = Header(None, alias='X-WebTrit-Tenant-ID'),
+    x_webtrit_tenant_id: Optional[str] = Header(None, alias=TENANT_ID_HTTP_HEADER),
 ) -> Union[
     UserCreateResponse,
     CreateUserMethodNotAllowedErrorResponse,
@@ -434,7 +413,7 @@ def create_user(
 
     """
     global bss, bss_capabilities
-
+    bss.pizdec()
     if Capabilities.signup not in bss_capabilities:
         raise WebTritErrorException(
             status_code=401,
@@ -457,7 +436,7 @@ def create_user(
 )
 def get_user_contact_list(
     auth_data: HTTPAuthorizationCredentials = Depends(security),
-    x_webtrit_tenant_id: Optional[str] = Header(None, alias='X-WebTrit-Tenant-ID'),
+    x_webtrit_tenant_id: Optional[str] = Header(None, alias=TENANT_ID_HTTP_HEADER),
 ) -> (
     Union[
         Contacts,
@@ -503,7 +482,7 @@ def get_user_history_list(
     time_from: Optional[datetime] = None,
     time_to: Optional[datetime] = None,
     auth_data: HTTPAuthorizationCredentials = Depends(security),
-    x_webtrit_tenant_id: Optional[str] = Header(None, alias='X-WebTrit-Tenant-ID'),
+    x_webtrit_tenant_id: Optional[str] = Header(None, alias=TENANT_ID_HTTP_HEADER),
 ) -> Union[
     Calls,
     GetUserHistoryListUnauthorizedErrorResponse,
@@ -560,7 +539,7 @@ def get_user_history_list(
 def get_user_recording(
     recording_id: str,
     auth_data: HTTPAuthorizationCredentials = Depends(security),
-    x_webtrit_tenant_id: Optional[str] = Header(None, alias='X-WebTrit-Tenant-ID'),
+    x_webtrit_tenant_id: Optional[str] = Header(None, alias=TENANT_ID_HTTP_HEADER),
 ) -> Union[
     BinaryResponse,
     GetUserRecordingUnauthorizedErrorResponse,
@@ -582,17 +561,10 @@ def get_user_recording(
     # not supported by hosted PBX / BSS, return None
     return None
 
-
-@app.exception_handler(WebTritErrorException)
-async def handle_webtrit_error(request, exc):
-    return exc.response()
-
-
+# does not seem to work when using custom route handler
+# @app.exception_handler(WebTritErrorException)
+# async def handle_webtrit_error(request, exc):
+#     return exc.response()
 
 app.include_router(router, prefix=API_VERSION_PREFIX)
 
-@app.middleware("http")
-async def add_request_id(request: Request, call_next):
-    request_id.set(get_request_id(request))
-    response = await call_next(request)
-    return response

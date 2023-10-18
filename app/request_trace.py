@@ -9,10 +9,31 @@ import logging
 import pprint
 import json
 import uuid
+import os
+from contextvars import ContextVar
+import traceback
 
 pp = pprint.PrettyPrinter(indent=4)
 
-# logger = logging.getLogger(__name__)
+request_id: ContextVar[str] = ContextVar('request_id', default='')
+request_id.set('STARTUP')
+
+class CustomFormatter(logging.Formatter):
+    def format(self, record):
+        record.request_id = request_id.get()  # Add your custom field here
+        return super().format(record)
+
+
+# Create a custom formatter instance
+if not os.environ.get('PORT'):
+    # we are running locally so it is useful to add timestamps
+    # since when running in GCP, logs already have timestamps
+    log_prefix='[%(asctime)s] %(levelname)s '
+else:
+    # cloud debug
+    log_prefix='%(levelname)s '
+
+log_formatter = CustomFormatter(fmt = log_prefix +'RQ-ID:%(request_id)s %(message)s')
 
 def get_request_id(request: Request):
     for id in [
@@ -54,7 +75,8 @@ class RouteWithLogging(APIRoute):
         async def custom_route_handler(request: Request) -> Response:
             req_body = await request.body()
             req_body = req_body.decode("utf-8")
-            req_id = get_request_id(request)
+            request_id.set(get_request_id(request))
+            # req_id = get_request_id(request)
             log_with_label(f"{request.method} request to {request.url.path} " + \
 #                           added by the logger
 #                           f"'X-Request-ID': {req_id} " + \
@@ -67,9 +89,12 @@ class RouteWithLogging(APIRoute):
                 logging.error(f"HTTP exception {http_exc.status_code} {http_exc.detail}")
                 raise http_exc
             except Exception as e:
-                logging.error(f"Exception: {e}")
+                logging.error(f"Application error: {e} {traceback.print_exc()}")
                 # we assume the error was already logged by the original_route_handler
-                raise e
+                raise HTTPException(
+                    status_code=500, 
+                    detail=f"An error {e} occurred")
+
 
             if isinstance(response, StreamingResponse):
                 res_body = b""
