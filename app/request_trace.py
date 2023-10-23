@@ -6,14 +6,14 @@ from fastapi.routing import APIRoute
 # from starlette.types import Message
 from typing import Callable
 import logging
-import pprint
-import json
+# import pprint
+# import json
 import uuid
 import os
 from contextvars import ContextVar
 import traceback
 
-pp = pprint.PrettyPrinter(indent=4)
+# pp = pprint.PrettyPrinter(indent=4)
 
 request_id: ContextVar[str] = ContextVar('request_id', default='')
 request_id.set('STARTUP')
@@ -44,17 +44,17 @@ def get_request_id(request: Request):
             return id
     return 'WEBTRIT'+str(uuid.uuid4())
 
-def log_formatted_json(label: str, text):
-    """Take JSON (as byte-string) and pretty-print it to the log"""
-    # not very efficient, skip for now
-    try:
-        json_data = text.decode("utf-8")
-        data = json.loads(json_data)
-    except json.JSONDecodeError as e:
-        logging.info(f"{label}: Invalid JSON structure {e}")
-        return
-    formatted = pp.pformat(data) if False else str(data)
-    logging.info(f"{label}: {formatted}")
+# def log_formatted_json(label: str, text):
+#     """Take JSON (as byte-string) and pretty-print it to the log"""
+#     # not very efficient, skip for now
+#     try:
+#         json_data = text.decode("utf-8")
+#         data = json.loads(json_data)
+#     except json.JSONDecodeError as e:
+#         logging.info(f"{label}: Invalid JSON structure {e}")
+#         return
+#     formatted = pp.pformat(data) if False else str(data)
+#     logging.info(f"{label}: {formatted}")
 
 def log_with_label(label: str, text):
     if len(text) == 0:

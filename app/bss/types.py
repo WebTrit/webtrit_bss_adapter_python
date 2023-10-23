@@ -1,4 +1,4 @@
-from dataclasses import dataclass, field
+import enum
 from typing import List, Dict, Any, Optional, Union
 from pydantic import BaseModel, Field
 from datetime import datetime, timedelta
@@ -194,6 +194,32 @@ class ListResponse(BaseModel):
     """The status response"""
     count: int = 0
     items: List[Any] = []
+
+class CallToActionType(str, enum.Enum):
+    BUTTON = 'Button'
+    LINK = 'Link'
+
+class CallToAction(BaseModel):
+    """An action invitation (button, link, etc.) to be shown in the app, which takes
+    the user to the external page - e.g. invite friends, etc."""
+    type: CallToActionType = Field(description='How this CTA should be rendered',
+                                   example='Link')
+    title: Optional[str] = Field(description='The title to be shown to the user',
+                                   example='Invite others',
+                                   default = None)
+    description: Optional[str] = Field(description='Extended info about the action (to be shown in the tool-tip, etc.)',
+                                   example='Invite your colleagues or friends to use webTrit, so you can call each other for free',
+                                   default = None)
+    
+class CallToActionLink(CallToAction):
+    type: CallToActionType = Field(description='How this CTA should be rendered',
+                                   example='Link', default=CallToActionType.LINK)
+    url: str = Field(description='URL that the user should be taken to',
+                                   example='https://signup.webtrit.com/?email=abc@test.com')
+
+class CallToActionResponse(BaseModel):
+    """Set of links to be shown in the app"""
+    actions: List[CallToAction] = []
 
 def is_scalar(obj) -> bool:
     """Return True if the object is a scalar"""
