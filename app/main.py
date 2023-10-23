@@ -71,6 +71,7 @@ from bss.types import (
     SessionNotFoundCode,
     OTPExtAPIErrorCode,
     OTPValidationErrCode,
+    OTPUserDataErrorCode,
     FailedAuthIncorrectDataCode,
     SessionInfo,
     CallToActionMenu, CallToActionLink, 
@@ -264,7 +265,7 @@ def create_session_otp(
         raise WebTritErrorException(
             status_code=422,
             error_message="Method not supported",
-            code=OTPValidationErrCode.validation_error,
+            code=OTPUserDataErrorCode.validation_error
         )
 
     if hasattr(body, 'user_ref'):
@@ -272,7 +273,7 @@ def create_session_otp(
     else:
         raise WebTritErrorException(
             status_code=422,
-            code=OTPValidationErrCode.validation_error,
+            code=OTPUserDataErrorCode.validation_error,
             error_message="Cannot find user_ref in the request"
         )
 
@@ -309,7 +310,7 @@ def verify_session_otp(
     if Capabilities.otpSignin not in bss_capabilities:
         raise WebTritErrorException(
             status_code=401,
-            code=OTPValidationErrCode.validation_error,
+            code=OTPValidationErrCode.incorrect_otp_code,
             error_message="Method not supported"
         )
 
@@ -425,6 +426,47 @@ def create_user(
         )
     # TODO: think about extra authentification measures
     return bss.signup(body, tenant_id = bss.default_id_if_none(x_webtrit_tenant_id))
+
+# temporary version of the method definition - added manually and not
+# auto-generated from the API schema; will be updated later
+@router.delete(
+    '/user',
+    response_model=None,
+    responses={
+        '401': {'model': DeleteSessionUnauthorizedErrorResponse},
+        '404': {'model': DeleteSessionNotFoundErrorResponse},
+        '500': {'model': DeleteSessionInternalServerErrorErrorResponse},
+    },
+    tags=['user'],
+)
+def delete_user(
+    auth_data: HTTPAuthorizationCredentials = Depends(security),
+    x_webtrit_tenant_id: Optional[str] = Header(None, alias=TENANT_ID_HTTP_HEADER),
+):
+    """
+    Delete an existing user - this functionality is required if the app allows sign up
+    """
+    global bss, bss_capabilities
+
+    if Capabilities.signup not in bss_capabilities:
+        raise WebTritErrorException(
+            status_code=422,
+            # TODO: which error code should I use?
+            code=OTPUserDataErrorCode.validation_error,
+            error_message="Method not supported"
+        )
+    access_token = auth_data.credentials
+    session = bss.validate_session(access_token)
+    user = ExtendedUserInfo(
+        user_id = safely_extract_scalar_value(session.user_id),
+        tenant_id=bss.default_id_if_none(x_webtrit_tenant_id)
+    )
+    bss.delete_user(user)
+    result = bss.close_session(access_token)
+    return Response(content="", status_code=204)
+
+
+
 
 @router.get(
     '/user/contacts',

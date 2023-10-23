@@ -186,11 +186,41 @@ class BSSAdapter(SessionManagement, OTPHandler):
         """Get the media file for a previously recorded call."""
         raise NotImplementedError("Override this method in your sub-class")
 
-    @abstractmethod
-    def signup(self, user_data, tenant_id: str = None) -> UserCreateResponse:
+    # since most adapters do not need to create&delete users or perform custom actions,
+    # we do not make these abstract methos, so the developer
+    # does not have to bother overriding them with empty methods
+    def create_new_user(self, user_data, tenant_id: str = None) -> UserCreateResponse:
         """Create a new user as a part of the sign-up process"""
         raise NotImplementedError("Override this method in your sub-class")
 
+    def delete_user(self, user: UserInfo):
+        """Delete an existing user - this functionality is required if the
+        app allows sign up"""
+        raise NotImplementedError("Override this method in your sub-class")
+
+    def custom_action(self,
+                      action: str = None,
+                      user: UserInfo = None,
+                      tenant_id: str = None,
+                      data: Dict = {}):
+        """Perform a custom action - could be validation of user data during
+        signup; or getting a list of 'call-to-action' items such as promotions
+        to show in the app; or anything else
+        
+        Parameters:
+        action: the name of the action to perform (provided in the request URL
+                as /custom/<action>))
+        user:   the authenticated user info (if the user is authenticated,
+                since custom actions can be called while the user is still
+                in the process of signing up or authenticating)
+        tenant_id: the tenant ID (if the tenant is known)
+        data:   any additional data that may be required to perform the action
+        
+        Returns: 
+        A structure (presumably dictionary) with the data to be returned to the app
+        """
+        raise NotImplementedError("Override this method in your sub-class")
+        
     @classmethod
     def remap_dict(self, mapping: List[AttrMap], data: dict) -> dict:
         """Remap the keys of the dictionary"""

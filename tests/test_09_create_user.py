@@ -2,7 +2,7 @@ import requests
 import pytest
 import logging
 import json
-from utils4testing import Attr, verify_attribute_in_json
+from utils4testing import Attr, verify_attribute_in_json, compose_headers
 
 response = None
 
@@ -15,7 +15,7 @@ user_info = {
             "status": "active",
             "company_name": "WebTrit, Inc",
             "sip": {
-                "login": "12065551235",
+                "username": "12065551235",
                 "password": "SlavaUkraini!",
                 "display_name": "Geroyam Slava!",
                 "sip_server": {"host": "127.0.0.1", "port": 5060},
@@ -48,19 +48,48 @@ def test_create(api_url, userinfo_path):
         Attr(name="refresh_token", type=str),
     ],
 )
-def test_login_attr(api_url, login_path, attr):
+def test_returned_attr(api_url, login_path, attr):
     global body
 
     print('attr = ', attr)
     verify_attribute_in_json(attr, body)
 
 
-def test_login_userid(api_url, login_path):
+def test_returned_userid(api_url, login_path):
     global body
 
     attr = Attr(name="user_id", type=str, mandatory = True)
     attr.expected = user_info['user_id']
 
+    verify_attribute_in_json(attr, body)
+
+def test_login_after_Creation(api_url, login_path):
+    global response, access_token, user_info
+    response = requests.post(
+        api_url + login_path,
+        json={"login": user_info['user_id'], "password": user_info['password']},
+
+    )
+
+    print(response.content)
+    assert response.status_code == 200
+    assert isinstance(body := response.json(), dict)
+    assert (access_token := body.get("access_token", None)) is not None
+
+
+# required response attributes
+@pytest.mark.parametrize(
+    "attr",
+    [
+        Attr(name="access_token", type=str, mandatory=True),
+        Attr(name="expires_at", type=str),
+        Attr(name="refresh_token", type=str),
+    ],
+)
+def test_login_attr(api_url, login_path, attr):
+    global body
+
+    print('attr = ', attr)
     verify_attribute_in_json(attr, body)
 
 response2 = None
@@ -71,7 +100,7 @@ def test_userinfo(api_url, userinfo_path):
 
     response2 = requests.get(
         api_url + userinfo_path,
-        headers={"Authorization": "Bearer " + access_token},
+        headers=compose_headers(access_token=access_token),
     )
 
     assert response2.status_code == 200
@@ -101,3 +130,27 @@ def test_user_info_attr(api_url, login_path, attr):
 
     verify_attribute_in_json(attr, body)
 
+def test_delete_user(api_url, userinfo_path, login_path):
+    global response, body, user_info, access_token  # so we can re-use it in later tests
+    response = requests.delete(
+        api_url + userinfo_path, 
+        headers=compose_headers(access_token=access_token)
+    )
+
+    assert response.status_code == 204
+
+    # ensure that the session is closed
+    response2 = requests.get(
+        api_url + userinfo_path,
+        headers=compose_headers(access_token=access_token),
+    )
+
+    assert response2.status_code == 401
+
+    # ensure we cannot re-login
+    response2 = requests.post(
+        api_url + login_path,
+        json={"login": user_info['user_id'], "password": user_info['password']},
+    )
+
+    assert response2.status_code == 401
