@@ -85,8 +85,9 @@ class RouteWithLogging(APIRoute):
             try:
                 response = await original_route_handler(request)
             except HTTPException as http_exc:
-                logging.error(f"HTTP exception {http_exc.status_code} {http_exc.detail}")
-                raise http_exc
+                err_response = http_exc.response() if hasattr(http_exc, 'response') else {}
+                logging.error(f"HTTP exception {http_exc.status_code} {http_exc.detail} {err_response}")
+                return err_response
             except Exception as e:
                 logging.error(f"Application error: {e} {traceback.print_exc()}")
                 # we assume the error was already logged by the original_route_handler
