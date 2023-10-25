@@ -73,7 +73,7 @@ from bss.types import (
     OTPValidationErrCode,
     FailedAuthIncorrectDataCode,
     SessionInfo,
-
+    CallToActionMenu, CallToActionLink, 
     # error responses & codes
     SignupNotAllowedErrorCode
 
@@ -564,7 +564,46 @@ def get_user_recording(
     # not supported by hosted PBX / BSS, return None
     return None
 
+# provisional implementation, since the structures are not yet defined
+# in the OpenAPI schema
+@router.get(
+    '/user/actions',
+    response_model=CallToActionMenu,
+    responses={
+        # these will be replaced with the real structures for this method
+        '401': {'model': GetUserHistoryListUnauthorizedErrorResponse},
+        '500': {'model': GetUserHistoryListInternalServerErrorErrorResponse},
+    },
+    tags=['user'],
+)
+def get_user_call_to_actions(
+    auth_data: HTTPAuthorizationCredentials = Depends(security),
+    x_webtrit_tenant_id: Optional[str] = Header(None, alias=TENANT_ID_HTTP_HEADER),
+) -> Union[
+    CallToActionMenu,
+    GetUserHistoryListUnauthorizedErrorResponse,
+    GetUserHistoryListInternalServerErrorErrorResponse,
+]:
+    global bss, bss_capabilities
+
+    if Capabilities.cta_list not in bss_capabilities:
+        raise WebTritErrorException(
+            status_code=401,
+            code=SignupNotAllowedErrorCode.signup_disabled,
+            error_message="Method not supported"
+        )
+    
+    access_token = auth_data.credentials
+    session = bss.validate_session(access_token)
+
+    options = bss.get_call_to_actions(user = ExtendedUserInfo(
+        user_id = safely_extract_scalar_value(session.user_id),
+        tenant_id=bss.default_id_if_none(x_webtrit_tenant_id)
+        ))
+    return options
+
 # does not seem to work when using custom route handler
+# which does its own error handling
 # @app.exception_handler(WebTritErrorException)
 # async def handle_webtrit_error(request, exc):
 #     return exc.response()

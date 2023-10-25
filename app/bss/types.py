@@ -1,5 +1,5 @@
-from dataclasses import dataclass, field
-from typing import List, Dict, Any, Optional, Union
+from enum import Enum
+from typing import List, Dict, Any, Optional, Type, Union
 from pydantic import BaseModel, Field
 from datetime import datetime, timedelta
 import orjson
@@ -32,6 +32,7 @@ from bss.models import (
     Contact as ContactInfo,
     UserHistoryIndexResponse as Calls,
     ErrorResponse as ErrorMsg,
+
     SupportedEnum as Capabilities,
 
     CDRInfo as CDRInfo,
@@ -114,6 +115,7 @@ from bss.models import (
 
 )
 
+
 class UserInfo(BaseModel):
     """Data about the user, on whose behalf the operation is requested"""
     # 
@@ -195,6 +197,34 @@ class ListResponse(BaseModel):
     """The status response"""
     count: int = 0
     items: List[Any] = []
+
+class CallToActionType(str, Enum):
+    BUTTON = 'Button'
+    LINK = 'Link'
+
+class CallToAction(BaseModel):
+    """An action invitation (button, link, etc.) to be shown in the app, which takes
+    the user to the external page - e.g. invite friends, etc."""
+    type: CallToActionType = Field(description='How this CTA should be rendered',
+                                   example='Link')
+    title: Optional[str] = Field(description='The title to be shown to the user',
+                                   example='Invite others',
+                                   default = None)
+    description: Optional[str] = Field(description='Extended info about the action (to be shown in the tool-tip, etc.)',
+                                   example='Invite your colleagues or friends to use webTrit, so you can call each other for free',
+                                   default = None)
+    
+class CallToActionLink(CallToAction):
+    type: CallToActionType = Field(description='How this CTA should be rendered',
+                                   example='Link', default=CallToActionType.LINK)
+    url: str = Field(description='URL that the user should be taken to',
+                                   example='https://signup.webtrit.com/?email=abc@test.com')
+    
+class CallToActionMenu(BaseModel):
+    """Set of links to be shown in the app"""
+#   cannot figure out why it does not work
+#    actions: List[Type[CallToAction]] = []
+    actions: List[Union[CallToAction, CallToActionLink]]
 
 def is_scalar(obj) -> bool:
     """Return True if the object is a scalar"""
