@@ -416,7 +416,7 @@ def create_user(
 
     """
     global bss, bss_capabilities
-    bss.pizdec()
+
     if Capabilities.signup not in bss_capabilities:
         raise WebTritErrorException(
             status_code=401,
