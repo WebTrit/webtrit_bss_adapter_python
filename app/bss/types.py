@@ -101,6 +101,7 @@ from bss.models import (
     Code21 as AuthorizationFailureCode,
     Code28 as SignupValidationErrorCode,
     Code32 as FailedAuthIncorrectDataCode,
+    Code32 as MethodNotAllowedCode, # until we get something more suitable
     Code35 as UserNotFoundCode,
 
     # Code39 as TokenErrorCode,
