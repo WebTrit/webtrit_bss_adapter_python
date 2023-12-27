@@ -67,6 +67,8 @@ class TiedKeyValue:
     def items(self):
         return self._data.items()
 
+    def values(self):
+        return self._data.items()
 
 class FileStoredKeyValue(TiedKeyValue):
     """Store data in a file, using shelve module."""

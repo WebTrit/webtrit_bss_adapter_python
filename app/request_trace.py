@@ -90,8 +90,7 @@ class RouteWithLogging(APIRoute):
                 else:
                     err_response = JSONResponse(
                                         status_code=http_exc.status_code,
-                                        content={
-                                            "detail": http_exc.detail if hasattr(http_exc, 'detail') else "Unknown error" }
+                                        content={"detail": http_exc.detail if hasattr(http_exc, 'detail') else "Unknown error" }
                     )
                 logging.error(f"HTTP exception {http_exc.status_code} {http_exc.detail} {err_response}")
                 return err_response

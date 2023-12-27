@@ -246,7 +246,7 @@ def delete_session(
     return Response(content="", status_code=204)
 
 
-@app.post(
+@router.post(
     '/session/auto-provision',
     response_model=SessionResponse,
     responses={
@@ -270,10 +270,16 @@ def autoprovision_session(
 ]:
     """
     Establish an authenticated session without any direct interaction with the user
-    by utilizing a temporary "provisioning token" (sent vua email, SMS, QR code)
+    by utilizing a temporary "provisioning token" (sent via email, SMS, QR code)
+
+    Returns:
+    SessionResponse (so the result is identical to the regular login)
     """
+    global bss
+
     is_method_allowed(Capabilities.autoProvision)
 
+    return bss.autoprovision_session(body.config_token)
 
 @router.post(
     '/session/otp-create',
@@ -630,7 +636,7 @@ def get_user_recording(
 def custom_method_public(
     request: Request,
     method_name: str,
-    body: Dict = Body(default=None),
+    body: CustomRequest = Body(default=None),
     x_webtrit_tenant_id: Optional[str] = Header(None, alias=TENANT_ID_HTTP_HEADER),
     extra_path_params: Optional[str] = None,
 ) -> CustomResponse:
@@ -660,7 +666,7 @@ def custom_method_public(
 def custom_method_private(
     request: Request,
     method_name: str,
-    body: Dict = Body(default=None),
+    body: CustomRequest = Body(default=None),
     x_webtrit_tenant_id: Optional[str] = Header(None, alias=TENANT_ID_HTTP_HEADER),
     extra_path_params: Optional[str] = None,
     auth_data: HTTPAuthorizationCredentials = Depends(security),
