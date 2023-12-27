@@ -4,11 +4,9 @@ import random
 import uuid
 from bss.types import (UserInfo, OTP,
                        OTPCreateResponse, OTPVerifyRequest, OTPDeliveryChannel, 
-                       OTPExtAPIErrorCode, OTPValidationErrCode,
-                       OTPNotFoundErrorCode, OTPUserDataErrorCode,
-                       UserNotFoundCode, safely_extract_scalar_value)
+                       safely_extract_scalar_value)
 from bss.sessions import SessionInfo
-from report_error import WebTritErrorException
+from report_error import raise_webtrit_error
 import logging
 
 class OTPHandler(ABC):
@@ -23,6 +21,7 @@ class OTPHandler(ABC):
     def validate_otp(self, otp: OTPVerifyRequest) -> SessionInfo:
         """Verify that the OTP code, provided by the user, is correct."""
         pass
+
 
 class SampleOTPHandler(OTPHandler):
     """This is a demo class for handling OTPs, it does not send any
@@ -70,18 +69,11 @@ class SampleOTPHandler(OTPHandler):
         # the DB with user data
         user_data = self.retrieve_user_info(user)
         if user_data is None:
-            raise WebTritErrorException(
-                status_code=404,
-                code=UserNotFoundCode.user_not_found,
-                error_message="User does not have a valid email to receive OTP",
-            )
+            raise_webtrit_error(404, "User does not exist")
+
         email = self.extract_user_email(user_data) if user_data else None
         if not email:
-            raise WebTritErrorException(
-                status_code=422,
-                code=OTPUserDataErrorCode.validation_error,
-                error_message="User does not have a valid email to receive OTP",
-            )
+            raise_webtrit_error(404, "User does not have a valid email to receive OTP")
 
         # the code that the user should provide to prove that
         # he/she is who he/she claims to be
@@ -118,11 +110,7 @@ class SampleOTPHandler(OTPHandler):
         if not self.send_otp_email(email_address = email,
                                    from_address = sender_email,
                                    otp = otp):
-            raise WebTritErrorException(
-                status_code=500,
-                code=OTPExtAPIErrorCode.external_api_issue,
-                error_message="Could not send an OTP email",
-            )
+            raise_webtrit_error(500, "Could not send an OTP email")
 
         return OTPCreateResponse(
             # OTP sender's address so the user can find it easier in his/her inbox
@@ -136,14 +124,11 @@ class SampleOTPHandler(OTPHandler):
         """Verify that the OTP code, provided by the user, is correct."""
 
         otp_id = safely_extract_scalar_value(otp.otp_id)
-        original = self.otp_db.get(otp_id, None)
+        original = self.otp_db.get(otp_id)
         if not original:
             logging.debug(f"OTP ID={otp_id} does not exist")
-            raise WebTritErrorException(
-                status_code=404,
-                code=OTPNotFoundErrorCode.otp_not_found,
-                error_message="Invalid OTP ID",
-            )
+            raise_webtrit_error(404, "Invalid OTP ID")
+
         # to avoid problems with comparing datetimes with different timezones
         # we assume that in DB they are stored in the same TZ as we have here 
         # on the server
@@ -152,11 +137,9 @@ class SampleOTPHandler(OTPHandler):
             # remove OTP to clean up space in DB
             logging.debug(f"OTP ID={otp_id} has expired at {expiration.isoformat()}")
             del self.otp_db[otp_id]
-            raise WebTritErrorException(
-                status_code=422,
-                code=OTPValidationErrCode.otp_expired,
-                error_message="OTP has expired",
-            )
+            raise_webtrit_error(422, "OTP has expired",
+                                extra_error_code="otp_expired")
+
 
         if original.otp_expected_code != otp.code:
             if original.attempts > self.MAX_ATTEMPTS:
@@ -164,21 +147,15 @@ class SampleOTPHandler(OTPHandler):
                 logging.debug("User already attempted to enter the code " +
                             f"for OTP ID={otp_id} {original.attempts} - erasing OTP")
                 del self.otp_db[otp_id]
-                raise WebTritErrorException(
-                    status_code=422,
-                    code=OTPValidationErrCode.otp_verification_attempts_exceeded,
-                    error_message="Too many incorrect attempts to enter OTP",
-                )
+                raise_webtrit_error(422, "Too many incorrect attempts to enter OTP",
+                                    extra_error_code="otp_verification_attempts_exceeded")
+
             else:
                 # update the counter of failed attempts
                 original.attempts += 1
                 self.otp_db[otp_id] = original
 
-            raise WebTritErrorException(
-                status_code=401,
-                code=OTPValidationErrCode.incorrect_otp_code,
-                error_message="Invalid OTP",
-            )
+            raise_webtrit_error(401, "Invalid OTP")
 
         # everything is in order, create a session
         session = self.sessions.create_session(UserInfo(user_id = original.user_id))

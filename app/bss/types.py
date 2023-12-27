@@ -89,22 +89,38 @@ from bss.models import (
     VerifySessionOtpNotFoundErrorResponse as VerifySessionOtpNotFoundErrorResponse,
     VerifySessionOtpUnprocessableEntityErrorResponse as VerifySessionOtpUnprocessableEntityErrorResponse,
 
-    Code  as APIAccessErrorCode,
-    Code2 as UserAccessErrorCode,
-    Code3 as RefreshTokenErrorCode,
-    Code5 as OTPNotFoundErrorCode,
-    Code8 as OTPUserDataErrorCode,
-    Code9 as FailedAuthCode,
-    Code11 as SessionNotFoundCode,
-    Code13 as OTPValidationErrCode,
-    Code16 as SignupExtAPIErrorCode,
-    Code19 as OTPExtAPIErrorCode,
-    Code21 as AuthorizationFailureCode,
-    Code28 as SignupValidationErrorCode,
-    Code31 as SignupNotAllowedErrorCode,
-    Code32 as FailedAuthIncorrectDataCode,
-    Code32 as MethodNotAllowedCode, # until we get something more suitable
-    Code35 as UserNotFoundCode,
+    # custom methods
+    CustomRequest as CustomRequest,
+    CustomResponse as CustomResponse,
+    PrivateCustomUnauthorizedErrorResponse as PrivateCustomUnauthorizedErrorResponse,
+
+    # signup
+    UserCreateRequest as UserCreateRequest,
+
+    # auto-provisioning
+    SessionAutoProvisionRequest as SessionAutoProvisionRequest,
+    ProvisionSessionAutoUnauthorizedErrorResponse as SessionAutoProvisionUnauthorizedErrorResponse,
+    ProvisionSessionAutoUnprocessableEntityErrorResponse as SessionAutoProvisionUnprocessableEntityErrorResponse,
+    ProvisionSessionAutoInternalServerErrorErrorResponse as SessionAutoProvisionInternalServerErrorErrorResponse,
+    ProvisionSessionAutoNotImplementedErrorResponse as SessionAutoProvisionNotImplementedErrorResponse,
+
+    Code as ErrorCode,
+    # no longer needed
+    # Code  as APIAccessErrorCode,
+    # Code2 as UserAccessErrorCode,
+    # Code3 as RefreshTokenErrorCode,
+    # Code5 as OTPNotFoundErrorCode,
+    # Code8 as OTPUserDataErrorCode,
+    # Code9 as FailedAuthCode,
+    # Code11 as SessionNotFoundCode,
+    # Code13 as OTPValidationErrCode,
+    # Code16 as SignupExtAPIErrorCode,
+    # Code19 as OTPExtAPIErrorCode,
+    # Code21 as AuthorizationFailureCode,
+    # Code28 as SignupValidationErrorCode,
+    # Code32 as FailedAuthIncorrectDataCode,
+    # Code32 as MethodNotAllowedCode, # until we get something more suitable
+    # Code35 as UserNotFoundCode,
 
     # Code39 as TokenErrorCode,
     # Code40 as TokenErrorCode2,
@@ -240,3 +256,4 @@ def safely_extract_scalar_value(obj: object):
     if hasattr(obj, "__root__"):
         return obj.__root__
     raise ValueError(f"Cannot extract scalar value from {type(obj)} {obj}")
+

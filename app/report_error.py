@@ -66,3 +66,18 @@ class WebTritErrorException(HTTPException):
             f"traces: {traces} HTTP code: {self.status_code}")
         
         return JSONResponse(content=data, status_code=self.status_code)
+
+
+def raise_webtrit_error(
+        http_error_code: int,
+        error_message: str = "An error has occurred, but the developer has not provided any real details",
+        extra_error_code: str = None,
+        bss_request_trace: dict = None,
+        bss_response_trace: dict = None,):
+    raise WebTritErrorException(
+        status_code=http_error_code,
+        code=extra_error_code,
+        error_message=error_message,
+        bss_request_trace=bss_request_trace,
+        bss_response_trace=bss_response_trace,
+    )
