@@ -1,0 +1,2432 @@
+{
+    "components": {
+        "parameters": {
+            "TenantID": {
+                "description": "Optional filtering.\n\nThis parameter is rarely used and serves for additional filtering in specific cases.\nNote that not all adapter implementations may support this functionality.\n",
+                "in": "header",
+                "name": "X-WebTrit-Tenant-ID",
+                "schema": {
+                    "type": "string"
+                }
+            }
+        },
+        "responses": {},
+        "schemas": {
+            "ErrorResponse": {
+                "properties": {
+                    "code": {
+                        "description": "Unique error code identifier.",
+                        "type": "string"
+                    },
+                    "details": {
+                        "description": "Additional details related to the error code, which depend on the specific error.\n",
+                        "items": {
+                            "oneOf": [
+                                {
+                                    "description": "Provided for the `validation_error` error code, containing detailed\ninformation about the invalid field.\n",
+                                    "properties": {
+                                        "path": {
+                                            "type": "string"
+                                        },
+                                        "reason": {
+                                            "type": "string"
+                                        }
+                                    },
+                                    "type": "object"
+                                },
+                                {
+                                    "description": "Any other error-related data.\n",
+                                    "type": "object"
+                                }
+                            ]
+                        },
+                        "type": "array"
+                    },
+                    "message": {
+                        "description": "Description of the error.",
+                        "type": "string"
+                    }
+                },
+                "title": "ErrorResponse",
+                "type": "object"
+            },
+            "GetUserInfoUnauthorizedErrorResponse": {
+                "allOf": [
+                    {
+                        "$ref": "#/components/schemas/ErrorResponse"
+                    },
+                    {
+                        "properties": {
+                            "code": {
+                                "description": "`code` field values that are defined (but can be expanded) are:\n- `authorization_header_missing`\n- `bearer_credentials_missing`\n- `access_token_invalid`\n- `access_token_expired`\n- `unknown`",
+                                "type": "string"
+                            }
+                        },
+                        "type": "object"
+                    }
+                ],
+                "title": "GetUserInfoUnauthorizedErrorResponse"
+            },
+            "GetUserInfoUnprocessableEntityErrorResponse": {
+                "allOf": [
+                    {
+                        "$ref": "#/components/schemas/ErrorResponse"
+                    },
+                    {
+                        "properties": {
+                            "code": {
+                                "description": "`code` field values that are defined (but can be expanded) are:\n- `validation_error`",
+                                "type": "string"
+                            }
+                        },
+                        "type": "object"
+                    }
+                ],
+                "title": "GetUserInfoUnprocessableEntityErrorResponse"
+            },
+            "GetUserInfoNotFoundErrorResponse": {
+                "allOf": [
+                    {
+                        "$ref": "#/components/schemas/ErrorResponse"
+                    },
+                    {
+                        "properties": {
+                            "code": {
+                                "description": "`code` field values that are defined (but can be expanded) are:\n- `session_not_found`\n- `user_not_found`",
+                                "type": "string"
+                            }
+                        },
+                        "type": "object"
+                    }
+                ],
+                "title": "GetUserInfoNotFoundErrorResponse"
+            },
+            "SessionOtpVerifyRequest": {
+                "properties": {
+                    "code": {
+                        "description": "Code (one-time-password) that the end-user receives from\nthe **Adaptee** via email/SMS and then uses in\napplication to confirm his/her identity and login.\n",
+                        "type": "string"
+                    },
+                    "otp_id": {
+                        "$ref": "#/components/schemas/OtpId"
+                    }
+                },
+                "required": [
+                    "otp_id",
+                    "code"
+                ],
+                "title": "SessionOtpVerifyRequest",
+                "type": "object"
+            },
+            "ProvisionSessionAutoUnauthorizedErrorResponse": {
+                "allOf": [
+                    {
+                        "$ref": "#/components/schemas/ErrorResponse"
+                    },
+                    {
+                        "properties": {
+                            "code": {
+                                "description": "`code` field values that are defined (but can be expanded) are:\n- `incorrect_credentials`",
+                                "type": "string"
+                            }
+                        },
+                        "type": "object"
+                    }
+                ],
+                "title": "ProvisionSessionAutoUnauthorizedErrorResponse"
+            },
+            "UpdateSessionUnprocessableEntityErrorResponse": {
+                "allOf": [
+                    {
+                        "$ref": "#/components/schemas/ErrorResponse"
+                    },
+                    {
+                        "properties": {
+                            "code": {
+                                "description": "`code` field values that are defined (but can be expanded) are:\n- `validation_error`\n- `refresh_token_invalid`\n- `refresh_token_expired`\n- `unknown`",
+                                "type": "string"
+                            }
+                        },
+                        "type": "object"
+                    }
+                ],
+                "title": "UpdateSessionUnprocessableEntityErrorResponse"
+            },
+            "GetUserContactListNotFoundErrorResponse": {
+                "allOf": [
+                    {
+                        "$ref": "#/components/schemas/ErrorResponse"
+                    },
+                    {
+                        "properties": {
+                            "code": {
+                                "description": "`code` field values that are defined (but can be expanded) are:\n- `session_not_found`\n- `user_not_found`",
+                                "type": "string"
+                            }
+                        },
+                        "type": "object"
+                    }
+                ],
+                "title": "GetUserContactListNotFoundErrorResponse"
+            },
+            "DeleteUserInfoNotFoundErrorResponse": {
+                "allOf": [
+                    {
+                        "$ref": "#/components/schemas/ErrorResponse"
+                    },
+                    {
+                        "properties": {
+                            "code": {
+                                "description": "`code` field values that are defined (but can be expanded) are:\n- `session_not_found`\n- `user_not_found`",
+                                "type": "string"
+                            }
+                        },
+                        "type": "object"
+                    }
+                ],
+                "title": "DeleteUserInfoNotFoundErrorResponse"
+            },
+            "Contact": {
+                "properties": {
+                    "alias_name": {
+                        "description": "The user's alternative name. May be used for indicate role or position.",
+                        "example": "Receptionist",
+                        "type": "string"
+                    },
+                    "company_name": {
+                        "description": "The name of the company the user is associated with.",
+                        "example": "Matrix",
+                        "type": "string"
+                    },
+                    "email": {
+                        "description": "The user's email address.",
+                        "example": "a.black@matrix.com",
+                        "format": "email",
+                        "type": "string"
+                    },
+                    "first_name": {
+                        "description": "The user's first name.",
+                        "example": "Annabelle",
+                        "type": "string"
+                    },
+                    "last_name": {
+                        "description": "The user's last name.",
+                        "example": "Black",
+                        "type": "string"
+                    },
+                    "numbers": {
+                        "$ref": "#/components/schemas/Numbers"
+                    },
+                    "sip_status": {
+                        "description": "The current registration status of the user on the SIP server.",
+                        "enum": [
+                            "registered",
+                            "notregistered"
+                        ],
+                        "type": "string"
+                    }
+                },
+                "required": [
+                    "numbers"
+                ],
+                "title": "Contact",
+                "type": "object"
+            },
+            "CustomRequest": {
+                "description": "Any information passed to the **Adaptee** for custom method functionality.\n",
+                "title": "CustomRequest",
+                "type": "object"
+            },
+            "VerifySessionOtpNotFoundErrorResponse": {
+                "allOf": [
+                    {
+                        "$ref": "#/components/schemas/ErrorResponse"
+                    },
+                    {
+                        "properties": {
+                            "code": {
+                                "description": "`code` field values that are defined (but can be expanded) are:\n- `otp_not_found`",
+                                "type": "string"
+                            }
+                        },
+                        "type": "object"
+                    }
+                ],
+                "title": "VerifySessionOtpNotFoundErrorResponse"
+            },
+            "GetUserHistoryListUnauthorizedErrorResponse": {
+                "allOf": [
+                    {
+                        "$ref": "#/components/schemas/ErrorResponse"
+                    },
+                    {
+                        "properties": {
+                            "code": {
+                                "description": "`code` field values that are defined (but can be expanded) are:\n- `authorization_header_missing`\n- `bearer_credentials_missing`\n- `access_token_invalid`\n- `access_token_expired`\n- `unknown`",
+                                "type": "string"
+                            }
+                        },
+                        "type": "object"
+                    }
+                ],
+                "title": "GetUserHistoryListUnauthorizedErrorResponse"
+            },
+            "UserInfoShowResponse": {
+                "properties": {
+                    "alias_name": {
+                        "description": "The user's alternative name. May be used for indicate role or position.",
+                        "example": "CTO",
+                        "type": "string"
+                    },
+                    "balance": {
+                        "$ref": "#/components/schemas/Balance"
+                    },
+                    "company_name": {
+                        "description": "The company the user is associated with.",
+                        "example": "Matrix",
+                        "type": "string"
+                    },
+                    "email": {
+                        "description": "The user's email address.",
+                        "example": "neo@matrix.com",
+                        "format": "email",
+                        "type": "string"
+                    },
+                    "first_name": {
+                        "description": "The user's first name.",
+                        "example": "Thomas",
+                        "type": "string"
+                    },
+                    "last_name": {
+                        "description": "The user's last name.",
+                        "example": "Anderson",
+                        "type": "string"
+                    },
+                    "numbers": {
+                        "$ref": "#/components/schemas/Numbers"
+                    },
+                    "sip": {
+                        "$ref": "#/components/schemas/SipInfo"
+                    },
+                    "status": {
+                        "default": "active",
+                        "description": "The user's account status.\n\n* `active`, the user is in an active state and has full access to all functionality\n  (this is the default value and will be assumed if this property is not specified)\n* `limited`, indicates a condition of restricted functionality access\n  (while sign-in and API calls may be allowed, call capabilities could\n  be partially or fully restricted)\n* `blocked`, denotes a state in which the user is blocked, and as a result,\n  client applications won't be able to sign in and will be signed out if\n  previously signed in\n  (API calls might be partially available, but call capabilities are fully\n  restricted)\n\nNote that the number of possible values may be expanded in the future.\n",
+                        "enum": [
+                            "active",
+                            "limited",
+                            "blocked"
+                        ],
+                        "type": "string"
+                    },
+                    "time_zone": {
+                        "description": "The preferred time zone for the user's displayed time values\n(see [time zones list](https://en.wikipedia.org/wiki/List_of_tz_database_time_zones)).\nIf not provided, the **WebTrit Core** server time zone is used.\n",
+                        "example": "Europe/Kyiv",
+                        "type": "string"
+                    }
+                },
+                "required": [
+                    "sip",
+                    "numbers"
+                ],
+                "title": "UserInfoShowResponse",
+                "type": "object"
+            },
+            "RefreshToken": {
+                "description": "A single-use token for refreshing the API session and obtaining a new `access_token`.\n\nWhen the current `access_token` is close to expiration or has already expired, the\n`refresh_token` can be exchanged for a new `access_token`, ensuring uninterrupted access\nto the API without requiring the user to manually sign in again.\n\nPlease note that each `refresh_token` can only be used once, and a new `refresh_token`\nwill be issued along with the new `access_token`.\n",
+                "title": "RefreshToken",
+                "type": "string"
+            },
+            "BinaryResponse": {
+                "format": "binary",
+                "title": "BinaryResponse",
+                "type": "string"
+            },
+            "UserId": {
+                "description": "A primary unique identifier of the user on the **Adaptee**.\n\nThis identifier is crucial for the proper functioning of **WebTrit Core**, as it is used\nto store information such as push tokens and other relevant data associated to the user.\n\nThe **Adaptee** must consistently return the same `UserId` for the same user,\nregardless of the `UserRef` used for sign-in.\n",
+                "example": "123456789abcdef0123456789abcdef0",
+                "title": "UserId",
+                "type": "string"
+            },
+            "GetUserContactListUnauthorizedErrorResponse": {
+                "allOf": [
+                    {
+                        "$ref": "#/components/schemas/ErrorResponse"
+                    },
+                    {
+                        "properties": {
+                            "code": {
+                                "description": "`code` field values that are defined (but can be expanded) are:\n- `authorization_header_missing`\n- `bearer_credentials_missing`\n- `access_token_invalid`\n- `access_token_expired`\n- `unknown`",
+                                "type": "string"
+                            }
+                        },
+                        "type": "object"
+                    }
+                ],
+                "title": "GetUserContactListUnauthorizedErrorResponse"
+            },
+            "CreateSessionOtpUnprocessableEntityErrorResponse": {
+                "allOf": [
+                    {
+                        "$ref": "#/components/schemas/ErrorResponse"
+                    },
+                    {
+                        "properties": {
+                            "code": {
+                                "description": "`code` field values that are defined (but can be expanded) are:\n- `validation_error`\n- `delivery_channel_unspecified`",
+                                "type": "string"
+                            }
+                        },
+                        "type": "object"
+                    }
+                ],
+                "title": "CreateSessionOtpUnprocessableEntityErrorResponse"
+            },
+            "CreateSessionUnauthorizedErrorResponse": {
+                "allOf": [
+                    {
+                        "$ref": "#/components/schemas/ErrorResponse"
+                    },
+                    {
+                        "properties": {
+                            "code": {
+                                "description": "`code` field values that are defined (but can be expanded) are:\n- `incorrect_credentials`",
+                                "type": "string"
+                            }
+                        },
+                        "type": "object"
+                    }
+                ],
+                "title": "CreateSessionUnauthorizedErrorResponse"
+            },
+            "GetUserHistoryListInternalServerErrorErrorResponse": {
+                "allOf": [
+                    {
+                        "$ref": "#/components/schemas/ErrorResponse"
+                    },
+                    {
+                        "properties": {
+                            "code": {
+                                "description": "`code` field values that are defined (but can be expanded) are:\n- `external_api_issue`",
+                                "type": "string"
+                            }
+                        },
+                        "type": "object"
+                    }
+                ],
+                "title": "GetUserHistoryListInternalServerErrorErrorResponse"
+            },
+            "UserRef": {
+                "description": "A reference identifier of the user on the **Adaptee**\n\nThis identifier is entered by the user in client applications and passed\nvia **WebTrit Core** to the **Adaptee** for sign-in purposes.\n\nThe identifier can be a phone number or any other attribute associated\nwith the user. When the same user is accessed using different references,\nit is crucial to ensure that the same `UserId` is assigned to this user.\n",
+                "example": "1234567890",
+                "title": "UserRef",
+                "type": "string"
+            },
+            "DeleteSessionNotFoundErrorResponse": {
+                "allOf": [
+                    {
+                        "$ref": "#/components/schemas/ErrorResponse"
+                    },
+                    {
+                        "properties": {
+                            "code": {
+                                "description": "`code` field values that are defined (but can be expanded) are:\n- `session_not_found`",
+                                "type": "string"
+                            }
+                        },
+                        "type": "object"
+                    }
+                ],
+                "title": "DeleteSessionNotFoundErrorResponse"
+            },
+            "GetSystemInfoInternalServerErrorErrorResponse": {
+                "allOf": [
+                    {
+                        "$ref": "#/components/schemas/ErrorResponse"
+                    },
+                    {
+                        "properties": {
+                            "code": {
+                                "description": "`code` field values that are defined (but can be expanded) are:\n- `external_api_issue`",
+                                "type": "string"
+                            }
+                        },
+                        "type": "object"
+                    }
+                ],
+                "title": "GetSystemInfoInternalServerErrorErrorResponse"
+            },
+            "VerifySessionOtpUnauthorizedErrorResponse": {
+                "allOf": [
+                    {
+                        "$ref": "#/components/schemas/ErrorResponse"
+                    },
+                    {
+                        "properties": {
+                            "code": {
+                                "description": "`code` field values that are defined (but can be expanded) are:\n- `otp_already_verified`\n- `otp_verification_attempts_exceeded`\n- `otp_expired`\n- `incorrect_otp_code`",
+                                "type": "string"
+                            }
+                        },
+                        "type": "object"
+                    }
+                ],
+                "title": "VerifySessionOtpUnauthorizedErrorResponse"
+            },
+            "SessionOtpCreateRequest": {
+                "description": "This request generates an OTP using the provided reference.\n",
+                "properties": {
+                    "user_ref": {
+                        "$ref": "#/components/schemas/UserRef"
+                    }
+                },
+                "required": [
+                    "user_ref"
+                ],
+                "title": "SessionOtpCreateRequest",
+                "type": "object"
+            },
+            "CustomResponse": {
+                "description": "Any information returned from the **Adaptee** upon custom method functionality.\n",
+                "title": "CustomResponse",
+                "type": "object"
+            },
+            "SessionCreateRequest": {
+                "properties": {
+                    "login": {
+                        "description": "User's `login` on the **Adaptee**.",
+                        "type": "string"
+                    },
+                    "password": {
+                        "description": "User's `password` on the **Adaptee**.",
+                        "type": "string"
+                    }
+                },
+                "required": [
+                    "login",
+                    "password"
+                ],
+                "title": "SessionCreateRequest",
+                "type": "object"
+            },
+            "SessionResponse": {
+                "properties": {
+                    "access_token": {
+                        "$ref": "#/components/schemas/AccessToken"
+                    },
+                    "refresh_token": {
+                        "$ref": "#/components/schemas/RefreshToken"
+                    },
+                    "user_id": {
+                        "$ref": "#/components/schemas/UserId"
+                    }
+                },
+                "required": [
+                    "user_id",
+                    "access_token",
+                    "expires_at"
+                ],
+                "title": "SessionResponse",
+                "type": "object"
+            },
+            "GetUserRecordingUnprocessableEntityErrorResponse": {
+                "allOf": [
+                    {
+                        "$ref": "#/components/schemas/ErrorResponse"
+                    },
+                    {
+                        "properties": {
+                            "code": {
+                                "description": "`code` field values that are defined (but can be expanded) are:\n- `validation_error`",
+                                "type": "string"
+                            }
+                        },
+                        "type": "object"
+                    }
+                ],
+                "title": "GetUserRecordingUnprocessableEntityErrorResponse"
+            },
+            "GetUserHistoryListNotFoundErrorResponse": {
+                "allOf": [
+                    {
+                        "$ref": "#/components/schemas/ErrorResponse"
+                    },
+                    {
+                        "properties": {
+                            "code": {
+                                "description": "`code` field values that are defined (but can be expanded) are:\n- `session_not_found`\n- `user_not_found`",
+                                "type": "string"
+                            }
+                        },
+                        "type": "object"
+                    }
+                ],
+                "title": "GetUserHistoryListNotFoundErrorResponse"
+            },
+            "CreateUserInternalServerErrorErrorResponse": {
+                "allOf": [
+                    {
+                        "$ref": "#/components/schemas/ErrorResponse"
+                    },
+                    {
+                        "properties": {
+                            "code": {
+                                "description": "`code` field values that are defined (but can be expanded) are:\n- `external_api_issue`",
+                                "type": "string"
+                            }
+                        },
+                        "type": "object"
+                    }
+                ],
+                "title": "CreateUserInternalServerErrorErrorResponse"
+            },
+            "SipServer": {
+                "properties": {
+                    "force_tcp": {
+                        "description": "If set to true, forces the use of TCP for SIP messaging.",
+                        "example": false,
+                        "type": "boolean"
+                    },
+                    "host": {
+                        "description": "The SIP server address, which can be either a hostname or an IP address.",
+                        "example": "sip.webtrit.com",
+                        "type": "string"
+                    },
+                    "port": {
+                        "description": "The port on which the SIP server listens for incoming requests.",
+                        "example": 5060,
+                        "type": "integer"
+                    }
+                },
+                "required": [
+                    "host"
+                ],
+                "title": "SipServer",
+                "type": "object"
+            },
+            "Balance": {
+                "properties": {
+                    "amount": {
+                        "description": "The user's current balance.",
+                        "example": "50.00",
+                        "type": "number"
+                    },
+                    "balance_type": {
+                        "description": "Meaning of the balance figure for this user.\n\n* `inapplicable` means the **Adaptee** does not handle\n  billing and does not have the balance data.\n* `prepaid` means the number reflects the funds that\n  the user has available for spending.\n* `postpaid` means the balance reflects the amount of\n  previously accumulated charges (how much the user\n  owes - to be used in conjunction with a `credit_limit`).\n",
+                        "enum": [
+                            "unknown",
+                            "inapplicable",
+                            "prepaid",
+                            "postpaid"
+                        ],
+                        "type": "string"
+                    },
+                    "credit_limit": {
+                        "description": "The user's credit limit (if applicable).",
+                        "example": "100.00",
+                        "type": "number"
+                    },
+                    "currency": {
+                        "default": "$",
+                        "description": "Currency symbol or name in ISO 4217:2015 format (e.g. USD).",
+                        "example": "$",
+                        "maximum": 3,
+                        "minimum": 1,
+                        "type": "string"
+                    }
+                },
+                "title": "Balance",
+                "type": "object"
+            },
+            "DeleteUserInfoInternalServerErrorErrorResponse": {
+                "allOf": [
+                    {
+                        "$ref": "#/components/schemas/ErrorResponse"
+                    }
+                ],
+                "description": "`code` field values that are defined (but can be expanded) are:\n- `external_api_issue`",
+                "title": "DeleteUserInfoInternalServerErrorErrorResponse"
+            },
+            "GetUserRecordingNotFoundErrorResponse": {
+                "allOf": [
+                    {
+                        "$ref": "#/components/schemas/ErrorResponse"
+                    }
+                ],
+                "description": "`code` field values that are defined (but can be expanded) are:\n- `session_not_found`\n- `user_not_found`",
+                "title": "GetUserRecordingNotFoundErrorResponse"
+            },
+            "Pagination": {
+                "description": "Information about pagination of results.",
+                "properties": {
+                    "items_per_page": {
+                        "description": "Number of items presented per page.",
+                        "example": 100,
+                        "minimum": 1,
+                        "type": "integer"
+                    },
+                    "items_total": {
+                        "description": "Total number of items found in filtered result set.\nIf no filters are provided, this represents total number\nof items available.\n",
+                        "example": 1000,
+                        "minimum": 0,
+                        "type": "integer"
+                    },
+                    "page": {
+                        "description": "Current page number.",
+                        "example": 1,
+                        "minimum": 1,
+                        "type": "integer"
+                    }
+                },
+                "title": "Pagination",
+                "type": "object"
+            },
+            "ProvisionSessionAutoUnprocessableEntityErrorResponse": {
+                "allOf": [
+                    {
+                        "$ref": "#/components/schemas/ErrorResponse"
+                    },
+                    {
+                        "properties": {
+                            "code": {
+                                "description": "`code` field values that are defined (but can be expanded) are:\n- `validation_error`",
+                                "type": "string"
+                            }
+                        },
+                        "type": "object"
+                    }
+                ],
+                "description": "`code` field values that are defined (but can be expanded) are:\n- `validation_error`",
+                "title": "ProvisionSessionAutoUnprocessableEntityErrorResponse"
+            },
+            "ProvisionSessionAutoInternalServerErrorErrorResponse": {
+                "allOf": [
+                    {
+                        "$ref": "#/components/schemas/ErrorResponse"
+                    },
+                    {
+                        "properties": {
+                            "code": {
+                                "description": "`code` field values that are defined (but can be expanded) are:\n- `external_api_issue`",
+                                "type": "string"
+                            }
+                        },
+                        "type": "object"
+                    }
+                ],
+                "title": "ProvisionSessionAutoInternalServerErrorErrorResponse"
+            },
+            "GetUserRecordingUnauthorizedErrorResponse": {
+                "allOf": [
+                    {
+                        "$ref": "#/components/schemas/ErrorResponse"
+                    },
+                    {
+                        "properties": {
+                            "code": {
+                                "description": "`code` field values that are defined (but can be expanded) are:\n- `authorization_header_missing`\n- `bearer_credentials_missing`\n- `access_token_invalid`\n- `access_token_expired`\n- `unknown`",
+                                "type": "string"
+                            }
+                        },
+                        "type": "object"
+                    }
+                ],
+                "title": "GetUserRecordingUnauthorizedErrorResponse"
+            },
+            "CreateSessionOtpInternalServerErrorErrorResponse": {
+                "allOf": [
+                    {
+                        "$ref": "#/components/schemas/ErrorResponse"
+                    },
+                    {
+                        "properties": {
+                            "code": {
+                                "description": "`code` field values that are defined (but can be expanded) are:\n- `external_api_issue`",
+                                "type": "string"
+                            }
+                        },
+                        "type": "object"
+                    }
+                ],
+                "title": "CreateSessionOtpInternalServerErrorErrorResponse"
+            },
+            "SipInfo": {
+                "properties": {
+                    "auth_username": {
+                        "description": "The username for SIP authorization;\nonly needs to be populated if for a user it differs\nfrom his/her registration ID (which is normally a phone number) supplied in the `username` attribute.\n",
+                        "example": "thomas",
+                        "type": "string"
+                    },
+                    "display_name": {
+                        "description": "The visible identification of the caller to be included in the SIP request.\nThis will be shown to the called party as the caller's name. If not provided,\nthe `display_name` will be populated with the `username`.\n",
+                        "example": "Thomas A. Anderson",
+                        "type": "string"
+                    },
+                    "password": {
+                        "description": "The password for the SIP account.",
+                        "example": "strong_password",
+                        "type": "string"
+                    },
+                    "registration_server": {
+                        "$ref": "#/components/schemas/SipServer"
+                    },
+                    "sip_server": {
+                        "$ref": "#/components/schemas/SipServer"
+                    },
+                    "username": {
+                        "description": "The identity (typically a phone number but can be some other alphanumeric ID)\nthat should be registered to SIP server to receive incoming calls.\nUsually it is also used as a username for SIP authorization of registrations (SIP REGISTER)\nand outgoing calls (SIP INVITE).\n",
+                        "example": "14155551234",
+                        "type": "string"
+                    }
+                },
+                "required": [
+                    "username",
+                    "password",
+                    "sip_server"
+                ],
+                "title": "SipInfo",
+                "type": "object"
+            },
+            "ProvisionSessionAutoNotImplementedErrorResponse": {
+                "allOf": [
+                    {
+                        "$ref": "#/components/schemas/ErrorResponse"
+                    },
+                    {
+                        "properties": {
+                            "code": {
+                                "description": "`code` field values that are defined (but can be expanded) are:\n- `functionality_not_implemented`",
+                                "type": "string"
+                            }
+                        },
+                        "type": "object"
+                    }
+                ],
+                "title": "ProvisionSessionAutoNotImplementedErrorResponse"
+            },
+            "GetUserContactListInternalServerErrorErrorResponse": {
+                "allOf": [
+                    {
+                        "$ref": "#/components/schemas/ErrorResponse"
+                    },
+                    {
+                        "properties": {
+                            "code": {
+                                "description": "`code` field values that are defined (but can be expanded) are:\n- `external_api_issue`",
+                                "type": "string"
+                            }
+                        },
+                        "type": "object"
+                    }
+                ],
+                "title": "GetUserContactListInternalServerErrorErrorResponse"
+            },
+            "PrivateCustomUnauthorizedErrorResponse": {
+                "allOf": [
+                    {
+                        "$ref": "#/components/schemas/ErrorResponse"
+                    },
+                    {
+                        "properties": {
+                            "code": {
+                                "description": "`code` field values that are defined (but can be expanded) are:\n- `authorization_header_missing`\n- `bearer_credentials_missing`\n- `access_token_invalid`\n- `access_token_expired`\n- `unknown`",
+                                "type": "string"
+                            }
+                        },
+                        "type": "object"
+                    }
+                ],
+                "title": "PrivateCustomUnauthorizedErrorResponse"
+            },
+            "DeleteSessionUnauthorizedErrorResponse": {
+                "allOf": [
+                    {
+                        "$ref": "#/components/schemas/ErrorResponse"
+                    },
+                    {
+                        "properties": {
+                            "code": {
+                                "description": "`code` field values that are defined (but can be expanded) are:\n- `authorization_header_missing`\n- `bearer_credentials_missing`\n- `access_token_invalid`\n- `access_token_expired`\n- `unknown`",
+                                "type": "string"
+                            }
+                        },
+                        "type": "object"
+                    }
+                ],
+                "title": "DeleteSessionUnauthorizedErrorResponse"
+            },
+            "GetUserContactListUnprocessableEntityErrorResponse": {
+                "allOf": [
+                    {
+                        "$ref": "#/components/schemas/ErrorResponse"
+                    },
+                    {
+                        "properties": {
+                            "code": {
+                                "description": "`code` field values that are defined (but can be expanded) are:\n- `validation_error`",
+                                "type": "string"
+                            }
+                        },
+                        "type": "object"
+                    }
+                ],
+                "title": "GetUserContactListUnprocessableEntityErrorResponse"
+            },
+            "UserContactIndexResponse": {
+                "properties": {
+                    "items": {
+                        "items": {
+                            "$ref": "#/components/schemas/Contact"
+                        },
+                        "type": "array"
+                    }
+                },
+                "title": "UserContactIndexResponse",
+                "type": "object"
+            },
+            "CreateSessionInternalServerErrorErrorResponse": {
+                "allOf": [
+                    {
+                        "$ref": "#/components/schemas/ErrorResponse"
+                    },
+                    {
+                        "properties": {
+                            "code": {
+                                "description": "`code` field values that are defined (but can be expanded) are:\n- `external_api_issue`",
+                                "type": "string"
+                            }
+                        },
+                        "type": "object"
+                    }
+                ],
+                "title": "CreateSessionInternalServerErrorErrorResponse"
+            },
+            "DeleteSessionInternalServerErrorErrorResponse": {
+                "allOf": [
+                    {
+                        "$ref": "#/components/schemas/ErrorResponse"
+                    },
+                    {
+                        "properties": {
+                            "code": {
+                                "description": "`code` field values that are defined (but can be expanded) are:\n- `external_api_issue`",
+                                "type": "string"
+                            }
+                        },
+                        "type": "object"
+                    }
+                ],
+                "title": "DeleteSessionInternalServerErrorErrorResponse"
+            },
+            "UserHistoryIndexResponse": {
+                "properties": {
+                    "items": {
+                        "items": {
+                            "$ref": "#/components/schemas/CDRInfo"
+                        },
+                        "type": "array"
+                    },
+                    "pagination": {
+                        "$ref": "#/components/schemas/Pagination"
+                    }
+                },
+                "title": "UserHistoryIndexResponse",
+                "type": "object"
+            },
+            "UpdateSessionInternalServerErrorErrorResponse": {
+                "allOf": [
+                    {
+                        "$ref": "#/components/schemas/ErrorResponse"
+                    },
+                    {
+                        "properties": {
+                            "code": {
+                                "description": "`code` field values that are defined (but can be expanded) are:\n- `external_api_issue`",
+                                "type": "string"
+                            }
+                        },
+                        "type": "object"
+                    }
+                ],
+                "title": "UpdateSessionInternalServerErrorErrorResponse"
+            },
+            "VerifySessionOtpInternalServerErrorErrorResponse": {
+                "allOf": [
+                    {
+                        "$ref": "#/components/schemas/ErrorResponse"
+                    },
+                    {
+                        "properties": {
+                            "code": {
+                                "description": "`code` field values that are defined (but can be expanded) are:\n- `external_api_issue`",
+                                "type": "string"
+                            }
+                        },
+                        "type": "object"
+                    }
+                ],
+                "title": "VerifySessionOtpInternalServerErrorErrorResponse"
+            },
+            "SessionUpdateRequest": {
+                "properties": {
+                    "refresh_token": {
+                        "$ref": "#/components/schemas/RefreshToken"
+                    }
+                },
+                "required": [
+                    "refresh_token"
+                ],
+                "title": "SessionUpdateRequest",
+                "type": "object"
+            },
+            "SessionOtpCreateResponse": {
+                "properties": {
+                    "delivery_channel": {
+                        "description": "Specifies the channel used to deliver the OTP to the user\n(e.g., email, SMS, call, or other). This information helps guide the\nuser on where to find the OTP.\n",
+                        "enum": [
+                            "email",
+                            "sms",
+                            "call",
+                            "other"
+                        ],
+                        "type": "string"
+                    },
+                    "delivery_from": {
+                        "description": "Identifies the sender of the OTP, making it easier for the user to\nlocate the correct message. Depending on the `delivery_channel`, this\nvalue may be an email address, phone number, or a description of an\nalternative method. In the case of email, if the message is marked as\nspam, the user can add this address to a whitelist for future\nreference.\n",
+                        "type": "string"
+                    },
+                    "otp_id": {
+                        "$ref": "#/components/schemas/OtpId"
+                    }
+                },
+                "required": [
+                    "otp_id"
+                ],
+                "title": "SessionOtpCreateResponse",
+                "type": "object"
+            },
+            "VerifySessionOtpUnprocessableEntityErrorResponse": {
+                "allOf": [
+                    {
+                        "$ref": "#/components/schemas/ErrorResponse"
+                    },
+                    {
+                        "properties": {
+                            "code": {
+                                "description": "`code` field values that are defined (but can be expanded) are:\n- `validation_error`",
+                                "type": "string"
+                            }
+                        },
+                        "type": "object"
+                    }
+                ],
+                "title": "VerifySessionOtpUnprocessableEntityErrorResponse"
+            },
+            "CDRInfo": {
+                "properties": {
+                    "call_id": {
+                        "description": "The field serves as the unique identifier for each call record.",
+                        "example": "b2YBUVAUT27eW4QmAd2yBSqG",
+                        "type": "string"
+                    },
+                    "callee": {
+                        "description": "The phone number of the called party (recipient of the call, CLD).",
+                        "example": "14155551234",
+                        "type": "string"
+                    },
+                    "caller": {
+                        "description": "The phone number of the calling party (originator of the call, CLI).",
+                        "example": "0001",
+                        "type": "string"
+                    },
+                    "connect_time": {
+                        "description": "Datetime of the call connection in ISO format.",
+                        "example": "2023-01-01T09:00:00Z",
+                        "format": "date-time",
+                        "type": "string"
+                    },
+                    "direction": {
+                        "description": "Indicates the call direction.",
+                        "enum": [
+                            "incoming",
+                            "outgoing"
+                        ],
+                        "type": "string"
+                    },
+                    "disconnect_reason": {
+                        "description": "Describes the reason for the call disconnection.",
+                        "example": "Caller hangup",
+                        "type": "string"
+                    },
+                    "disconnect_time": {
+                        "description": "Datetime of the call disconnection in ISO format.",
+                        "example": "2023-01-01T09:01:00Z",
+                        "format": "date-time",
+                        "type": "string"
+                    },
+                    "duration": {
+                        "description": "Call duration (in seconds), 0 for failed calls.",
+                        "example": 60,
+                        "type": "integer"
+                    },
+                    "recording_id": {
+                        "$ref": "#/components/schemas/CallRecordingId"
+                    },
+                    "status": {
+                        "description": "Indicates the call status.",
+                        "enum": [
+                            "accepted",
+                            "declined",
+                            "missed",
+                            "error"
+                        ],
+                        "type": "string"
+                    }
+                },
+                "required": [
+                    "callee",
+                    "caller",
+                    "direction",
+                    "status"
+                ],
+                "title": "CDRInfo",
+                "type": "object"
+            },
+            "CreateUserUnprocessableEntityErrorResponse": {
+                "allOf": [
+                    {
+                        "$ref": "#/components/schemas/ErrorResponse"
+                    },
+                    {
+                        "properties": {
+                            "code": {
+                                "description": "`code` field values that are defined (but can be expanded) are:\n- `validation_error`\n- `signup_limit_reached`",
+                                "type": "string"
+                            }
+                        },
+                        "type": "object"
+                    }
+                ],
+                "title": "CreateUserUnprocessableEntityErrorResponse"
+            },
+            "AccessToken": {
+                "description": "A short-lived token that grants access to the API resources.\n\nIt must be included as an Authorization header in the format `Bearer {access_token}` with each API request.\nThe `access_token` has an expiration date, so it needs to be refreshed periodically using a `refresh_token`\nto maintain uninterrupted access to the API without requiring the user to manually sign in again.\n\nPlease note that the `access_token` should be kept secure and not shared, as it grants access to the user's\ndata and actions within the API.\n",
+                "title": "AccessToken",
+                "type": "string"
+            },
+            "UserCreateRequest": {
+                "description": "This request creates a user using the provided information.\n\nIt enables the implementation of the following sign-up scenarios with the **Adaptee**:\n* just create a user\n* initiate user creation and send an OTP to the user for provided information verification\n* create a user and automatically sign the user in\n\nThe availability of the sign-up functionality is indicated by the `signup` value in the\n`supported` property of the `GeneralSystemInfoResponse`.\n",
+                "example": {
+                    "email": "neo@matrix.com"
+                },
+                "title": "UserCreateRequest",
+                "type": "object"
+            },
+            "UpdateSessionNotFoundErrorResponse": {
+                "allOf": [
+                    {
+                        "$ref": "#/components/schemas/ErrorResponse"
+                    },
+                    {
+                        "properties": {
+                            "code": {
+                                "description": "`code` field values that are defined (but can be expanded) are:\n- `session_not_found`",
+                                "type": "string"
+                            }
+                        },
+                        "type": "object"
+                    }
+                ],
+                "title": "UpdateSessionNotFoundErrorResponse"
+            },
+            "GetUserInfoInternalServerErrorErrorResponse": {
+                "allOf": [
+                    {
+                        "$ref": "#/components/schemas/ErrorResponse"
+                    },
+                    {
+                        "properties": {
+                            "code": {
+                                "description": "`code` field values that are defined (but can be expanded) are:\n- `external_api_issue`",
+                                "type": "string"
+                            }
+                        },
+                        "type": "object"
+                    }
+                ],
+                "title": "GetUserInfoInternalServerErrorErrorResponse"
+            },
+            "CreateUserMethodNotAllowedErrorResponse": {
+                "allOf": [
+                    {
+                        "$ref": "#/components/schemas/ErrorResponse"
+                    },
+                    {
+                        "properties": {
+                            "code": {
+                                "description": "`code` field values that are defined (but can be expanded) are:\n- `signup_disabled`",
+                                "type": "string"
+                            }
+                        },
+                        "type": "object"
+                    }
+                ],
+                "title": "CreateUserMethodNotAllowedErrorResponse"
+            },
+            "OtpId": {
+                "description": "Unique identifier of the OTP request on the **Adapter** and/or **Adaptee** side.\n\nNote: This ID is NOT the code that the user will enter. It serves\nto match the originally generated OTP with the one provided by the user.\n",
+                "example": "12345678-9abc-def0-1234-56789abcdef0",
+                "title": "OtpId",
+                "type": "string"
+            },
+            "CallRecordingId": {
+                "description": "A unique identifier for a call recording, used to reference the recorded media of a specific call.\n",
+                "title": "CallRecordingId",
+                "type": "string"
+            },
+            "CreateSessionUnprocessableEntityErrorResponse": {
+                "allOf": [
+                    {
+                        "$ref": "#/components/schemas/ErrorResponse"
+                    },
+                    {
+                        "properties": {
+                            "code": {
+                                "description": "`code` field values that are defined (but can be expanded) are:\n- `validation_error`",
+                                "type": "string"
+                            }
+                        },
+                        "type": "object"
+                    }
+                ],
+                "title": "CreateSessionUnprocessableEntityErrorResponse"
+            },
+            "GetUserRecordingInternalServerErrorErrorResponse": {
+                "allOf": [
+                    {
+                        "$ref": "#/components/schemas/ErrorResponse"
+                    },
+                    {
+                        "properties": {
+                            "code": {
+                                "description": "`code` field values that are defined (but can be expanded) are:\n- `external_api_issue`",
+                                "type": "string"
+                            }
+                        },
+                        "type": "object"
+                    }
+                ],
+                "title": "GetUserRecordingInternalServerErrorErrorResponse"
+            },
+            "SessionAutoProvisionRequest": {
+                "properties": {
+                    "config_token": {
+                        "description": "URL encoded unique token to identify user on the **Adaptee**.",
+                        "example": "YKnra0qV3FHeOeMNwotRoP0955gHHHy7y7BWeb",
+                        "type": "string"
+                    }
+                },
+                "required": [
+                    "config_token"
+                ],
+                "title": "SessionAutoProvisionRequest",
+                "type": "object"
+            },
+            "UserCreateResponse": {
+                "oneOf": [
+                    {
+                        "description": "Any information returned by the **Adaptee** upon user creation.",
+                        "type": "object"
+                    },
+                    {
+                        "$ref": "#/components/schemas/SessionOtpCreateResponse"
+                    },
+                    {
+                        "$ref": "#/components/schemas/SessionResponse"
+                    }
+                ],
+                "title": "UserCreateResponse"
+            },
+            "SystemInfoShowResponse": {
+                "example": "{\n  \"name\": \"WebTrit Adapter\",\n  \"version\": \"1.0.0\",\n  \"supported\": [\n    \"otpSignin\",\n    \"passwordSignin\",\n    \"recordings\",\n    \"callHistory\"\n  ],\n  \"custom\": {\n    \"PBX version\": \"7.0.0\"\n  }\n}\n",
+                "properties": {
+                    "custom": {
+                        "additionalProperties": {
+                            "type": "string"
+                        },
+                        "description": "Additional custom key-value pairs providing extended information about\nthe **Adaptee** and/or its environment.\n",
+                        "type": "object"
+                    },
+                    "name": {
+                        "type": "string"
+                    },
+                    "supported": {
+                        "description": "A list of supported functionalities by the **Adaptee**.\n\nPossible functionalities values:\n* `signup` - supports the creation of new customer accounts\n* `otpSignin` - allows user authorization via One-Time Password (OTP)\n* `passwordSignin` - allows user authorization using login and password\n* `autoProvision` - allows user authorization using config token\n* `recordings` - provides access to call recordings\n* `callHistory` - provides access to call history\n* `extensions` - retrieves the list of other users (contacts)\n",
+                        "items": {
+                            "enum": [
+                                "signup",
+                                "otpSignin",
+                                "passwordSignin",
+                                "autoProvision",
+                                "recordings",
+                                "callHistory",
+                                "extensions"
+                            ],
+                            "type": "string"
+                        },
+                        "type": "array"
+                    },
+                    "version": {
+                        "type": "string"
+                    }
+                },
+                "required": [
+                    "name",
+                    "version",
+                    "supported"
+                ],
+                "title": "SystemInfoShowResponse",
+                "type": "object"
+            },
+            "DeleteUserInfoUnauthorizedErrorResponse": {
+                "allOf": [
+                    {
+                        "$ref": "#/components/schemas/ErrorResponse"
+                    },
+                    {
+                        "properties": {
+                            "code": {
+                                "description": "`code` field values that are defined (but can be expanded) are:\n- `authorization_header_missing`\n- `bearer_credentials_missing`\n- `access_token_invalid`\n- `access_token_expired`\n- `unknown`",
+                                "type": "string"
+                            }
+                        },
+                        "type": "object"
+                    }
+                ],
+                "title": "DeleteUserInfoUnauthorizedErrorResponse"
+            },
+            "GetUserHistoryListUnprocessableEntityErrorResponse": {
+                "allOf": [
+                    {
+                        "$ref": "#/components/schemas/ErrorResponse"
+                    },
+                    {
+                        "properties": {
+                            "code": {
+                                "description": "`code` field values that are defined (but can be expanded) are:\n- `validation_error`",
+                                "type": "string"
+                            }
+                        },
+                        "type": "object"
+                    }
+                ],
+                "title": "GetUserHistoryListUnprocessableEntityErrorResponse"
+            },
+            "Numbers": {
+                "description": "Phone numbers associated with the user.",
+                "properties": {
+                    "additional": {
+                        "description": "A list of other phone numbers associated with the user. This may\ninclude extra phone numbers that the user purchased (also called\ndirect-inward-dials or DID) to ring on their VoIP phone,\nand other numbers that can be used to identify them in the\naddress book of others (e.g. their mobile number).\n",
+                        "example": [
+                            "380441234567",
+                            "34911234567"
+                        ],
+                        "items": {
+                            "type": "string"
+                        },
+                        "type": "array"
+                    },
+                    "ext": {
+                        "description": "The user's extension number (short dialing code) within the **Adaptee**.\n",
+                        "example": "0001",
+                        "type": "string"
+                    },
+                    "main": {
+                        "description": "The user's primary phone number. It is strongly suggested\nto use the full number, including the country code\n(also known as the E.164 format).\n",
+                        "example": "14155551234",
+                        "type": "string"
+                    }
+                },
+                "required": [
+                    "main"
+                ],
+                "title": "Numbers",
+                "type": "object"
+            },
+            "CreateSessionOtpNotFoundErrorResponse": {
+                "allOf": [
+                    {
+                        "$ref": "#/components/schemas/ErrorResponse"
+                    },
+                    {
+                        "properties": {
+                            "code": {
+                                "description": "`code` field values that are defined (but can be expanded) are:\n- `user_not_found`",
+                                "type": "string"
+                            }
+                        },
+                        "type": "object"
+                    }
+                ],
+                "title": "CreateSessionOtpNotFoundErrorResponse"
+            }
+        },
+        "securitySchemes": {
+            "bearerAuth": {
+                "scheme": "bearer",
+                "type": "http"
+            }
+        }
+    },
+    "info": {
+        "contact": {
+            "email": "contact-dev@webtrit.com",
+            "name": "WebTrit Dev",
+            "url": "https://webtrit.com"
+        },
+        "description": "The **Adapter** translates API requests from **WebTrit Core** to the target hosted PBX system or BSS,\nwhich will be referred to as the **Adaptee**. This translation enables users to authenticate,\nobtain their SIP credentials, and retrieve other necessary information.\n\n## Terminology\n\n* **Adapter** - the current system\n* **Adaptee** - the target hosted PBX system or BSS\n* **OTP** (One-Time Password) - a unique, temporary password sent to the user via a predefined delivery method,\n  such as email, SMS, etc.\n* **CDR** (Call Detail Record) - a record of a call, including the caller, callee, duration, etc.\n\n## Session\n\nThe `access_token` and `refresh_token` format are implicitly determined by the **Adapter** implementation,\nadhering to the following protocol:`\n- `the `access_token` is a relatively short-lived, reusable token, typically lasting anywhere from an hour to a day or more`\n- `if during making a protected API call using the current `access_token`, the **Adapter** responds with a `401` status code,\n  the caller will initiate the `updateSession` operation, using the `refresh_token` to obtain new `access_token` and `refresh_token`,\n  and then retry the original API call\n  - if during the `updateSession` operation, the caller receives a response with a non `200` status code,\n    it indicates that the `refresh_token` has either expired or been invalidated, and the caller must initiate a new session creation using\n    the `createSession` or `createSessionOtp` operations, involving the user`\n- `the `refresh_token` is a long-lived, single-use token, typically with a duration ranging from a week to a month or more\n\nNote: An alternative is to not provide a `refresh_token` and make the `access_token` long-lived. In this case,\nwhen the **Adapter** responds with a `401` status code during a protected API call using this `access_token`,\nthe caller can't update the token and must initiate a new session creation using\nthe `createSession` or `createSessionOtp` operations, requiring user involvement. Such usage, however, is not recommended.\n\n## References\n\n* [Adapter pattern](https://en.wikipedia.org/wiki/Adapter_pattern)\n",
+        "title": "WebTrit Adapter",
+        "version": "1.0.0"
+    },
+    "openapi": "3.0.0",
+    "paths": {
+        "/custom": {
+            "post": {
+                "callbacks": {},
+                "description": "Our API provides the capability to call custom methods that are not explicitly\noutlined in the official documentation, allowing for the extension of platform\nfunctionality. Developers can create and execute their own methods by adhering\nto predefined rules and conventions, opening opportunities for flexibility and\nindividualization in API usage.\n\nThe following are descriptions only for known schemes. Data is transferred from\nthe **Application** to the **Adaptee**, and the **Adaptee** response is forwarded\nto the **Application** without any processing or verification.\n",
+                "operationId": "publicCustom",
+                "parameters": [
+                    {
+                        "$ref": "#/components/parameters/TenantID"
+                    }
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/CustomRequest"
+                            }
+                        }
+                    },
+                    "description": "Identification of the user for whom an OTP will be generated and sent.\n",
+                    "required": true
+                },
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/CustomResponse"
+                                }
+                            }
+                        },
+                        "description": "If the custom method succeeds.\n"
+                    }
+                },
+                "summary": "The invocation of custom methods not explicitly defined in the documentation,\nexpanding functionality through predefined rules.\n",
+                "tags": [
+                    "custom"
+                ]
+            }
+        },
+        "/custom/private": {
+            "post": {
+                "callbacks": {},
+                "description": "Our API provides the capability to call custom methods that are not explicitly\noutlined in the official documentation, allowing for the extension of platform\nfunctionality. Developers can create and execute their own methods by adhering\nto predefined rules and conventions, opening opportunities for flexibility and\nindividualization in API usage.\n\nThe following are descriptions only for known schemes. Data is transferred from\nthe **Application** to the **Adaptee**, and the **Adaptee** response is forwarded\nto the **Application** without any processing or verification.\n",
+                "operationId": "privateCustom",
+                "parameters": [
+                    {
+                        "$ref": "#/components/parameters/TenantID"
+                    }
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/CustomRequest"
+                            }
+                        }
+                    },
+                    "description": "Identification of the user for whom an OTP will be generated and sent.\n",
+                    "required": true
+                },
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/CustomResponse"
+                                }
+                            }
+                        },
+                        "description": "If the custom method succeeds.\n"
+                    },
+                    "401": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/PrivateCustomUnauthorizedErrorResponse"
+                                }
+                            }
+                        },
+                        "description": "Unauthorized: The request was not authorized for one of the following reasons:`\n- ``access_token` not provided`\n- ``access_token` incorrect or outdated`\n- `session associated with the `access_token` is signed out\n"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ],
+                "summary": "The invocation of custom methods with access token verification not explicitly\ndefined in the documentation, expanding functionality through predefined rules.\n",
+                "tags": [
+                    "custom"
+                ]
+            }
+        },
+        "/session": {
+            "delete": {
+                "callbacks": {},
+                "description": "The user's API session is deleted.\n",
+                "operationId": "deleteSession",
+                "parameters": [
+                    {
+                        "$ref": "#/components/parameters/TenantID"
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "description": "Signed out."
+                    },
+                    "401": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/DeleteSessionUnauthorizedErrorResponse"
+                                }
+                            }
+                        },
+                        "description": "Unauthorized: The request was not authorized for one of the following reasons:`\n- ``access_token` not provided`\n- ``access_token` incorrect or outdated`\n- `session associated with the `access_token` is signed out\n"
+                    },
+                    "404": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/DeleteSessionNotFoundErrorResponse"
+                                }
+                            }
+                        },
+                        "description": "Not Found: The session could not be located.\n"
+                    },
+                    "500": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/DeleteSessionInternalServerErrorErrorResponse"
+                                }
+                            }
+                        },
+                        "description": "Internal Server Error.\n"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ],
+                "summary": "Sign out the user",
+                "tags": [
+                    "session"
+                ]
+            },
+            "patch": {
+                "callbacks": {},
+                "description": "The API `access_token` has an expiration date, so the API session needs to be\nupdated periodically. To do this, exchange the `refresh_token`\n(initially provided along with the access token) for new tokens\n(`access_token` and `refresh_token`). This should be done before the\n`refresh_token` expires to prevent the user from having to manually sign\nin again.\n",
+                "operationId": "updateSession",
+                "parameters": [
+                    {
+                        "$ref": "#/components/parameters/TenantID"
+                    }
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/SessionUpdateRequest"
+                            }
+                        }
+                    },
+                    "description": "Update credentials.",
+                    "required": true
+                },
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/SessionResponse"
+                                }
+                            }
+                        },
+                        "description": "The user's API session is refreshed, and new tokens with extended lifetime are provided.\n"
+                    },
+                    "404": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/UpdateSessionNotFoundErrorResponse"
+                                }
+                            }
+                        },
+                        "description": "Not Found: The session could not be located.\n"
+                    },
+                    "422": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/UpdateSessionUnprocessableEntityErrorResponse"
+                                }
+                            }
+                        },
+                        "description": "Unprocessable Entity.\n"
+                    },
+                    "500": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/UpdateSessionInternalServerErrorErrorResponse"
+                                }
+                            }
+                        },
+                        "description": "Internal Server Error.\n"
+                    }
+                },
+                "summary": "Refresh user's API session and retrieve new tokens",
+                "tags": [
+                    "session"
+                ]
+            },
+            "post": {
+                "callbacks": {},
+                "description": "This is an alternative sign-in method for the **Adaptee** that do not support OTP.\n\nThe absence of OTP support is indicated when the `otpSignin` value is not present\nin the `supported` property of the `GeneralSystemInfoResponse`.\n",
+                "operationId": "createSession",
+                "parameters": [
+                    {
+                        "$ref": "#/components/parameters/TenantID"
+                    }
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/SessionCreateRequest"
+                            }
+                        }
+                    },
+                    "description": "User credentials.",
+                    "required": true
+                },
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/SessionResponse"
+                                }
+                            }
+                        },
+                        "description": "User is verified, an API session is created, and API tokens are provided.\n"
+                    },
+                    "401": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/CreateSessionUnauthorizedErrorResponse"
+                                }
+                            }
+                        },
+                        "description": "Unauthorized: Incorrect `login` and/or `password`.\n"
+                    },
+                    "422": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/CreateSessionUnprocessableEntityErrorResponse"
+                                }
+                            }
+                        },
+                        "description": "Unprocessable Entity.\n"
+                    },
+                    "500": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/CreateSessionInternalServerErrorErrorResponse"
+                                }
+                            }
+                        },
+                        "description": "Internal Server Error.\n"
+                    }
+                },
+                "summary": "Sign in the user",
+                "tags": [
+                    "session"
+                ]
+            }
+        },
+        "/session/auto-provision": {
+            "post": {
+                "callbacks": {},
+                "description": "This is an alternative sign-in method for the **Adaptee** that support token-based provision.\n\nThe configure token for auto provision is transferred to the user in any alternative way.\nThe **Adaptee** side verifies the transferred provisioning token and returns data for\nuser authorization.\n",
+                "operationId": "provisionSessionAuto",
+                "parameters": [
+                    {
+                        "$ref": "#/components/parameters/TenantID"
+                    }
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/SessionAutoProvisionRequest"
+                            }
+                        }
+                    },
+                    "description": "Configure token for auto provision.",
+                    "required": true
+                },
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/SessionResponse"
+                                }
+                            }
+                        },
+                        "description": "User is verified, an API session is created, and API tokens are provided.\n"
+                    },
+                    "401": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ProvisionSessionAutoUnauthorizedErrorResponse"
+                                }
+                            }
+                        },
+                        "description": "Unauthorized: Incorrect `config_token`.\n"
+                    },
+                    "422": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ProvisionSessionAutoUnprocessableEntityErrorResponse"
+                                }
+                            }
+                        },
+                        "description": "Unprocessable Entity.\n"
+                    },
+                    "500": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ProvisionSessionAutoInternalServerErrorErrorResponse"
+                                }
+                            }
+                        },
+                        "description": "Internal Server Error.\n"
+                    },
+                    "501": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ProvisionSessionAutoNotImplementedErrorResponse"
+                                }
+                            }
+                        },
+                        "description": "Not Implemented: The requested functionality is not supported.\n"
+                    }
+                },
+                "summary": "Auto provision the user",
+                "tags": [
+                    "session"
+                ]
+            }
+        },
+        "/session/otp-create": {
+            "post": {
+                "callbacks": {},
+                "description": "Generates an OTP for the user within the **Adaptee** and sends it\nto the user through a predefined delivery channel (e.g., email, SMS, etc.).\nThis request can be used to sign in an existing user or sign up a new user,\nif the functionality is supported by the **Adaptee**.\n",
+                "operationId": "createSessionOtp",
+                "parameters": [
+                    {
+                        "$ref": "#/components/parameters/TenantID"
+                    }
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/SessionOtpCreateRequest"
+                            }
+                        }
+                    },
+                    "description": "Identification of the user for whom an OTP will be generated and sent.\n",
+                    "required": true
+                },
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/SessionOtpCreateResponse"
+                                }
+                            }
+                        },
+                        "description": "The OTP code was generated and sent to the user.\n\nThe `otp_id` (identifier of the code) will be used in the `otp_verify`\nrequest along with the OTP code entered by the user for validation.\n"
+                    },
+                    "404": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/CreateSessionOtpNotFoundErrorResponse"
+                                }
+                            }
+                        },
+                        "description": "Not Found: The user was not found.\n"
+                    },
+                    "422": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/CreateSessionOtpUnprocessableEntityErrorResponse"
+                                }
+                            }
+                        },
+                        "description": "Unprocessable Entity.\n"
+                    },
+                    "500": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/CreateSessionOtpInternalServerErrorErrorResponse"
+                                }
+                            }
+                        },
+                        "description": "Internal Server Error.\n"
+                    }
+                },
+                "summary": "Generate and send an OTP to the user",
+                "tags": [
+                    "session"
+                ]
+            }
+        },
+        "/session/otp-verify": {
+            "post": {
+                "callbacks": {},
+                "description": "Validates the provided OTP code by the user and sign in if successful.\n",
+                "operationId": "verifySessionOtp",
+                "parameters": [
+                    {
+                        "$ref": "#/components/parameters/TenantID"
+                    }
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/SessionOtpVerifyRequest"
+                            }
+                        }
+                    },
+                    "description": "User OTP verify credentials.",
+                    "required": true
+                },
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/SessionResponse"
+                                }
+                            }
+                        },
+                        "description": "User is verified, an API session is created, and API tokens are provided.\n"
+                    },
+                    "401": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/VerifySessionOtpUnauthorizedErrorResponse"
+                                }
+                            }
+                        },
+                        "description": "Unauthorized: Incorrect OTP `code` or other related OTP errors.\n"
+                    },
+                    "404": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/VerifySessionOtpNotFoundErrorResponse"
+                                }
+                            }
+                        },
+                        "description": "Not Found: The OTP was not found.\n"
+                    },
+                    "422": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/VerifySessionOtpUnprocessableEntityErrorResponse"
+                                }
+                            }
+                        },
+                        "description": "Unprocessable Entity.\n"
+                    },
+                    "500": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/VerifySessionOtpInternalServerErrorErrorResponse"
+                                }
+                            }
+                        },
+                        "description": "Internal Server Error.\n"
+                    }
+                },
+                "summary": "Verify the OTP and sign in the user",
+                "tags": [
+                    "session"
+                ]
+            }
+        },
+        "/system-info": {
+            "get": {
+                "callbacks": {},
+                "description": "Retrieve information about the **Adapter** and the connected **Adaptee**.\n\nThe primary focus of this information is on the supported functionalities and capabilities provided by the system.\n",
+                "operationId": "getSystemInfo",
+                "parameters": [
+                    {
+                        "$ref": "#/components/parameters/TenantID"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/SystemInfoShowResponse"
+                                }
+                            }
+                        },
+                        "description": "Provides information about the **Adapter** and the connected **Adaptee**, including their supported functionalities and capabilities.\n"
+                    },
+                    "500": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/GetSystemInfoInternalServerErrorErrorResponse"
+                                }
+                            }
+                        },
+                        "description": "Internal Server Error.\n"
+                    }
+                },
+                "summary": "Retrieve system and Adaptee information",
+                "tags": [
+                    "system"
+                ]
+            }
+        },
+        "/user": {
+            "delete": {
+                "callbacks": {},
+                "description": "Delete the user and user's data with associated information included sessions.\n",
+                "operationId": "deleteUserInfo",
+                "parameters": [
+                    {
+                        "$ref": "#/components/parameters/TenantID"
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "description": "Deleted successfully."
+                    },
+                    "401": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/DeleteUserInfoUnauthorizedErrorResponse"
+                                }
+                            }
+                        },
+                        "description": "Unauthorized: The request was not authorized for one of the following reasons:`\n- ``access_token` not provided`\n- ``access_token` incorrect or outdated`\n- `session associated with the `access_token` is signed out\n"
+                    },
+                    "404": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/DeleteUserInfoNotFoundErrorResponse"
+                                }
+                            }
+                        },
+                        "description": "Not Found: Either the session or the user could not be located.\n"
+                    },
+                    "500": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/DeleteUserInfoInternalServerErrorErrorResponse"
+                                }
+                            }
+                        },
+                        "description": "Internal Server Error.\n"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ],
+                "summary": "Delete user",
+                "tags": [
+                    "user"
+                ]
+            },
+            "get": {
+                "callbacks": {},
+                "description": "Fetch the user's data, such as the SIP server address, SIP username,\nand password, required for registration to the remote VoIP system\nand placing calls through it.\n",
+                "operationId": "getUserInfo",
+                "parameters": [
+                    {
+                        "$ref": "#/components/parameters/TenantID"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/UserInfoShowResponse"
+                                }
+                            }
+                        },
+                        "description": "User information and related data.\n"
+                    },
+                    "401": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/GetUserInfoUnauthorizedErrorResponse"
+                                }
+                            }
+                        },
+                        "description": "Unauthorized: The request was not authorized for one of the following reasons:`\n- ``access_token` not provided`\n- ``access_token` incorrect or outdated`\n- `session associated with the `access_token` is signed out\n"
+                    },
+                    "404": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/GetUserInfoNotFoundErrorResponse"
+                                }
+                            }
+                        },
+                        "description": "Not Found: Either the session or the user could not be located.\n"
+                    },
+                    "422": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/GetUserInfoUnprocessableEntityErrorResponse"
+                                }
+                            }
+                        },
+                        "description": "Unprocessable Entity.\n"
+                    },
+                    "500": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/GetUserInfoInternalServerErrorErrorResponse"
+                                }
+                            }
+                        },
+                        "description": "Internal Server Error.\n"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ],
+                "summary": "Retrieve user information",
+                "tags": [
+                    "user"
+                ]
+            },
+            "post": {
+                "callbacks": {},
+                "description": "Create a new user within the **Adaptee**.\n",
+                "operationId": "createUser",
+                "parameters": [
+                    {
+                        "$ref": "#/components/parameters/TenantID"
+                    }
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/UserCreateRequest"
+                            }
+                        }
+                    },
+                    "description": "Information required for creating a new user.\n",
+                    "required": true
+                },
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/UserCreateResponse"
+                                }
+                            }
+                        },
+                        "description": "User created.\n\nThe response data may vary based on the following scenarios:\n* Adaptee-specific information is returned. This information may not be\n  directly used by the application but could be utilized for other\n  functionalities. In this scenario, applications open the sign-in\n  screen, allowing the user to sign in using the provided/created\n  credentials.\n* An OTP code is generated and sent to the user. The `otp_id`\n  (identifier of the code) will be used in the `otp_verify` request\n  along with the OTP code entered by the user for validation. In this\n  scenario, applications open the OTP verification screen, allowing the\n  user to sign in using the OTP.\n* An API session is created for the user. In this case, API tokens are\n  provided. In this scenario, applications store the received API tokens\n  and open the main screen.\n"
+                    },
+                    "405": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/CreateUserMethodNotAllowedErrorResponse"
+                                }
+                            }
+                        },
+                        "description": "Method Not Allowed. Signup behavior disabled.\n"
+                    },
+                    "422": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/CreateUserUnprocessableEntityErrorResponse"
+                                }
+                            }
+                        },
+                        "description": "Unprocessable Entity.\n"
+                    },
+                    "500": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/CreateUserInternalServerErrorErrorResponse"
+                                }
+                            }
+                        },
+                        "description": "Internal Server Error.\n"
+                    }
+                },
+                "summary": "Create a new user",
+                "tags": [
+                    "user",
+                    "session"
+                ]
+            }
+        },
+        "/user/contacts": {
+            "get": {
+                "callbacks": {},
+                "description": "Retrieve extension numbers and names of other users\nwithin the same **Adaptee**, allowing the user to view and dial their colleagues.\n",
+                "operationId": "getUserContactList",
+                "parameters": [
+                    {
+                        "$ref": "#/components/parameters/TenantID"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/UserContactIndexResponse"
+                                }
+                            }
+                        },
+                        "description": "List of other users (extensions) within the **Adaptee**.\n"
+                    },
+                    "401": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/GetUserContactListUnauthorizedErrorResponse"
+                                }
+                            }
+                        },
+                        "description": "Unauthorized: The request was not authorized for one of the following reasons:`\n- ``access_token` not provided`\n- ``access_token` incorrect or outdated`\n- `session associated with the `access_token` is signed out\n"
+                    },
+                    "404": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/GetUserContactListNotFoundErrorResponse"
+                                }
+                            }
+                        },
+                        "description": "Not Found: Either the session or the user could not be located.\n"
+                    },
+                    "422": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/GetUserContactListUnprocessableEntityErrorResponse"
+                                }
+                            }
+                        },
+                        "description": "Unprocessable Entity.\n"
+                    },
+                    "500": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/GetUserContactListInternalServerErrorErrorResponse"
+                                }
+                            }
+                        },
+                        "description": "Internal Server Error.\n"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ],
+                "summary": "Retrieve corporate phone directory (other extensions in the same Adaptee)",
+                "tags": [
+                    "user"
+                ]
+            }
+        },
+        "/user/history": {
+            "get": {
+                "callbacks": {},
+                "description": "Retrieve the user's CDRs from the **Adaptee**.\n",
+                "operationId": "getUserHistoryList",
+                "parameters": [
+                    {
+                        "$ref": "#/components/parameters/TenantID"
+                    },
+                    {
+                        "description": "",
+                        "in": "query",
+                        "name": "page",
+                        "required": false,
+                        "schema": {
+                            "default": 1,
+                            "minimum": 1,
+                            "type": "integer"
+                        }
+                    },
+                    {
+                        "description": "",
+                        "in": "query",
+                        "name": "items_per_page",
+                        "required": false,
+                        "schema": {
+                            "default": 100,
+                            "minimum": 1,
+                            "type": "integer"
+                        }
+                    },
+                    {
+                        "description": "Filter CDRs by start time (inclusive)",
+                        "in": "query",
+                        "name": "time_from",
+                        "required": false,
+                        "schema": {
+                            "format": "date-time",
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "description": "Filter CDRs by end time (exclusive)",
+                        "in": "query",
+                        "name": "time_to",
+                        "required": false,
+                        "schema": {
+                            "format": "date-time",
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/UserHistoryIndexResponse"
+                                }
+                            }
+                        },
+                        "description": "List of CDRs."
+                    },
+                    "401": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/GetUserHistoryListUnauthorizedErrorResponse"
+                                }
+                            }
+                        },
+                        "description": "Unauthorized: The request was not authorized for one of the following reasons:`\n- ``access_token` not provided`\n- ``access_token` incorrect or outdated`\n- `session associated with the `access_token` is signed out\n"
+                    },
+                    "404": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/GetUserHistoryListNotFoundErrorResponse"
+                                }
+                            }
+                        },
+                        "description": "Not Found: Either the session or the user could not be located.\n"
+                    },
+                    "422": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/GetUserHistoryListUnprocessableEntityErrorResponse"
+                                }
+                            }
+                        },
+                        "description": "Unprocessable Entity.\n"
+                    },
+                    "500": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/GetUserHistoryListInternalServerErrorErrorResponse"
+                                }
+                            }
+                        },
+                        "description": "Internal Server Error.\n"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ],
+                "summary": "Retrieve the user's CDRs",
+                "tags": [
+                    "user"
+                ]
+            }
+        },
+        "/user/recordings/{recording_id}": {
+            "get": {
+                "callbacks": {},
+                "description": "Retrieve and download media data containing a recording of a call\nfrom the **Adaptee**.\n",
+                "operationId": "getUserRecording",
+                "parameters": [
+                    {
+                        "$ref": "#/components/parameters/TenantID"
+                    },
+                    {
+                        "description": "",
+                        "in": "path",
+                        "name": "recording_id",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/components/schemas/CallRecordingId"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/zip": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/BinaryResponse"
+                                }
+                            },
+                            "audio/mpeg": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/BinaryResponse"
+                                }
+                            }
+                        },
+                        "description": "Media data containing the call recording.\n"
+                    },
+                    "401": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/GetUserRecordingUnauthorizedErrorResponse"
+                                }
+                            }
+                        },
+                        "description": "Unauthorized: The request was not authorized for one of the following reasons:`\n- ``access_token` not provided`\n- ``access_token` incorrect or outdated`\n- `session associated with the `access_token` is signed out\n"
+                    },
+                    "404": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/GetUserRecordingNotFoundErrorResponse"
+                                }
+                            }
+                        },
+                        "description": "Not Found: Either the session or the user could not be located.\n"
+                    },
+                    "422": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/GetUserRecordingUnprocessableEntityErrorResponse"
+                                }
+                            }
+                        },
+                        "description": "Unprocessable Entity.\n"
+                    },
+                    "500": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/GetUserRecordingInternalServerErrorErrorResponse"
+                                }
+                            }
+                        },
+                        "description": "Internal Server Error.\n"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ],
+                "summary": "Retrieve a call recording",
+                "tags": [
+                    "user"
+                ]
+            }
+        }
+    },
+    "security": [],
+    "servers": [
+        {
+            "url": "/api/v1",
+            "variables": {}
+        }
+    ],
+    "tags": [
+        {
+            "description": "Retrieve information about the features and capabilities of the **Adapter** and **Adaptee**\n",
+            "name": "system"
+        },
+        {
+            "description": "Authenticate users within the **Adaptee**\n",
+            "name": "session"
+        },
+        {
+            "description": "Access user information within the **Adaptee**\n",
+            "name": "user"
+        }
+    ]
+}
