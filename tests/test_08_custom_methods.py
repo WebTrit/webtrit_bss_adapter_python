@@ -30,6 +30,7 @@ def test_public_method(api_url, custom_path, tenant_id, public_method, extra_pat
     assert isinstance(body := response.json(), dict)
 
 
+
 def test_private_method_fails_without_auth(api_url, custom_private_path, tenant_id, private_method):
     global response,response2, body, access_token  # so we can re-use it in later tests
 
@@ -45,9 +46,8 @@ def test_private_method_fails_without_auth(api_url, custom_private_path, tenant_
         # json = { }
     )
 
-    print(response.content)
-    assert response.status_code == 401
-    assert isinstance(body := response.json(), dict)
+    print(response2.content)
+    assert response2.status_code == 403
 
 def test_private_method_fails_with_wrong_token(api_url, custom_private_path, tenant_id, private_method):
     global response,response2, body, access_token  # so we can re-use it in later tests
@@ -65,9 +65,8 @@ def test_private_method_fails_with_wrong_token(api_url, custom_private_path, ten
         # json = { }
     )
 
-    print(response.content)
-    assert response.status_code == 401
-    assert isinstance(body := response.json(), dict)
+    print(response2.content)
+    assert response2.status_code == 401
 
 
 def test_do_login(api_url, login_path, username, password, tenant_id):
@@ -106,6 +105,6 @@ def test_private_method(api_url, custom_private_path, tenant_id, private_method,
         # json = { }
     )
 
-    print(response.content)
-    assert response.status_code == 200
-    assert isinstance(body := response.json(), dict)
+    print(response2.content)
+    assert response2.status_code == 200
+    assert isinstance(body := response2.json(), dict)

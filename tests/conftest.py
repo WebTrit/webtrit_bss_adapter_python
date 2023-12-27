@@ -52,6 +52,13 @@ def pytest_addoption(parser):
         default="call-me-securely",
         help="""The name of the private method to be called""",
     )
+    parser.addoption(
+        "--config_token",
+        action="store",
+        default="moc.tirtbew@tcatnoc",
+        help="""Auto-provisioning token""",
+    )
+
 
 @pytest.fixture
 def auth_bearer(token: str):
@@ -97,6 +104,11 @@ def system_info_path():
 def login_path():
     global API_PREFIX
     return API_PREFIX + "/session"
+
+@pytest.fixture
+def autoprovision_path():
+    global API_PREFIX
+    return API_PREFIX + "/session/auto-provision"
 
 
 @pytest.fixture
@@ -164,6 +176,11 @@ def password(request):
 @pytest.fixture
 def tenant_id(request):
     got_option = str(request.config.getoption("--tenant"))
+    return got_option
+
+@pytest.fixture
+def config_token(request):
+    got_option = str(request.config.getoption("--config_token"))
     return got_option
 
 # to make the auto-test work, we have to pre-configure the same

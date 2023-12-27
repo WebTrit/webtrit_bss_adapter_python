@@ -6,7 +6,7 @@ from bss.types import (Capabilities, UserInfo, EndUser, Contacts, ContactInfo,
                        SessionInfo, Numbers,
                        CustomRequest, CustomResponse)
  
-from report_error import WebTritErrorException
+from report_error import raise_webtrit_error
 from typing import List, Dict, Optional
 from bss.sessions import configure_session_storage
 from app_config import AppConfig
@@ -70,7 +70,7 @@ class ExampleBSSAdapter(BSSAdapterExternalDB):
                 "username": "12065551234",
                 "auth_username": "abc",
                 "password": "SlavaUkraini!",
-                "display_name": "Geroyam Slava!",
+                "display_name": "Heroyam Slava!",
                 "sip_server": {"host": "127.0.0.1", "port": 5060},
             },
             "balance": {"amount": 50.00, "balance_type": "prepaid", "currency": "USD"},
@@ -81,8 +81,15 @@ class ExampleBSSAdapter(BSSAdapterExternalDB):
             },
             "time_zone": "Europe/Kyiv",
         }
+        
         self.otp_db = TiedKeyValue()
 
+        self.config_token_db = TiedKeyValue()
+        # again, just for demo - user's config token is generated as his/her email
+        # with characters in reverse order
+        for id, user in self.user_db.values():
+            self.config_token_db[user.get("email", "")[::-1]] = id
+        
 
     @classmethod
     def name(cls) -> str:
@@ -108,7 +115,8 @@ class ExampleBSSAdapter(BSSAdapterExternalDB):
             # Capabilities.recordings
             # create a new user
             Capabilities.signup,
-            Capabilities.customMethods
+            Capabilities.customMethods,
+            Capabilities.autoProvision
         ]
 
 
@@ -194,10 +202,8 @@ class ExampleBSSAdapter(BSSAdapterExternalDB):
                                             user_id=user_data['user_id']),
                                     password = user_data['password'])
 
-        raise WebTritErrorException(
-            status_code=422,
-            error_message="Wrong data structure"
-        )
+        raise_webtrit_error(422, error_message = "Wrong data structure")
+
     
     def delete_user(self, user: UserInfo):
         """Delete an existing user - this functionality is required if the
@@ -206,17 +212,11 @@ class ExampleBSSAdapter(BSSAdapterExternalDB):
             del self.user_db[user.user_id]
             return {}
         except KeyError:
-            raise WebTritErrorException(
-                status_code=404,
-#                code = UserNotFoundCode.user_not_found,
-                error_message="User not found"
-            )
+            raise_webtrit_error(404, error_message = "User not found")
+
         except Exception as e:
-            raise WebTritErrorException(
-                status_code=500,
-#                code = APIAccessErrorCode.external_api_issue,
-                error_message=f"Application error: {e}"
-            )
+            raise_webtrit_error(500, error_message = f"Application error: {e}")
+
 
     def custom_method_public(self,
                         method_name: str,
@@ -238,3 +238,18 @@ class ExampleBSSAdapter(BSSAdapterExternalDB):
         """Custom function"""
         return dict(message =
                               f"On behalf of user {user_id} you called {method_name} with {data}!")
+
+    def autoprovision_session(self, config_token: str, tenant_id: str = None) -> SessionInfo:
+        """Create a new session based on the config token"""
+        # this is of course just for demo purposes - your code should really
+        # check the external DB, where the provisioning tokens are stored
+        if user_id := self.config_token_db.get(config_token):
+            if user := self.user_db.get(user_id):
+                # and now we just produce the same result as with "normal" login
+                return self.authenticate(user = UserInfo(login=user_id,
+                                                user_id=user_id),
+                                            password = user.get('password')
+                            )
+
+            
+        raise_webtrit_error(401, error_message = "Invalid config token")

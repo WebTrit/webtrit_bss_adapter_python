@@ -54,7 +54,6 @@ class SessionManagement(ABC):
                     access_token=access_token,
                     refresh_token=None # keep the refresh token
                 )
-                # raise an error
                 raise_webtrit_error(401,
                                     error_message = f"Access token {access_token} expired",
                                     extra_error_code= "access_token_expired")
@@ -114,7 +113,7 @@ class SessionManagement(ABC):
                     error_message = f"Error closing the session {access_token}")
 
 class CustomMethodCall(ABC):
-    """A prototype for implemeting your, custom methods in the adapter. 
+    """A prototype for implemeting your own, custom methods in the adapter. 
     
     Do something specific to your app - could be validation of user
     data during signup; or getting a list of 'call-to-action' items
@@ -171,7 +170,33 @@ class CustomMethodCall(ABC):
         """
         pass
 
-class BSSAdapter(SessionManagement, OTPHandler, CustomMethodCall):
+class AutoProvisionByToken(ABC):
+    """Establish a new authenticated session based on a temporary token,
+    provided via SMS/email/QR code/etc."""
+    def autoprovision_session(self, config_token: str, tenant_id: str = None) -> SessionInfo:
+        """Verify the token and if it is valid - return the info about a new session."""
+        raise NotImplementedError("Override this method in your sub-class")
+
+class InAppSignup(ABC):
+    """Allow users to register from the app, passing the data via the WebTrit and adapter
+    to the actual BSS system. If you decide to implement it, please think carefully
+    about the security and anit-fraud measures you need to take to prevent abuse."""
+
+    # since most adapters do not need to create&delete users or perform custom actions,
+    # we do not make these abstract methos, so the developer
+    # does not have to bother overriding them with empty methods
+    def create_new_user(self, user_data, tenant_id: str = None) -> UserCreateResponse:
+        """Create a new user as a part of the sign-up process"""
+        raise NotImplementedError("Override this method in your sub-class")
+
+    def delete_user(self, user: UserInfo):
+        """Delete an existing user - this functionality is required by
+        Google/Apple marketplace if the app allows to sign up"""
+        raise NotImplementedError("Override this method in your sub-class")
+
+
+class BSSAdapter(SessionManagement, OTPHandler,
+                 CustomMethodCall, InAppSignup, AutoProvisionByToken):
     def __init__(self, config: AppConfig):
         self.config = config
 
@@ -234,20 +259,7 @@ class BSSAdapter(SessionManagement, OTPHandler, CustomMethodCall):
         """Get the media file for a previously recorded call."""
         raise NotImplementedError("Override this method in your sub-class")
 
-    # since most adapters do not need to create&delete users or perform custom actions,
-    # we do not make these abstract methos, so the developer
-    # does not have to bother overriding them with empty methods
-    def create_new_user(self, user_data, tenant_id: str = None) -> UserCreateResponse:
-        """Create a new user as a part of the sign-up process"""
-        raise NotImplementedError("Override this method in your sub-class")
 
-    def delete_user(self, user: UserInfo):
-        """Delete an existing user - this functionality is required if the
-        app allows sign up"""
-        raise NotImplementedError("Override this method in your sub-class")
-
-
-        
     @classmethod
     def remap_dict(self, mapping: List[AttrMap], data: dict) -> dict:
         """Remap the keys of the dictionary"""
