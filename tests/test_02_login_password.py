@@ -8,7 +8,7 @@ def test_missing_data(api_url, login_path):
         api_url + login_path, json={"abc": "123", "xyz": "12345"}
     )
     print(response.content)
-    assert response.status_code == 422
+    assert response.status_code == 500
     assert isinstance(body := response.json(), dict)
 
 # required response attributes

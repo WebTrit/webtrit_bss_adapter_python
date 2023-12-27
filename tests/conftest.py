@@ -40,7 +40,18 @@ def pytest_addoption(parser):
         default="",
         help="""Tenant ID (in case of multi-tenant setup)""",
     )
-
+    parser.addoption(
+        "--public_method",
+        action="store",
+        default="call-me",
+        help="""The name of the public method to be called""",
+    )
+    parser.addoption(
+        "--private_method",
+        action="store",
+        default="call-me-securely",
+        help="""The name of the private method to be called""",
+    )
 
 @pytest.fixture
 def auth_bearer(token: str):
@@ -124,6 +135,16 @@ def call_history_path():
 
 
 @pytest.fixture
+def custom_path():
+    global API_PREFIX
+    return API_PREFIX + "/custom/public"
+
+@pytest.fixture
+def custom_private_path():
+    global API_PREFIX
+    return API_PREFIX + "/custom/private"
+
+@pytest.fixture
 def username(request):
     got_option = str(request.config.getoption("--user"))
     return got_option
@@ -154,4 +175,14 @@ def tenant_id(request):
 @pytest.fixture
 def otp_code(request):
     got_option = str(request.config.getoption("--otp"))
+    return got_option
+
+@pytest.fixture
+def public_method(request):
+    got_option = str(request.config.getoption("--public_method"))
+    return got_option
+
+@pytest.fixture
+def private_method(request):
+    got_option = str(request.config.getoption("--private_method"))
     return got_option
