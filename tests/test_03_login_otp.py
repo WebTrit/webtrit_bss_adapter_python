@@ -68,7 +68,8 @@ def test_verify_otp_fail(api_url, otp_verify_path, tenant_id):
 def test_verify_otp_fail_too_many_tries(api_url, otp_verify_path, tenant_id):
     global response
     body = response.json()
-    for i in range(1, 10):
+    MAX_ALLOWED_ATTEMPTS = 10
+    for i in range(1, MAX_ALLOWED_ATTEMPTS):
         response2 = requests.post(
             api_url + otp_verify_path,
             json={"otp_id": body["otp_id"], "code": "wrong"},
