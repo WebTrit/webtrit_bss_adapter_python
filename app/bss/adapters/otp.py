@@ -30,6 +30,10 @@ class SampleOTPHandler(OTPHandler):
     for debugging your own application while you are working on establishing
     a way to send real OTPs via SMS or other channel."""
 
+    # def __init__(self, config: AppConfig, *args, **kwargs):
+    #     super().__init__(config, *args, **kwargs)
+    #     self.config = config
+
     def extract_user_email(self, user_data: object) -> str:
         """Extract user's email to be used for sending one-time-password
         
@@ -109,7 +113,7 @@ class SampleOTPHandler(OTPHandler):
         # memorize it
         self.otp_db[otp_id] = otp
 
-        sender_email = self.config.get_conf_val("Email", "Sender",
+        sender_email = self.config.get_conf_val("Email", "From",
                                                 default="sample@webtrit.com")
         if not self.send_otp_email(email_address = email,
                                    from_address = sender_email,
