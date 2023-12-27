@@ -1,16 +1,17 @@
 import logging
 from abc import ABC, abstractmethod
 from datetime import datetime
-from pydantic import BaseModel, Field
+from pydantic import BaseModel
 from bss.types import (UserInfo, EndUser, ContactInfo, CDRInfo,
                        UserCreateResponse,
-                       APIAccessErrorCode, FailedAuthCode, UserNotFoundCode, UserAccessErrorCode,
-                       RefreshTokenErrorCode,
+                    #    APIAccessErrorCode, FailedAuthCode, UserNotFoundCode, UserAccessErrorCode,
+                    #    RefreshTokenErrorCode,
+                       CustomResponse, CustomRequest,
                        safely_extract_scalar_value)
 from bss.sessions import SessionStorage, SessionInfo
 from bss.adapters.otp import OTPHandler, SampleOTPHandler
 from app_config import AppConfig
-from report_error import WebTritErrorException
+from report_error import raise_webtrit_error
 from module_loader import ModuleLoader
 from typing import List, Dict, Any, Optional, Callable
 
@@ -54,39 +55,33 @@ class SessionManagement(ABC):
                     refresh_token=None # keep the refresh token
                 )
                 # raise an error
-                raise WebTritErrorException(
-                    status_code=401,
-                    code=APIAccessErrorCode.access_token_expired,
-                    error_message=f"Access token {access_token} expired",
-                )
+                raise_webtrit_error(401,
+                                    error_message = f"Access token {access_token} expired",
+                                    extra_error_code= "access_token_expired")
 
             return session
 
-        raise WebTritErrorException(
-            status_code=401,
-            code=APIAccessErrorCode.access_token_invalid,
-            error_message=f"Invalid access token {access_token}",
-        )
+        raise_webtrit_error(401, 
+                    error_message = f"Invalid access token {access_token}",
+                    extra_error_code= "access_token_invalid")
 
     def refresh_session(self, refresh_token: str) -> SessionInfo:
         """Extend the API session be exchanging the refresh token for
         a new API access token."""
         session = self.sessions.get_session(refresh_token=refresh_token)
         if not session:
-            raise WebTritErrorException(
-                status_code=401,
-                code=RefreshTokenErrorCode.refresh_token_invalid,
-                error_message=f"Invalid refresh token {refresh_token}",
-            )
+            raise_webtrit_error(401, 
+                    error_message = f"Invalid refresh token {refresh_token}",
+                    extra_error_code = "refresh_token_invalid")
+
 
         if not isinstance(session, SessionInfo):
             # accessing some old objects in the DB which do not store refresh token
             # as a separate full object
-            raise WebTritErrorException(
-                status_code=401,
-                code=RefreshTokenErrorCode.refresh_token_invalid,
-                error_message=f"Outdated refresh token {refresh_token} - was stored in the old format",
-            )
+            raise_webtrit_error(401, 
+                    error_message = f"Outdated refresh token {refresh_token} - was stored in the old format",
+                    extra_error_code = "old_format")
+
         access_token = safely_extract_scalar_value(session.access_token)
         if not session.still_active():
             # remove it from the DB
@@ -94,12 +89,10 @@ class SessionManagement(ABC):
                 access_token=access_token,
                 refresh_token=refresh_token
             )
-            # raise an error
-            raise WebTritErrorException(
-                status_code=401,
-                code=RefreshTokenErrorCode.access_token_expired,
-                error_message=f"Refresh token {refresh_token} expired",
-            )
+            raise_webtrit_error(401, 
+                    error_message = f"Refresh token {refresh_token} expired",
+                    extra_error_code = "refresh_token_expired")
+
         # everything is in order, create a new session
         new_session = self.sessions.create_session(UserInfo(
                             user_id=safely_extract_scalar_value(session.user_id)))
@@ -117,13 +110,68 @@ class SessionManagement(ABC):
         if session:
             return self.sessions.delete_session(access_token, session.refresh_token)
 
-        raise WebTritErrorException(
-            status_code=401,
-            code=UserAccessErrorCode.session_not_found,
-            error_message=f"Error closing the session {access_token}",
-        )
+        raise_webtrit_error(401, 
+                    error_message = f"Error closing the session {access_token}")
 
-class BSSAdapter(SessionManagement, OTPHandler):
+class CustomMethodCall(ABC):
+    """A prototype for implemeting your, custom methods in the adapter. 
+    
+    Do something specific to your app - could be validation of user
+    data during signup; or getting a list of 'call-to-action' items
+    such as promotions to show in the app; or anything else.        
+    """
+    
+    def custom_method_public(self,
+                        method_name: str,
+                        data: CustomRequest,
+                        headers: Optional[Dict] = {},
+                        extra_path_params: Optional[str] = None,
+                        tenant_id: str = None) -> CustomResponse:
+        """
+        This method is unprotected and is called prior to authenticating the user
+        - e.g. while signing up return the list of available packages a customer can pick.
+        
+        Parameters:
+        method_name (str): the first param in the URL of the request (e.g. if your
+            app calls /custom/offers/ - then it will be "offers")
+        data (CustomRequest AKA Dict): extra info sent in the request body
+            (e.g. you send there the data customer already entered such as his/her ZIP code)
+        headers (Dict): HTTP headers of the request
+        extra_path_params (str): any extra parameters in the URL (e.g. if your app calls
+            /custom/offers/98275/ then it will containt "98275"
+        tenant_id (str): the tenant ID (if provided) - to separate the processing
+            in multi-tentant environment
+        
+        Returns:
+        CustomResponse (Dict): the data to be returned to the app "as is"
+        
+        """
+        pass
+
+    def custom_method_private(self,
+                        session: SessionInfo,
+                        user_id: str,
+                        method_name: str,
+                        data: CustomRequest,
+                        headers: Optional[Dict] = {},
+                        extra_path_params: Optional[str] = None,
+                        tenant_id: str = None) -> CustomResponse:
+        """Same thing as custom_method_public but is only allowed
+        to be called when an app is already established an authenticated
+        session on behalf of the user.
+        
+        The only diff with custom_method_public are extra parameters:
+
+        - session (SessionInfo): full info about the established session 
+        - user_id (str):   the user ID (e.g. email address) of the user
+
+        note that we do NOT supply the full user info here to avoid doing
+        a query to the external system to retrieve it. For most cases
+        knowing it is an authenticated user "xyz" is enough.
+        """
+        pass
+
+class BSSAdapter(SessionManagement, OTPHandler, CustomMethodCall):
     def __init__(self, config: AppConfig):
         self.config = config
 
@@ -198,28 +246,7 @@ class BSSAdapter(SessionManagement, OTPHandler):
         app allows sign up"""
         raise NotImplementedError("Override this method in your sub-class")
 
-    def custom_action(self,
-                      action: str = None,
-                      user: UserInfo = None,
-                      tenant_id: str = None,
-                      data: Dict = {}):
-        """Perform a custom action - could be validation of user data during
-        signup; or getting a list of 'call-to-action' items such as promotions
-        to show in the app; or anything else
-        
-        Parameters:
-        action: the name of the action to perform (provided in the request URL
-                as /custom/<action>))
-        user:   the authenticated user info (if the user is authenticated,
-                since custom actions can be called while the user is still
-                in the process of signing up or authenticating)
-        tenant_id: the tenant ID (if the tenant is known)
-        data:   any additional data that may be required to perform the action
-        
-        Returns: 
-        A structure (presumably dictionary) with the data to be returned to the app
-        """
-        raise NotImplementedError("Override this method in your sub-class")
+
         
     @classmethod
     def remap_dict(self, mapping: List[AttrMap], data: dict) -> dict:
@@ -313,19 +340,14 @@ class BSSAdapterExternalDB(BSSAdapter, SampleOTPHandler):
                 self.sessions.store_session(session)
                 return session
 
-            raise WebTritErrorException(
-                status_code=401,
-                code=FailedAuthCode.incorrect_credentials,
-                error_message="Invalid password",
-            )
+            raise_webtrit_error(401, 
+                    error_message = "Password validation fails",
+                    extra_error_code="incorrect_credentials")
 
-        # something is wrong. your code should return a more descriptive
-        # error message to simplify the process of fixing the problem
-        raise WebTritErrorException(
-            status_code=401,
-            code=FailedAuthCode.incorrect_credentials,
-            error_message="User authentication error",
-        )
+        # something is wrong. your code should raise its own exception
+        # with a more descriptive message to simplify the process of fixing the problem
+        raise_webtrit_error(401, error_message = "User authentication error")
+
 
     def retrieve_user(self, session: SessionInfo, user: UserInfo) -> EndUser:
         """Obtain user's information - most importantly, his/her SIP credentials."""
@@ -335,11 +357,7 @@ class BSSAdapterExternalDB(BSSAdapter, SampleOTPHandler):
             return self.produce_user_object(user_data)
 
         # no such session
-        raise WebTritErrorException(
-            status_code=404,
-            code=UserNotFoundCode.user_not_found,
-            error_message="User not found"
-        )
+        raise_webtrit_error(404, error_message = "User not found")
 
     # these are the "standard" methods from BSSAdapter you are expected to override
     @classmethod

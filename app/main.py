@@ -3,13 +3,13 @@ from __future__ import annotations
 from typing import Optional, Union, Dict
 import os
 import sys
-from fastapi import FastAPI, APIRouter, Depends, Response, Request, Header
+from fastapi import FastAPI, APIRouter, Depends, Response, Request, Header, Body
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 
 import logging
 from pydantic import conint
 from datetime import datetime
-from report_error import WebTritErrorException
+from report_error import raise_webtrit_error
 from app_config import AppConfig
 import bss.adapters
 from bss.adapters import initialize_bss_adapter
@@ -60,23 +60,31 @@ from bss.types import (
     UpdateSessionNotFoundErrorResponse,
     UpdateSessionUnprocessableEntityErrorResponse,
     Contacts,
+    # signup
     UserCreateRequest,
     UserCreateResponse,
+
     Calls,
     EndUser,
     VerifySessionOtpInternalServerErrorErrorResponse,
     VerifySessionOtpNotFoundErrorResponse,
     VerifySessionOtpUnprocessableEntityErrorResponse,
     Pagination,
-    SessionNotFoundCode,
-    OTPExtAPIErrorCode,
-    OTPValidationErrCode,
-    OTPUserDataErrorCode,
-    FailedAuthIncorrectDataCode,
-    SessionInfo
+    SessionInfo,
+
+    # custom methods
+    CustomRequest,
+    CustomResponse,
+    PrivateCustomUnauthorizedErrorResponse,
+
+    SessionAutoProvisionRequest,
+    SessionAutoProvisionUnauthorizedErrorResponse,
+    SessionAutoProvisionUnprocessableEntityErrorResponse,
+    SessionAutoProvisionInternalServerErrorErrorResponse,
+    SessionAutoProvisionNotImplementedErrorResponse,
 
 )
-VERSION="0.0.9"
+VERSION="0.1.0"
 API_VERSION_PREFIX = "/api/v1"
 
 my_project_path = os.path.dirname(__file__)
@@ -117,6 +125,16 @@ router = APIRouter(route_class=RouteWithLogging)
 bss = initialize_bss_adapter(bss.adapters.__name__, config)
 bss_capabilities = bss.get_capabilities()
 
+def is_method_allowed(method: Capabilities) -> Response:
+    """Raise error in case if a non-implemented (or disabled)
+    method is called"""
+    global bss_capabilities
+
+    if method not in bss_capabilities:
+        raise_webtrit_error(501,
+                            f"Method {method} is not supported by adapter {bss.name()} {bss.version()}")
+    return True
+
 @app.get(
     "/health-check",
     response_model=Health,
@@ -153,13 +171,12 @@ def create_session(
     Login user using username and password
     """
     global bss
+
+    is_method_allowed(Capabilities.passwordSignin)
+
     if not (body.login and body.password):
         # missing parameters
-        raise WebTritErrorException(
-            status_code=422,
-            code = FailedAuthIncorrectDataCode.validation_error,
-            error_message="Missing login & password"
-        )
+        raise_webtrit_error(422, "Missing login & password")
 
     user = ExtendedUserInfo(user_id = 'N/A', # do not know it yet
                     client_agent = request.headers.get('User-Agent', 'Unknown'),
@@ -194,8 +211,6 @@ def update_session(
 
     return bss.refresh_session(safely_extract_scalar_value(body.refresh_token))
 
-
-
 @router.delete(
     '/session',
     response_model=None,
@@ -226,13 +241,39 @@ def delete_session(
     if not result:
         # we were unable to delete the session - perhaps wrong
         # or expired access token was provided
-        raise WebTritErrorException(
-            status_code=500,
-            code=OTPExtAPIErrorCode.external_api_issue,
-            error_message="Logout failed"
-        )
+        raise_webtrit_error(500, "User logout failed")
 
     return Response(content="", status_code=204)
+
+
+@app.post(
+    '/session/auto-provision',
+    response_model=SessionResponse,
+    responses={
+        '401': {'model': SessionAutoProvisionUnauthorizedErrorResponse},
+        '422': {'model': SessionAutoProvisionUnprocessableEntityErrorResponse},
+        '500': {'model': SessionAutoProvisionInternalServerErrorErrorResponse},
+        '501': {'model': SessionAutoProvisionNotImplementedErrorResponse},
+    },
+    tags=['session'],
+)
+def autoprovision_session(
+    body: SessionAutoProvisionRequest,
+    x_webtrit_tenant_id: Optional[str] = Header(None, alias=TENANT_ID_HTTP_HEADER),
+
+) -> Union[
+    SessionResponse,
+    SessionAutoProvisionUnauthorizedErrorResponse,
+    SessionAutoProvisionUnprocessableEntityErrorResponse,
+    SessionAutoProvisionInternalServerErrorErrorResponse,
+    SessionAutoProvisionNotImplementedErrorResponse,
+]:
+    """
+    Establish an authenticated session without any direct interaction with the user
+    by utilizing a temporary "provisioning token" (sent vua email, SMS, QR code)
+    """
+    is_method_allowed(Capabilities.autoProvision)
+
 
 @router.post(
     '/session/otp-create',
@@ -256,23 +297,14 @@ def create_session_otp(
     """
     Generate and send an OTP to the user
     """
-    global bss, bss_capabilities
+    global bss
 
-    if Capabilities.otpSignin not in bss_capabilities:
-        raise WebTritErrorException(
-            status_code=422,
-            error_message="Method not supported",
-            code=OTPUserDataErrorCode.validation_error
-        )
+    is_method_allowed(Capabilities.otpSignin)
 
     if hasattr(body, 'user_ref'):
         user_ref = safely_extract_scalar_value(body.user_ref)
     else:
-        raise WebTritErrorException(
-            status_code=422,
-            code=OTPUserDataErrorCode.validation_error,
-            error_message="Cannot find user_ref in the request"
-        )
+        raise_webtrit_error(500, "Cannot find user_ref in the request")
 
     otp_request = bss.generate_otp(ExtendedUserInfo(
                         user_id=user_ref,
@@ -302,14 +334,9 @@ def verify_session_otp(
     """
     Verify the OTP and sign in the user
     """
-    global bss, bss_capabilities
+    global bss
 
-    if Capabilities.otpSignin not in bss_capabilities:
-        raise WebTritErrorException(
-            status_code=401,
-            code=OTPValidationErrCode.incorrect_otp_code,
-            error_message="Method not supported"
-        )
+    is_method_allowed(Capabilities.otpSignin)
 
     otp_response = bss.validate_otp(body)
     return otp_response
@@ -382,10 +409,8 @@ def get_user_info(
     },
     tags=['user'],
 )
-def create_user(
-#   body: UserCreateRequest,
-    # cannot figure out how to define this in Pydantic
-    body: Dict,
+def signup(
+    body: UserCreateRequest,
 #    auth_data: HTTPAuthorizationCredentials = Depends(security),
     x_webtrit_tenant_id: Optional[str] = Header(None, alias=TENANT_ID_HTTP_HEADER),
 ) -> Union[
@@ -400,7 +425,8 @@ def create_user(
     up users just using their mobile phone number, while another would require address,
     email, credit card info, etc.) - so it is not defined by the schema and passed "as is".
 
-    **body** - dictionary with the user's data
+    Parameters:
+    body - dictionary with the user's data
 
     Returns:
         UserCreateResponse, which (upon success) can contain one of the following objects:
@@ -413,14 +439,10 @@ def create_user(
             - freeform dictionary with the data to be interpreted by the front-end app
 
     """
-    global bss, bss_capabilities
+    global bss
 
-    if Capabilities.signup not in bss_capabilities:
-        raise WebTritErrorException(
-            status_code=401,
-            code=OTPUserDataErrorCode.validation_error,
-            error_message="Method not supported"
-        )
+    is_method_allowed(Capabilities.signup)
+
     # TODO: think about extra authentification measures
     return bss.create_new_user(body, tenant_id = bss.default_id_if_none(x_webtrit_tenant_id))
 
@@ -441,17 +463,12 @@ def delete_user(
     x_webtrit_tenant_id: Optional[str] = Header(None, alias=TENANT_ID_HTTP_HEADER),
 ):
     """
-    Delete an existing user - this functionality is required if the app allows sign up
+    Delete an existing user - this functionality is required if the app allows to sign up
     """
-    global bss, bss_capabilities
+    global bss
 
-    if Capabilities.signup not in bss_capabilities:
-        raise WebTritErrorException(
-            status_code=422,
-            # TODO: which error code should I use?
-            code=OTPUserDataErrorCode.validation_error,
-            error_message="Method not supported"
-        )
+    is_method_allowed(Capabilities.signup)
+
     access_token = auth_data.credentials
     session = bss.validate_session(access_token)
     user = ExtendedUserInfo(
@@ -490,6 +507,10 @@ def get_user_contact_list(
     Get corporate directory (contacts of other users in the same PBX)
     """
     global bss, bss_capabilities
+
+    # not raising an error here even if not implemented,
+    # so the user will just see an empty contact list
+    # is_method_allowed(Capabilities.extensions)
 
     access_token = auth_data.credentials
     session = bss.validate_session(access_token)
@@ -589,22 +610,81 @@ def get_user_recording(
 ]:
     global bss, bss_capabilities
 
+    is_method_allowed(Capabilities.recordings)
+
     access_token = auth_data.credentials
     session = bss.validate_session(access_token)
-    if Capabilities.recordings in bss_capabilities:
-        recording: bytes = bss.retrieve_call_recording(
+    recording: bytes = bss.retrieve_call_recording(
             session, CallRecordingId(__root__=recording_id)
         )
 
-        return Response(content = recording)
+    return Response(content = recording)
 
     # not supported by hosted PBX / BSS, return None
     return None
 
-# does not seem to work when using custom route handler
-# @app.exception_handler(WebTritErrorException)
-# async def handle_webtrit_error(request, exc):
-#     return exc.response()
+@router.post("/custom/public/{method_name}/{extra_path_params:path}",
+          response_model=CustomResponse, tags=['custom'])
+def custom_method_public(
+    request: Request,
+    method_name: str,
+    body: Dict = Body(default=None),
+    x_webtrit_tenant_id: Optional[str] = Header(None, alias=TENANT_ID_HTTP_HEADER),
+    extra_path_params: Optional[str] = None,
+) -> CustomResponse:
+    """
+        The invocation of custom methods not explicitly defined in the documentation,
+    expanding functionality through predefined rules.
+
+    """
+    global bss
+
+    is_method_allowed(Capabilities.customMethods)
+
+    return bss.custom_method_public(
+            method_name,
+            data = body,
+            headers = dict(request.headers),
+            extra_path_params = extra_path_params,
+            tenant_id = x_webtrit_tenant_id
+    )
+
+@router.post(
+    "/custom/private/{method_name}/{extra_path_params:path}",
+    response_model=CustomResponse,
+    responses={'401': {'model': PrivateCustomUnauthorizedErrorResponse}},
+    tags=['custom'],
+)
+def custom_method_private(
+    request: Request,
+    method_name: str,
+    body: Dict = Body(default=None),
+    x_webtrit_tenant_id: Optional[str] = Header(None, alias=TENANT_ID_HTTP_HEADER),
+    extra_path_params: Optional[str] = None,
+    auth_data: HTTPAuthorizationCredentials = Depends(security),
+) -> Union[CustomResponse, PrivateCustomUnauthorizedErrorResponse]:
+    """
+        The invocation of custom methods with access token verification not explicitly
+    defined in the documentation, expanding functionality through predefined rules.
+
+    """
+    global bss
+
+    is_method_allowed(Capabilities.customMethods)
+
+    access_token = auth_data.credentials
+    # ensure user is authenticated
+    session = bss.validate_session(access_token)
+
+    return bss.custom_method_private(
+        session = session,
+        user_id = safely_extract_scalar_value(session.user_id),
+        method_name = method_name,
+        data = body,
+        headers = dict(request.headers),
+        extra_path_params = extra_path_params,
+        tenant_id = x_webtrit_tenant_id
+    )
 
 app.include_router(router, prefix=API_VERSION_PREFIX)
 

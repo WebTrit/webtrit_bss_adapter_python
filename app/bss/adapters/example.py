@@ -3,10 +3,11 @@ from bss.dbs import TiedKeyValue, FileStoredKeyValue
 from bss.types import (Capabilities, UserInfo, EndUser, Contacts, ContactInfo,
                        Calls, CDRInfo, ConnectStatus, SIPRegistrationStatus,
                        Direction,
-                       SessionInfo, Numbers, FailedAuthIncorrectDataCode,
-                       UserNotFoundCode, APIAccessErrorCode)
+                       SessionInfo, Numbers,
+                       CustomRequest, CustomResponse)
+ 
 from report_error import WebTritErrorException
-from typing import List
+from typing import List, Dict, Optional
 from bss.sessions import configure_session_storage
 from app_config import AppConfig
 
@@ -18,7 +19,7 @@ import faker
 
 import re
 
-VERSION = "0.0.1"
+VERSION = "0.0.2"
 
 # otherwise it produces annoying messages about locale
 # when the app log level is set to DEBUG
@@ -106,7 +107,8 @@ class ExampleBSSAdapter(BSSAdapterExternalDB):
             # download call recordings - currently not supported
             # Capabilities.recordings
             # create a new user
-            Capabilities.signup
+            Capabilities.signup,
+            Capabilities.customMethods
         ]
 
 
@@ -194,7 +196,6 @@ class ExampleBSSAdapter(BSSAdapterExternalDB):
 
         raise WebTritErrorException(
             status_code=422,
-            code = FailedAuthIncorrectDataCode.validation_error,
             error_message="Wrong data structure"
         )
     
@@ -207,12 +208,33 @@ class ExampleBSSAdapter(BSSAdapterExternalDB):
         except KeyError:
             raise WebTritErrorException(
                 status_code=404,
-                code = UserNotFoundCode.user_not_found,
+#                code = UserNotFoundCode.user_not_found,
                 error_message="User not found"
             )
         except Exception as e:
             raise WebTritErrorException(
                 status_code=500,
-                code = APIAccessErrorCode.external_api_issue,
+#                code = APIAccessErrorCode.external_api_issue,
                 error_message=f"Application error: {e}"
             )
+
+    def custom_method_public(self,
+                        method_name: str,
+                        data: CustomRequest,
+                        headers: Optional[Dict] = {},
+                        extra_path_params: Optional[str] = None,
+                        tenant_id: str = None) -> CustomResponse:
+        """Custom function"""
+        return dict(message = f"You called {method_name} with {data}!")
+    
+    def custom_method_private(self,
+                    session: SessionInfo,
+                    user_id: str,
+                    method_name: str,
+                    data: CustomRequest,
+                    headers: Optional[Dict] = {},
+                    extra_path_params: Optional[str] = None,
+                    tenant_id: str = None) -> CustomResponse:
+        """Custom function"""
+        return dict(message =
+                              f"On behalf of user {user_id} you called {method_name} with {data}!")

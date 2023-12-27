@@ -1,6 +1,6 @@
 from fastapi import Response, Request, HTTPException
 from starlette.background import BackgroundTask
-from starlette.responses import StreamingResponse
+from starlette.responses import StreamingResponse, JSONResponse
 from fastapi.routing import APIRoute
 
 # from starlette.types import Message
@@ -85,7 +85,14 @@ class RouteWithLogging(APIRoute):
             try:
                 response = await original_route_handler(request)
             except HTTPException as http_exc:
-                err_response = http_exc.response() if hasattr(http_exc, 'response') else {}
+                if hasattr(http_exc, 'response'):
+                    err_response = http_exc.response()
+                else:
+                    err_response = JSONResponse(
+                                        status_code=http_exc.status_code,
+                                        content={
+                                            "detail": http_exc.detail if hasattr(http_exc, 'detail') else "Unknown error" }
+                    )
                 logging.error(f"HTTP exception {http_exc.status_code} {http_exc.detail} {err_response}")
                 return err_response
             except Exception as e:
