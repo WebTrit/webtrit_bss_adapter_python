@@ -1,4 +1,5 @@
 from fastapi import Response, Request, HTTPException
+from fastapi.exceptions import RequestValidationError
 from starlette.background import BackgroundTask
 from starlette.responses import StreamingResponse, JSONResponse
 from fastapi.routing import APIRoute
@@ -84,6 +85,17 @@ class RouteWithLogging(APIRoute):
                         )
             try:
                 response = await original_route_handler(request)
+            except RequestValidationError as validation_exc:
+                # errors when invalid input data is provided
+                err_response = JSONResponse(
+                                    status_code=422,
+                                    content={
+                                        "detail": validation_exc.errors(),
+                                        "body": req_body
+                                    }
+                )
+                logging.error(f"Validation exception {validation_exc.errors()}")
+                return err_response
             except HTTPException as http_exc:
                 if hasattr(http_exc, 'response'):
                     err_response = http_exc.response()
@@ -100,7 +112,6 @@ class RouteWithLogging(APIRoute):
                 raise HTTPException(
                     status_code=500, 
                     detail=f"An error {e} occurred")
-
 
             if isinstance(response, StreamingResponse):
                 res_body = b""
