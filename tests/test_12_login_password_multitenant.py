@@ -88,8 +88,8 @@ def test_login_attr(api_url, login_path, attr):
 def test_login_userid(api_url, login_path, username, tenant_id, attr):
     global body
 
-    # attr.expected = tenant_id + ':*:' + username
-    attr.expected = username
+    attr.expected = tenant_id + ':*:' + username
+    #attr.expected = username
     print('attr = ', attr)
     verify_attribute_in_json(attr, body)
 
@@ -134,7 +134,7 @@ def test_refresh_attr(api_url, login_path, attr):
 def test_refresh_userid(api_url, login_path, username, tenant_id, attr):
     global body
 
-    attr.expected = username
+    attr.expected = tenant_id + ':*:' + username
     print('attr = ', attr)
     verify_attribute_in_json(attr, body)
 

@@ -259,6 +259,10 @@ class BSSAdapter(SessionManagement, OTPHandler,
         """Get the media file for a previously recorded call."""
         raise NotImplementedError("Override this method in your sub-class")
 
+    @abstractmethod
+    def signup(self, user_data, tenant_id: str = None) -> UserCreateResponse:
+        """Create a new user as a part of the sign-up process"""
+        raise NotImplementedError("Override this method in your sub-class")
 
     @classmethod
     def remap_dict(self, mapping: List[AttrMap], data: dict) -> dict:
@@ -409,7 +413,7 @@ class BSSAdapterExternalDB(BSSAdapter, SampleOTPHandler):
     ) -> bytes:
         """Get the media file for a previously recorded call."""
         raise NotImplementedError("Override this method in your sub-class")
-
+    
     def create_new_user(self, user_data, tenant_id: str = None) -> UserCreateResponse:
         """Create a new user as a part of the sign-up process"""
         raise NotImplementedError("Override this method in your sub-class")

@@ -486,6 +486,8 @@ def delete_user(
     return Response(content="", status_code=204)
 
 
+
+
 @router.get(
     '/user/contacts',
     response_model=Contacts,

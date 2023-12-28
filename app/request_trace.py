@@ -113,6 +113,7 @@ class RouteWithLogging(APIRoute):
                     status_code=500, 
                     detail=f"An error {e} occurred")
 
+
             if isinstance(response, StreamingResponse):
                 res_body = b""
                 async for item in response.body_iterator:

@@ -20,6 +20,9 @@ COPY app/requirements.txt /app/
 RUN pip install --no-cache-dir --upgrade -r requirements.txt
 
 COPY app /app/
+# copy the contents of webtrit_common, which is a part
+# of different repository
+COPY app/common2 /app/webtrit_common
 RUN chmod 755 /app/start-web-server.sh
 
 USER httpd
