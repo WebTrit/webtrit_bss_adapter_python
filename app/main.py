@@ -450,7 +450,7 @@ def signup(
     is_method_allowed(Capabilities.signup)
 
     # TODO: think about extra authentification measures
-    return bss.create_new_user(body, tenant_id = bss.default_id_if_none(x_webtrit_tenant_id))
+    return bss.signup(body, tenant_id = bss.default_id_if_none(x_webtrit_tenant_id))
 
 # temporary version of the method definition - added manually and not
 # auto-generated from the API schema; will be updated later
