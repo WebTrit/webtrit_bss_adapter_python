@@ -14,6 +14,7 @@ def test_wrong_token(api_url, autoprovision_path, config_token, tenant_id):
     )
 
     assert response.status_code == 401
+    print(response.content)
 
 
 def test_login_token(api_url, autoprovision_path, config_token, tenant_id):

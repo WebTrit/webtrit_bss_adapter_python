@@ -1,8 +1,9 @@
 from fastapi import Response, Request, HTTPException
 from fastapi.exceptions import RequestValidationError
 from starlette.background import BackgroundTask
-from starlette.responses import StreamingResponse, JSONResponse
+from starlette.responses import StreamingResponse
 from fastapi.routing import APIRoute
+from report_error import WebTritErrorException
 
 # from starlette.types import Message
 from typing import Callable
@@ -87,24 +88,25 @@ class RouteWithLogging(APIRoute):
                 response = await original_route_handler(request)
             except RequestValidationError as validation_exc:
                 # errors when invalid input data is provided
-                err_response = JSONResponse(
-                                    status_code=422,
-                                    content={
-                                        "detail": validation_exc.errors(),
-                                        "body": req_body
-                                    }
-                )
+                err_response = WebTritErrorException(status_code=422,
+                                                     error_message = "Input data validation error: " + 
+                                                            str(validation_exc.errors()),
+                                                     path = request.url.path,
+                                                     ).response()
+
                 logging.error(f"Validation exception {validation_exc.errors()}")
                 return err_response
             except HTTPException as http_exc:
                 if hasattr(http_exc, 'response'):
                     err_response = http_exc.response()
                 else:
-                    err_response = JSONResponse(
+                    err_response = WebTritErrorException(
                                         status_code=http_exc.status_code,
-                                        content={"detail": http_exc.detail if hasattr(http_exc, 'detail') else "Unknown error" }
-                    )
-                logging.error(f"HTTP exception {http_exc.status_code} {http_exc.detail} {err_response}")
+                                        error_message = "Server error: " +
+                                            http_exc.detail if hasattr(http_exc, 'detail') else "Unknown error",
+                                            path=request.url.path,
+                    ).response()
+                logging.error(f"HTTP exception {http_exc.status_code} {http_exc.detail}")
                 return err_response
             except Exception as e:
                 logging.error(f"Application error: {e} {traceback.print_exc()}")
