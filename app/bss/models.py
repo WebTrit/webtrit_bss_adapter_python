@@ -521,6 +521,8 @@ class SupportedEnum(Enum):
     recordings = 'recordings'
     callHistory = 'callHistory'
     extensions = 'extensions'
+    # adding this manually
+    cta_list = 'cta_list'
 
 
 class SystemInfoShowResponse(BaseModel):

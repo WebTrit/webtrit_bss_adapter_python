@@ -1,5 +1,5 @@
 from enum import Enum
-from typing import List, Dict, Any, Optional, Union
+from typing import List, Dict, Any, Optional, Type, Union
 from pydantic import BaseModel, Field
 from datetime import datetime
 import orjson
@@ -32,6 +32,7 @@ from bss.models import (
     Contact as ContactInfo,
     UserHistoryIndexResponse as Calls,
     ErrorResponse as ErrorMsg,
+
     SupportedEnum as Capabilities,
 
     CDRInfo as CDRInfo,
@@ -104,7 +105,32 @@ from bss.models import (
     ProvisionSessionAutoNotImplementedErrorResponse as SessionAutoProvisionNotImplementedErrorResponse,
 
     Code as ErrorCode,
+    # no longer needed
+    # Code  as APIAccessErrorCode,
+    # Code2 as UserAccessErrorCode,
+    # Code3 as RefreshTokenErrorCode,
+    # Code5 as OTPNotFoundErrorCode,
+    # Code8 as OTPUserDataErrorCode,
+    # Code9 as FailedAuthCode,
+    # Code11 as SessionNotFoundCode,
+    # Code13 as OTPValidationErrCode,
+    # Code16 as SignupExtAPIErrorCode,
+    # Code19 as OTPExtAPIErrorCode,
+    # Code21 as AuthorizationFailureCode,
+    # Code28 as SignupValidationErrorCode,
+    # Code32 as FailedAuthIncorrectDataCode,
+    # Code32 as MethodNotAllowedCode, # until we get something more suitable
+    # Code35 as UserNotFoundCode,
+    # Code39 as TokenErrorCode,
+    # Code40 as TokenErrorCode2,
+    # Code41 as ExternalErrorCode,
+    # Code43 as RefreshTokenErrorCode,
+    # Code49 as OTPIDNotFoundCode,
+    # Code50 as OTPValidationErrCode,
+    # Code58 as SignupValidationErrorCode,
+
 )
+
 
 class UserInfo(BaseModel):
     """Data about the user, on whose behalf the operation is requested"""
@@ -209,10 +235,12 @@ class CallToActionLink(CallToAction):
                                    example='Link', default=CallToActionType.LINK)
     url: str = Field(description='URL that the user should be taken to',
                                    example='https://signup.webtrit.com/?email=abc@test.com')
-
-class CallToActionResponse(BaseModel):
+    
+class CallToActionMenu(BaseModel):
     """Set of links to be shown in the app"""
-    actions: List[CallToAction] = []
+#   cannot figure out why it does not work
+#    actions: List[Type[CallToAction]] = []
+    actions: List[Union[CallToAction, CallToActionLink]]
 
 def is_scalar(obj) -> bool:
     """Return True if the object is a scalar"""

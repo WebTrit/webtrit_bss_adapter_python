@@ -128,6 +128,7 @@ class RouteWithLogging(APIRoute):
                     status_code=500, 
                     detail=f"An error {e} occurred")
 
+
             if isinstance(response, StreamingResponse):
                 task = BackgroundTask(log_req_and_reply, req_body,
                                       "<binary/streaming content>")
