@@ -185,8 +185,8 @@ class InAppSignup(ABC):
     # since most adapters do not need to create&delete users or perform custom actions,
     # we do not make these abstract methos, so the developer
     # does not have to bother overriding them with empty methods
-    def create_new_user(self, user_data, tenant_id: str = None) -> UserCreateResponse:
-        """Create a new user as a part of the sign-up process"""
+    def signup(self, user_data, tenant_id: str = None) -> UserCreateResponse:
+        """Create a new user/customer as a part of the sign-up process"""
         raise NotImplementedError("Override this method in your sub-class")
 
     def delete_user(self, user: UserInfo):
@@ -410,9 +410,13 @@ class BSSAdapterExternalDB(BSSAdapter, SampleOTPHandler):
         """Get the media file for a previously recorded call."""
         raise NotImplementedError("Override this method in your sub-class")
 
-    def create_new_user(self, user_data, tenant_id: str = None) -> UserCreateResponse:
-        """Create a new user as a part of the sign-up process"""
+    def signup(self, user_data, tenant_id: str = None) -> UserCreateResponse:
+        """Create a new user / customer as a part of the sign-up process"""
         raise NotImplementedError("Override this method in your sub-class")
+    
+    def create_new_user(self, user_data, tenant_id: str = None) -> UserCreateResponse:
+        """Deprecated version"""
+        raise NotImplementedError("This method has been renamed to 'signup', update your code")
 
 # initialize BSS Adapter
 def initialize_bss_adapter(root_package: str, config: AppConfig) -> BSSAdapter:

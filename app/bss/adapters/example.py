@@ -190,7 +190,7 @@ class ExampleBSSAdapter(BSSAdapterExternalDB):
         # not yet implemented
         pass
 
-    def create_new_user(self, user_data: dict, tenant_id: str = None):
+    def signup(self, user_data: dict, tenant_id: str = None):
         """Create a new user as a part of the sign-up process"""
         if isinstance(user_data, dict) \
                 and 'user_id' in user_data \
