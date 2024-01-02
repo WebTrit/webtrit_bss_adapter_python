@@ -109,7 +109,7 @@ class RouteWithLogging(APIRoute):
                 logging.error(f"HTTP exception {http_exc.status_code} {http_exc.detail}")
                 return err_response
             except Exception as e:
-                logging.error(f"Application error: {e} {traceback.print_exc()}")
+                logging.error(f"Application error: {e} {traceback.format_exc()}")
                 # we assume the error was already logged by the original_route_handler
                 raise HTTPException(
                     status_code=500, 
