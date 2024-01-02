@@ -2,8 +2,8 @@ import logging
 import requests
 from datetime import datetime, timedelta
 from abc import ABC, abstractmethod
-from report_error import WebTritErrorException
-from bss.types import SignupExtAPIErrorCode as ExtAPIErrorCode
+from report_error import raise_webtrit_error
+#from bss.types import SignupExtAPIErrorCode as ExtAPIErrorCode
 
 class HTTPAPIConnector(ABC):
     """Extract data from a remote server via REST/GRAPHQL or other HTTP-based API"""
@@ -63,9 +63,7 @@ class HTTPAPIConnector(ABC):
 
         except requests.exceptions.Timeout:
             logging.debug(f"Connection to {self.api_server} timed out")
-            raise WebTritErrorException(
-                    status_code=500,
-                    code=ExtAPIErrorCode.external_api_issue,
+            raise_webtrit_error(500,
                     error_message="Request execution error on the other side",
                     bss_request_trace = {
                         'method': method,
@@ -88,9 +86,7 @@ class HTTPAPIConnector(ABC):
             except ValueError:
                 pass
 
-            raise WebTritErrorException(
-                    status_code=500,
-                    code=ExtAPIErrorCode.external_api_issue,
+            raise_webtrit_error(500,
                     error_message="Request execution error on the BSS/VoIP system side",
                     bss_request_trace = {
                         'method': method,
