@@ -8,11 +8,11 @@ from bss.adapters import BSSAdapter
 from bss.dbs import TiedKeyValue
 from bss.sessions import SessionInfo
 from bss.types import (
-    APIAccessErrorCode, CallRecordingId, Capabilities, CDRInfo, ContactInfo, EndUser,
-    FailedAuthCode, OTPCreateResponse, OTPNotFoundErrorCode, OTPUserDataErrorCode, OTPVerifyRequest,
-    SessionInfo, SessionNotFoundCode, UserAccessErrorCode, UserInfo, UserNotFoundCode,
+    CallRecordingId, Capabilities, CDRInfo, ContactInfo, EndUser,
+    OTPCreateResponse, OTPVerifyRequest,
+    SessionInfo, UserInfo, 
     safely_extract_scalar_value)
-from report_error import WebTritErrorException
+from report_error import raise_webtrit_error, WebTritErrorException
 
 from .account_api import AccountAPI
 from .admin_api import AdminAPI
@@ -139,7 +139,7 @@ class Adapter(BSSAdapter):
 
                 raise WebTritErrorException(
                     status_code = 401,
-                    code = FailedAuthCode.incorrect_credentials,
+                    # code = FailedAuthCode.incorrect_credentials,
                     error_message = "User authentication error",
                 )
 
@@ -149,7 +149,7 @@ class Adapter(BSSAdapter):
             ## Incorrect data from PortaSwitch API. Has the backward compatibility been broken?
             raise WebTritErrorException(
                 status_code = 500,
-                code = APIAccessErrorCode.external_api_issue,
+                # code = APIAccessErrorCode.external_api_issue,
                 error_message = "Incorrect data from the Adaptee system",
             )
 
@@ -176,7 +176,7 @@ class Adapter(BSSAdapter):
             if faultcode in ('Client.Session.ping.failed_to_process_access_token',):
                 raise WebTritErrorException(
                     status_code = 401,
-                    code = APIAccessErrorCode.authorization_header_missing,
+                    # code = APIAccessErrorCode.authorization_header_missing,
                     error_message = f"Invalid access token {access_token}",
                 )
 
@@ -186,7 +186,7 @@ class Adapter(BSSAdapter):
             ## Incorrect data from PortaSwitch API. Has the backward compatibility been broken?
             raise WebTritErrorException(
                 status_code = 500,
-                code = APIAccessErrorCode.external_api_issue,
+                # code = APIAccessErrorCode.external_api_issue,
                 error_message = "Incorrect data from the Adaptee system",
             )
 
@@ -219,7 +219,7 @@ class Adapter(BSSAdapter):
                              'Client.Session.check_auth.failed_to_process_access_token'):
                 raise WebTritErrorException(
                     status_code = 404,
-                    code = SessionNotFoundCode.session_not_found,
+                    # code = SessionNotFoundCode.session_not_found,
                     error_message = f"Invalid refresh token {refresh_token}",
                 )
 
@@ -229,7 +229,7 @@ class Adapter(BSSAdapter):
             ## Incorrect data from PortaSwitch API. Has the backward compatibility been broken?
             raise WebTritErrorException(
                 status_code = 500,
-                code = APIAccessErrorCode.external_api_issue,
+                # code = APIAccessErrorCode.external_api_issue,
                 error_message = "Incorrect data from the Adaptee system",
             )
 
@@ -251,7 +251,7 @@ class Adapter(BSSAdapter):
             if faultcode in ('Client.Session.logout.failed_to_process_access_token',):
                 raise WebTritErrorException(
                     status_code = 404,
-                    code = UserAccessErrorCode.session_not_found,
+                    # code = UserAccessErrorCode.session_not_found,
                     error_message = f'Error closing the session {access_token}',
                 )
 
@@ -261,7 +261,7 @@ class Adapter(BSSAdapter):
             ## Incorrect data from PortaSwitch API. Has the backward compatibility been broken?
             raise WebTritErrorException(
                 status_code = 500,
-                code = APIAccessErrorCode.external_api_issue,
+                # code = APIAccessErrorCode.external_api_issue,
                 error_message = "Incorrect data from the Adaptee system",
             )
 
@@ -291,18 +291,18 @@ class Adapter(BSSAdapter):
                 # Race condition case, when session is validated and then the access_token dies.
                 raise WebTritErrorException(
                     status_code = 404,
-                    code = UserAccessErrorCode.session_not_found,
+                    # code = UserAccessErrorCode.session_not_found,
                     error_message ="User not found"
                 )
 
             raise error
 
-        except (KeyError, TypeError):
+        except (KeyError, TypeError) as e:
             ## Incorrect data from PortaSwitch API. Has the backward compatibility been broken?
             raise WebTritErrorException(
                 status_code = 500,
-                code = APIAccessErrorCode.external_api_issue,
-                error_message = "Incorrect data from the Adaptee system",
+                # code = APIAccessErrorCode.external_api_issue,
+                error_message = f"Incorrect data from the Adaptee system {e}",
             )
 
     def retrieve_contacts(self, session: SessionInfo, user: UserInfo) -> list[ContactInfo]:
@@ -333,7 +333,7 @@ class Adapter(BSSAdapter):
                 # Race condition case, when session is validated and then the access_token dies.
                 raise WebTritErrorException(
                     status_code = 404,
-                    code = UserAccessErrorCode.session_not_found,
+                    # code = UserAccessErrorCode.session_not_found,
                     error_message ="User not found"
                 )
 
@@ -343,7 +343,7 @@ class Adapter(BSSAdapter):
             ## Incorrect data from PortaSwitch API. Has the backward compatibility been broken?
             raise WebTritErrorException(
                 status_code = 500,
-                code = APIAccessErrorCode.external_api_issue,
+                # code = APIAccessErrorCode.external_api_issue,
                 error_message = "Incorrect data from the Adaptee system",
             )
 
@@ -385,7 +385,7 @@ class Adapter(BSSAdapter):
                 # Race condition case, when session is validated and then the access_token dies.
                 raise WebTritErrorException(
                     status_code = 404,
-                    code = UserNotFoundCode.user_not_found,
+                    # code = UserNotFoundCode.user_not_found,
                     error_message ="User not found"
                 )
 
@@ -395,7 +395,7 @@ class Adapter(BSSAdapter):
             ## Incorrect data from PortaSwitch API. Has the backward compatibility been broken?
             raise WebTritErrorException(
                 status_code = 500,
-                code = APIAccessErrorCode.external_api_issue,
+                # code = APIAccessErrorCode.external_api_issue,
                 error_message = "Incorrect data from the Adaptee system",
             )
 
@@ -424,7 +424,7 @@ class Adapter(BSSAdapter):
                 # Race condition case, when session is validated and then the access_token dies.
                 raise WebTritErrorException(
                     status_code = 404,
-                    code = UserAccessErrorCode.session_not_found,
+                    # code = UserAccessErrorCode.session_not_found,
                     error_message = "The recording with such a recording_id is not found."
                 )
 
@@ -434,7 +434,7 @@ class Adapter(BSSAdapter):
             ## Incorrect data from PortaSwitch API. Has the backward compatibility been broken?
             raise WebTritErrorException(
                 status_code = 500,
-                code = APIAccessErrorCode.external_api_issue,
+                # code = APIAccessErrorCode.external_api_issue,
                 error_message = "Incorrect data from the Adaptee system",
             )
 
@@ -461,7 +461,7 @@ class Adapter(BSSAdapter):
             if success == 0:
                 raise WebTritErrorException(
                     status_code = 500,
-                    code = APIAccessErrorCode.external_api_issue,
+                    # code = APIAccessErrorCode.external_api_issue,
                     error_message = 'Unknown error',
                 )
 
@@ -475,7 +475,7 @@ class Adapter(BSSAdapter):
             if faultcode in ('Server.AccessControl.empty_rec_and_bcc',):
                 raise WebTritErrorException(
                     status_code = 404,
-                    code = UserAccessErrorCode.user_not_found,
+                    # code = UserAccessErrorCode.user_not_found,
                     error_message = f"There is no an account with such a i_account: {user.user_id}"
                 )
 
@@ -485,7 +485,7 @@ class Adapter(BSSAdapter):
             ## Incorrect data from PortaSwitch API. Has the backward compatibility been broken?
             raise WebTritErrorException(
                 status_code = 500,
-                code = APIAccessErrorCode.external_api_issue,
+                # code = APIAccessErrorCode.external_api_issue,
                 error_message = "Incorrect data from the Adaptee system",
             )
 
@@ -510,7 +510,7 @@ class Adapter(BSSAdapter):
             if not otp_id in self.__opt_id_storage:
                 raise WebTritErrorException(
                     status_code = 404,
-                    code = OTPNotFoundErrorCode.otp_not_found,
+                    # code = OTPNotFoundErrorCode.otp_not_found,
                     error_message = f"Incorrect OTP code: {otp.code}"
                 )
 
@@ -520,7 +520,7 @@ class Adapter(BSSAdapter):
             if success == 0:
                 raise WebTritErrorException(
                     status_code = 404,
-                    code = OTPNotFoundErrorCode.otp_not_found,
+                    # code = OTPNotFoundErrorCode.otp_not_found,
                     error_message = f"Incorrect OTP code: {otp.code}"
                 )
 
@@ -545,7 +545,7 @@ class Adapter(BSSAdapter):
             if faultcode in ('Server.Session.alert_You_must_change_password',):
                 raise WebTritErrorException(
                     status_code = 422,
-                    code = OTPUserDataErrorCode.validation_error,
+                    # code = OTPUserDataErrorCode.validation_error,
                     error_message = "Failed to perform authentication using this account."
                         "Try changing this account web-password."
                 )
@@ -556,7 +556,7 @@ class Adapter(BSSAdapter):
             ## Incorrect data from PortaSwitch API. Has the backward compatibility been broken?
             raise WebTritErrorException(
                 status_code = 500,
-                code = APIAccessErrorCode.external_api_issue,
+                # code = APIAccessErrorCode.external_api_issue,
                 error_message = "Incorrect data from the Adaptee system",
             )
 

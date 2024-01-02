@@ -46,26 +46,26 @@ class Serializer:
 
         """
         return EndUser(
-            alias_name = '', # TODO: shall we fill it?
+            alias_name = None, # TODO: shall we fill it?
             balance = Balance(
                 amount = account_info['balance'],
                 balance_type = BILLING_MODEL_MAP.get(account_info['billing_model'],
                                                     BalanceType.unknown),
-                credit_limit = account_info['credit_limit'],
+                credit_limit = account_info.get('credit_limit'),
                 currency = account_info['iso_4217'],
             ),
-            company_name = account_info['companyname'],
-            email = account_info['email'],
-            first_name = account_info['firstname'],
-            last_name = account_info['lastname'],
+            company_name = account_info.get('customer_name'),
+            email = account_info.get('email'),
+            first_name = account_info.get('firstname'),
+            last_name = account_info.get('lastname'),
             numbers = Numbers(
                 additional = [alias['id'] for alias in aliases],
-                ext = account_info['extension_id'],
+                ext = account_info.get('extension_id'),
                 main = account_info['id'],
             ),
             sip = SIPInfo(
                 auth_username = account_info['id'],
-                display_name = f"{account_info['firstname']} {account_info['lastname']}",
+                display_name = f"{account_info.get('firstname')} {account_info.get('lastname')}",
                 password = account_info['h323_password'],
                 sip_server = SIPServer(
                     force_tcp = False,
@@ -94,7 +94,7 @@ class Serializer:
             alias_name = '', # TODO: shall we fill it?
             company_name = account_info.get('companyname', ''), # TODO: PortaSwitch sometimes does
                                                                 # not return it. Why?
-            email = account_info.get('email', ''),
+            email = account_info.get('email', None),
             first_name = account_info.get('firstname', ''),
             last_name = account_info.get('lastname', ''),
             numbers = Numbers(

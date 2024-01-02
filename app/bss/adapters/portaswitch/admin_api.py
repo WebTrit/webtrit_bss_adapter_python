@@ -24,6 +24,8 @@ class AdminAPI(HTTPAPIConnectorWithLogin):
         api_server: str = config.get_conf_val('PortaSwitch', 'Admin', 'API', 'Server')
         api_user: str = config.get_conf_val('PortaSwitch', 'Admin', 'API', 'User')
         api_password: str = config.get_conf_val('PortaSwitch', 'Admin', 'API', 'Password')
+        self.api_token: str = config.get_conf_val('PortaSwitch', 'Admin', 'API', 'Token')
+        self.use_api_token = self.api_token is not None
 
         self.__otp_delivery_channel: str = config.get_conf_val('PortaSwitch', 'OTP', 'delivery',
                                                                'channel', default = 'mail')
@@ -32,7 +34,7 @@ class AdminAPI(HTTPAPIConnectorWithLogin):
         self.__shall_verify_https: bool = config.get_conf_val('PortaSwitch', 'Verify', 'HTTPS',
                                                               default = 'True') == 'True'
 
-        super().__init__(api_server, api_user, api_password)
+        super().__init__(api_server, api_user, 'use-token' if self.use_api_token else api_password)
 
     def extract_access_token(self, response: dict) -> bool:
         """Extract the access token and other data (expiration time,
@@ -100,8 +102,12 @@ class AdminAPI(HTTPAPIConnectorWithLogin):
         if params is None:
             params: dict = {
                 "login": self.api_user,
-                "password": self.api_password,
+                
             }
+        if self.use_api_token:
+            params["token"] = self.api_token
+        else:
+            params["password"] = self.api_password
 
         response = self.__send_request(module = 'Session',
                                        method = 'login',
