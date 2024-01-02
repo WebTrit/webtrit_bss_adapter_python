@@ -105,30 +105,6 @@ from bss.models import (
     ProvisionSessionAutoNotImplementedErrorResponse as SessionAutoProvisionNotImplementedErrorResponse,
 
     Code as ErrorCode,
-    # no longer needed
-    # Code  as APIAccessErrorCode,
-    # Code2 as UserAccessErrorCode,
-    # Code3 as RefreshTokenErrorCode,
-    # Code5 as OTPNotFoundErrorCode,
-    # Code8 as OTPUserDataErrorCode,
-    # Code9 as FailedAuthCode,
-    # Code11 as SessionNotFoundCode,
-    # Code13 as OTPValidationErrCode,
-    # Code16 as SignupExtAPIErrorCode,
-    # Code19 as OTPExtAPIErrorCode,
-    # Code21 as AuthorizationFailureCode,
-    # Code28 as SignupValidationErrorCode,
-    # Code32 as FailedAuthIncorrectDataCode,
-    # Code32 as MethodNotAllowedCode, # until we get something more suitable
-    # Code35 as UserNotFoundCode,
-    # Code39 as TokenErrorCode,
-    # Code40 as TokenErrorCode2,
-    # Code41 as ExternalErrorCode,
-    # Code43 as RefreshTokenErrorCode,
-    # Code49 as OTPIDNotFoundCode,
-    # Code50 as OTPValidationErrCode,
-    # Code58 as SignupValidationErrorCode,
-
 )
 
 
