@@ -218,6 +218,14 @@ def is_scalar(obj) -> bool:
     """Return True if the object is a scalar"""
     return isinstance(obj, (str, int, float, bool))
 
+def eval_as_bool(val):
+    """Interpret value of a config toggle (Y, True, 1, etc.) as boolean."""
+    if isinstance(val, bool):
+        return val
+    if isinstance(val, str):
+        return val.lower() in ['true', 'yes', 'y', '1']
+    return False
+
 def safely_extract_scalar_value(obj: object):
     """When dealing with scalar types in auto-generated models, the value is
      stored in __root__ attribute. This function extracts it - or returns the

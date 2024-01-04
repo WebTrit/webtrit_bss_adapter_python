@@ -3,11 +3,12 @@ from abc import ABC, abstractmethod
 from datetime import datetime
 from pydantic import BaseModel
 from bss.types import (UserInfo, EndUser, ContactInfo, CDRInfo,
+                       Capabilities,
                        UserCreateResponse,
                     #    APIAccessErrorCode, FailedAuthCode, UserNotFoundCode, UserAccessErrorCode,
                     #    RefreshTokenErrorCode,
                        CustomResponse, CustomRequest,
-                       safely_extract_scalar_value)
+                       eval_as_bool)
 from bss.sessions import SessionStorage, SessionInfo
 from bss.adapters.otp import OTPHandler, SampleOTPHandler
 from app_config import AppConfig
@@ -121,6 +122,45 @@ class InAppSignup(ABC):
 
 class BSSAdapter(SessionManagement, OTPHandler,
                  CustomMethodCall, InAppSignup, AutoProvisionByToken):
+    # names of config variables to turn on/off capabilities
+    CONFIG_CAPABILITIES_OPTIONS = dict(
+        PASSWORD = dict(default = True, option = Capabilities.passwordSignin),
+        OTP = dict(default = False, option = Capabilities.otpSignin),
+        AUTO_PROVISION = dict(default = False, option = Capabilities.autoProvision),
+        SIGNUP = dict(default = False, option = Capabilities.signup),
+        CDRS = dict(default = False, option = Capabilities.callHistory),
+        RECORDINGS = dict(default = False, option = Capabilities.recordings),
+    )
+    # what our adapter can do in general (what is coded)
+    # should be overridden in the sub-class
+    CAPABILITIES = [
+
+    ]
+    def calculate_capabilities(self) -> List:
+        """Calculate the adapter capabilities based on it's settings and config options"""
+
+        capabilities = self.CAPABILITIES 
+        for option, data in self.CONFIG_CAPABILITIES_OPTIONS.items():
+           capability_id = data['option']
+           if capability_id in self.CAPABILITIES:
+                # we support it in general - let's see if it is enabled in config
+                if (cfg_val := self.config.get_conf_val("Capabilities",
+                                                       option, default = None)) \
+                    is not None:
+                    # a value provided in the config
+                    cfg_val = eval_as_bool(cfg_val)
+                else:
+                    # no defined in the config, use defaulr    
+                    cfg_val = data.get('default', False)
+                
+                if cfg_val:
+                    # include it
+                    capabilities.append(capability_id)
+                else:
+                    # disabled - remove it
+                    capabilities.remove(capability_id)
+        return list(set(capabilities))
+
     def __init__(self, config: AppConfig):
         self.config = config
 
@@ -128,7 +168,7 @@ class BSSAdapter(SessionManagement, OTPHandler,
         """Initialize some session-related data, e.g. open a connection
         to the database. This can be done after the creation of a new
         object."""
-        pass
+        self.capabilities = self.calculate_capabilities()
 
     # virtual methods - override them in your subclass
     # these two are class methods, so they can be called without
@@ -144,10 +184,9 @@ class BSSAdapter(SessionManagement, OTPHandler,
         raise NotImplementedError("Override this method in your sub-class")
 
     # these are regular class methods
-    @abstractmethod
     def get_capabilities(self) -> list:
         """Capabilities of your hosted PBX / BSS / your API adapter"""
-        raise NotImplementedError("Override this method in your sub-class")
+        return self.capabilities
 
     @abstractmethod
     def authenticate(self, user: UserInfo, password: str = None) -> SessionInfo:
@@ -304,11 +343,6 @@ class BSSAdapterExternalDB(BSSAdapter, SampleOTPHandler):
     @classmethod
     def name(cls) -> str:
         """The name of the adapter"""
-        raise NotImplementedError("Override this method in your sub-class")
-
-    @abstractmethod
-    def get_capabilities(self) -> list:
-        """Capabilities of your hosted PBX / BSS / your API adapter"""
         raise NotImplementedError("Override this method in your sub-class")
 
     @abstractmethod

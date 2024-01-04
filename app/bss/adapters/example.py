@@ -46,6 +46,23 @@ class ExampleBSSAdapter(BSSAdapterExternalDB):
     VoIP users using a built-in list of users. Suitable
     for development / testing"""
 
+    CAPABILITIES = [
+            # log in user with username / password
+            Capabilities.passwordSignin,
+            # log in user using one-time-password generated on the BSS side
+            Capabilities.otpSignin,
+            # obtain user's call history
+            Capabilities.callHistory,
+            # obtain the list of other extensions in the PBX
+            Capabilities.extensions,
+            # download call recordings - currently not supported
+            # Capabilities.recordings
+            # create a new user
+            Capabilities.signup,
+            Capabilities.customMethods,
+            Capabilities.autoProvision
+        ]
+
     def __init__(self, config: AppConfig, *args, **kwargs):
         super().__init__(config, *args, **kwargs)
         self.config = config
@@ -99,26 +116,6 @@ class ExampleBSSAdapter(BSSAdapterExternalDB):
     def version(cls) -> str:
         global VERSION
         return VERSION
-
-    def get_capabilities(self) -> list:
-        """Capabilities of your hosted PBX / BSS / your API adapter"""
-        return [
-            # log in user with username / password
-            Capabilities.passwordSignin,
-            # log in user using one-time-password generated on the BSS side
-            Capabilities.otpSignin,
-            # obtain user's call history
-            Capabilities.callHistory,
-            # obtain the list of other extensions in the PBX
-            Capabilities.extensions,
-            # download call recordings - currently not supported
-            # Capabilities.recordings
-            # create a new user
-            Capabilities.signup,
-            Capabilities.customMethods,
-            Capabilities.autoProvision
-        ]
-
 
     def retrieve_contacts(self, session: SessionInfo, user: UserInfo) -> List[ContactInfo]:
         """List of other extensions in the PBX"""
