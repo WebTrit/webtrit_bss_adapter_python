@@ -134,3 +134,5 @@ dmypy.json
 app/bss/adapters/multi_tenant.py*
 app/common/
 schemas/draft/
+.config/
+*.bak
