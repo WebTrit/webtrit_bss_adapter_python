@@ -279,7 +279,8 @@ def autoprovision_session(
 
     is_method_allowed(Capabilities.autoProvision)
 
-    return bss.autoprovision_session(body.config_token)
+    return bss.autoprovision_session(config_token=body.config_token,
+                                     tenant_id = bss.default_id_if_none(x_webtrit_tenant_id))
 
 @router.post(
     '/session/otp-create',
