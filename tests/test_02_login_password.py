@@ -69,7 +69,7 @@ def test_login(api_url, login_path, username, password, tenant_id):
     #print(response.content)
     assert response.status_code == 200
     assert isinstance(body := response.json(), dict)
-
+    print(response.headers)
 
 # required response attributes
 @pytest.mark.parametrize(
@@ -131,6 +131,21 @@ def test_refresh_attr(api_url, login_path, attr):
 
     #print('attr = ', attr)
     verify_attribute_in_json(attr, body)
+
+
+def test_logout(api_url, login_path, tenant_id):
+    global response, response2, body
+    body = response2.json()
+
+    response = requests.delete(
+        api_url + login_path,
+        json={},
+        headers=compose_headers(tenant_id=tenant_id, access_token=body["access_token"]),
+    )
+    #print(response2.content)
+    assert response.status_code == 204
+    print(response.headers)
+    print(f"content = '{response.content}'")
 
 # @pytest.mark.parametrize(
 #     "attr",
