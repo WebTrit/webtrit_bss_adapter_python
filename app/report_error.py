@@ -61,6 +61,7 @@ class WebTritErrorException(HTTPException):
         bss_response_trace: dict = None,
         path: str = None,
         called_ordinary: bool = True,
+        stack_trace: bool = True,
     ):
         self.status_code = status_code
         self.error_message = error_message
@@ -68,7 +69,7 @@ class WebTritErrorException(HTTPException):
         self.call_trace = WebTritErrorException.record_call_trace(
             # remove everything before the call to raise_webtrit_error
             remove_frames = 4 if called_ordinary else 3
-        )
+        ) if stack_trace else None
         self.bss_request_trace = bss_request_trace
         self.bss_response_trace = bss_response_trace
         self.path = path
@@ -115,4 +116,5 @@ def raise_webtrit_error(
         error_message=error_message,
         bss_request_trace=bss_request_trace,
         bss_response_trace=bss_response_trace,
+        stack_trace=False, # no need to record the stack trace when it is a planned exception
     )
