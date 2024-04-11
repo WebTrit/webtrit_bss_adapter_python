@@ -66,6 +66,7 @@ class WebTritErrorException(HTTPException):
         self.status_code = status_code
         self.error_message = error_message
         self.code = self.code_to_str(code) if code else None
+
         self.call_trace = WebTritErrorException.record_call_trace(
             # remove everything before the call to raise_webtrit_error
             remove_frames = 4 if called_ordinary else 3

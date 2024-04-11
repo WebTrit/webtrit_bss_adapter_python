@@ -1,5 +1,5 @@
 from enum import Enum
-from typing import List, Dict, Any, Optional, Union
+from typing import List, Dict, Any, Optional, Type, Union
 from pydantic import BaseModel, Field
 from datetime import datetime
 import orjson
@@ -32,6 +32,7 @@ from bss.models import (
     Contact as ContactInfo,
     UserHistoryIndexResponse as Calls,
     ErrorResponse as ErrorMsg,
+
     SupportedEnum as Capabilities,
 
     CDRInfo as CDRInfo,
@@ -105,6 +106,7 @@ from bss.models import (
 
     Code as ErrorCode,
 )
+
 
 class UserInfo(BaseModel):
     """Data about the user, on whose behalf the operation is requested"""
@@ -209,10 +211,12 @@ class CallToActionLink(CallToAction):
                                    example='Link', default=CallToActionType.LINK)
     url: str = Field(description='URL that the user should be taken to',
                                    example='https://signup.webtrit.com/?email=abc@test.com')
-
-class CallToActionResponse(BaseModel):
+    
+class CallToActionMenu(BaseModel):
     """Set of links to be shown in the app"""
-    actions: List[CallToAction] = []
+#   cannot figure out why it does not work
+#    actions: List[Type[CallToAction]] = []
+    actions: List[Union[CallToAction, CallToActionLink]]
 
 def is_scalar(obj) -> bool:
     """Return True if the object is a scalar"""
