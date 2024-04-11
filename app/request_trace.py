@@ -71,6 +71,12 @@ def log_req_and_reply(req_body: str, res_body: str):
 
 class RouteWithLogging(APIRoute):
     """Custom route class that logs request and response bodies """
+    HEADER_LIST = [ element.strip() for element in
+                        os.environ.get("LOG_HEADERS", "X-WebTrit-Tenant-ID").split(",") ] 
+    def add_headers_to_log(self, request: Request):
+        return "Headers: " + ", ".join(
+            [ f"{header}: '{request.headers.get(header)}'" for header in self.HEADER_LIST ]
+        )
     def get_route_handler(self) -> Callable:
         original_route_handler = super().get_route_handler()
 
@@ -79,9 +85,7 @@ class RouteWithLogging(APIRoute):
             req_body = await request.body()
             req_body = req_body.decode("utf-8")
             log_with_label(f"{request.method} request to {request.url.path} " + \
-#                           added by the logger
-#                           f"'X-Request-ID': {req_id} " + \
-                           f"'X-WebTrit-Tenant-ID': {request.headers.get('X-WebTrit-Tenant-ID')}",
+                           self.add_headers_to_log(request),
                            f"body: {req_body}"
                         )
             try:
@@ -95,6 +99,15 @@ class RouteWithLogging(APIRoute):
                                                      ).response()
 
                 logging.error(f"Validation exception {validation_exc.errors()}")
+                return err_response
+            except WebTritErrorException as e:
+                # an error produced by our own code 
+                logging.error(f"App-generated exception {e.status_code} {e.error_message}")
+                err_response = e.response()
+                err_response.background = BackgroundTask(log_with_label,
+                                                    f"Reply to {request.method} {request.url.path} " + \
+                                                    f"http code {e.status_code}",
+                                                    err_response.body.decode("utf-8"))
                 return err_response
             except HTTPException as http_exc:
                 if hasattr(http_exc, 'response'):
@@ -116,18 +129,9 @@ class RouteWithLogging(APIRoute):
                     detail=f"An error {e} occurred")
 
             if isinstance(response, StreamingResponse):
-                res_body = b""
-                async for item in response.body_iterator:
-                    res_body += item
-
-                task = BackgroundTask(log_req_and_reply, req_body, res_body)
-                return Response(
-                    content=res_body,
-                    status_code=response.status_code,
-                    headers=dict(response.headers),
-                    media_type=response.media_type,
-                    background=task,
-                )
+                task = BackgroundTask(log_req_and_reply, req_body,
+                                      "<binary/streaming content>")
+                return response
             else:
                 res_body = response.body
                 response.background = BackgroundTask(log_with_label,
