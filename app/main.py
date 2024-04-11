@@ -10,7 +10,7 @@ from starlette.status import HTTP_204_NO_CONTENT
 import logging
 from pydantic import conint
 from datetime import datetime
-from report_error import raise_webtrit_error
+from report_error import raise_webtrit_error, WebTritErrorException
 from app_config import AppConfig
 import bss.adapters
 from bss.adapters import initialize_bss_adapter
@@ -279,7 +279,11 @@ def autoprovision_session(
     global bss
 
     is_method_allowed(Capabilities.autoProvision)
-
+    # TODO: just to allow Vladislav to debug! remove later
+    if body.config_token == 'abcd':
+        if x_webtrit_tenant_id is None:
+            x_webtrit_tenant_id = '6e6838dd-1256-432e-ba5f-954e2c02b5be'
+            
     return bss.autoprovision_session(config_token=body.config_token,
                                      tenant_id = bss.default_id_if_none(x_webtrit_tenant_id))
 
@@ -344,7 +348,11 @@ def verify_session_otp(
     """
     global bss
 
-    is_method_allowed(Capabilities.otpSignin)
+    try:
+        is_method_allowed(Capabilities.otpSignin)
+    except WebTritErrorException as e:
+        # we may need OTP validation for signup
+        is_method_allowed(Capabilities.signup)
 
     otp_response = bss.validate_otp(body)
     return otp_response
@@ -483,7 +491,7 @@ def delete_user(
     )
     bss.delete_user(user)
     result = bss.close_session(access_token)
-    return Response(content="", status_code=204)
+    return Response(status_code=HTTP_204_NO_CONTENT, headers={'content-type': 'application/json'})
 
 
 
