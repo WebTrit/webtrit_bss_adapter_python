@@ -85,8 +85,8 @@ class RouteWithLogging(APIRoute):
             req_body = await request.body()
             req_body = req_body.decode("utf-8")
             log_with_label(f"{request.method} request to {request.url.path} " + \
-                           self.add_headers_to_log(request),
-                           f"body: {req_body}"
+                            self.add_headers_to_log(request),
+                            f"body: {req_body}"
                         )
             try:
                 response = await original_route_handler(request)
@@ -120,6 +120,10 @@ class RouteWithLogging(APIRoute):
                                             path=request.url.path,
                     ).response()
                 logging.error(f"HTTP exception {http_exc.status_code} {http_exc.detail}")
+                err_response.background = BackgroundTask(log_with_label,
+                                                    f"Reply to {request.method} {request.url.path} " + \
+                                                    f"http code {http_exc.status_code}",
+                                                    err_response.body.decode("utf-8"))
                 return err_response
             except Exception as e:
                 logging.error(f"Application error: {e} {traceback.format_exc()}")
@@ -136,7 +140,7 @@ class RouteWithLogging(APIRoute):
             else:
                 res_body = response.body
                 response.background = BackgroundTask(log_with_label,
-                                                    f"Reply to {request.url.path}",
+                                                    f"Reply to {request.method} {request.url.path}",
                                                     res_body.decode("utf-8"))
                 return response
 
