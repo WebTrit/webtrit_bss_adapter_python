@@ -5,6 +5,7 @@ import os
 import sys
 from fastapi import FastAPI, APIRouter, Depends, Response, Request, Header, Body
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
+from starlette.status import HTTP_204_NO_CONTENT
 
 import logging
 from pydantic import conint
@@ -243,7 +244,7 @@ def delete_session(
         # or expired access token was provided
         raise_webtrit_error(500, "User logout failed")
 
-    return Response(content="", status_code=204)
+    return Response(status_code=HTTP_204_NO_CONTENT, headers={'content-type': 'application/json'})
 
 
 @router.post(
