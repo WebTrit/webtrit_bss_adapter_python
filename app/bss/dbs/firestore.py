@@ -141,3 +141,6 @@ class FirestoreKeyValue(TiedKeyValue):
         
         logging.debug("No items returned by the search")
         return []
+
+# suppress excessive debug info
+logging.getLogger('google.cloud.firestore').setLevel(logging.INFO)
