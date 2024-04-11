@@ -76,7 +76,9 @@ class SessionManagement(ABC):
         """Close the API session and logout the user."""
         session = self.sessions.get_session(access_token)
         if session:
-            return self.sessions.delete_session(access_token, session.refresh_token)
+            return self.sessions.delete_session(
+                        access_token,
+                        safely_extract_scalar_value(session.refresh_token))
 
         raise_webtrit_error(401, 
                     error_message = f"Error closing the session {access_token}")
