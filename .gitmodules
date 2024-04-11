@@ -1,0 +1,3 @@
+[submodule "app/webtrit_common"]
+	path = app/webtrit_common
+	url = git@github.com:WebTrit/python_webtrit_common.git
