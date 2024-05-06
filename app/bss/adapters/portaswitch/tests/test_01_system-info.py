@@ -1,4 +1,3 @@
-
 import requests
 
 
@@ -12,8 +11,4 @@ def test_system_info(api_url: str, system_info_path: str) -> None:
 
     assert body['name'] == 'PortaSwitch adapter'
     assert body['version'] == '0.0.1'
-    assert set(body['supported']) == set(['otpSignin',
-                                          'passwordSignin',
-                                          'callHistory',
-                                          'recordings',
-                                          'extensions'])
+    assert set(body['supported']) == {'otpSignin', 'passwordSignin', 'callHistory', 'recordings', 'extensions'}

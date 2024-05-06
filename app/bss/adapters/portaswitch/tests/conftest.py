@@ -1,11 +1,12 @@
-import pytest
+import uuid
 
+import pytest
+import requests
 
 API_PREFIX = "/api/v1"
 
 
 def pytest_addoption(parser):
-
     print(type(parser))
     parser.addoption(
         "--server-url",
@@ -98,13 +99,30 @@ def password(request):
 def recording_id(request):
     return str(request.config.getoption("--recordingid"))
 
-@pytest.fixture
-def otp_token(request):
-    return str(request.config.getoption("--otp-token"))
 
 @pytest.fixture
-def otp_id(request):
+def valid_access_token(username, password, api_url, login_path):
+    response = requests.post(
+        api_url + login_path,
+        json={"login": username, "password": password},
+    )
+
+    return response.json().get('access_token', None)
+
+
+@pytest.fixture
+def invalid_access_token():
+    return str(uuid.uuid4())
+
+
+@pytest.fixture
+def valid_otp_id(request):
     return str(request.config.getoption("--otp-id"))
+
+
+@pytest.fixture
+def valid_otp_code(request):
+    return str(request.config.getoption("--otp-code"))
 
 
 @pytest.fixture
