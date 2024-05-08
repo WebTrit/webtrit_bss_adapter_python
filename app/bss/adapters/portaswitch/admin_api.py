@@ -224,3 +224,12 @@ class AdminAPI(HTTPAPIConnectorWithLogin):
                 'without_service_features': 1,
                 **params
             })
+
+    def get_env_info(self) -> dict:
+        """Returns PortaSwitch environment info.
+        Returns:
+            dict: The API method execution result that contains an env info.
+        """
+        response = self.__send_request(module='Env', method='get_env_info', params={})
+
+        return response.get('env_info', dict())

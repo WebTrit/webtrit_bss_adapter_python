@@ -25,6 +25,7 @@ class Adapter(BSSAdapter):
 
     """
     VERSION: Final[str] = "0.0.2"
+    OTP_DELIVERY_CHANNEL: Final[str] = 'email'
 
     def __init__(self, config: AppConfig):
         super().__init__(config)
@@ -89,12 +90,11 @@ class Adapter(BSSAdapter):
             login_attr = 'id' if self._signin_creds == PortaSwitchSignInCredentialsType.SIP else 'login'
             password_attr = 'h323_password' if self._signin_creds == PortaSwitchSignInCredentialsType.SIP else 'password'
 
-            account_info: dict = self.__admin_api.get_account_info(**{login_attr: user.login})['account_info']
-            if account_info[password_attr] != password:
-                raise WebTritErrorException(status_code=401, code='incorrect_credentials',
-                                            error_message="User authentication error")
+            account_info = self.__admin_api.get_account_info(**{login_attr: user.login}).get('account_info')
+            if not account_info or account_info[password_attr] != password:
+                raise WebTritErrorException(401, "User authentication error", code='incorrect_credentials')
 
-            session_data: dict = self.__account_api.login(account_info['login'], account_info['password'])
+            session_data = self.__account_api.login(account_info['login'], account_info['password'])
 
             return SessionInfo(
                 user_id=account_info['i_account'],
@@ -423,28 +423,30 @@ class Adapter(BSSAdapter):
 
         """
         try:
-            success: int = self.__admin_api.create_otp(user_ref=user.user_id)['success']
+            account_info = self.__admin_api.get_account_info(id=user.user_id).get('account_info')
+            if not account_info:
+                raise WebTritErrorException(404, f"There is no an account with such id: {user.user_id}")
 
-            if success == 0:
-                raise WebTritErrorException(
-                    status_code=500,
-                    # code = APIAccessErrorCode.external_api_issue,
-                    error_message='Unknown error',
-                )
+            i_account = account_info['i_account']
+            success: int = self.__admin_api.create_otp(user_ref=i_account)['success']
+            if not success:
+                raise WebTritErrorException(500, 'Unknown error', code='external_api_issue')
 
             otp_id: str = generate_otp_id()
-            self.__opt_id_storage[otp_id] = int(user.user_id)
+            self.__opt_id_storage[otp_id] = i_account
 
-            return OTPCreateResponse(otp_id=otp_id)
+            env_info = self.__admin_api.get_env_info()
+
+            return OTPCreateResponse(
+                otp_id=otp_id,
+                delivery_channel=self.OTP_DELIVERY_CHANNEL,
+                delivery_from=env_info.get('email')
+            )
 
         except WebTritErrorException as error:
-            faultcode = extract_fault_code(error)
-            if faultcode in ('Server.AccessControl.empty_rec_and_bcc',):
-                raise WebTritErrorException(
-                    status_code=404,
-                    # code = UserAccessErrorCode.user_not_found,
-                    error_message=f"There is no an account with such a i_account: {user.user_id}"
-                )
+            fault_code = extract_fault_code(error)
+            if fault_code in ('Server.AccessControl.empty_rec_and_bcc',):
+                raise WebTritErrorException(422, "Delivery channel unspecified", code="delivery_channel_unspecified")
 
             raise error
 
@@ -530,8 +532,3 @@ class Adapter(BSSAdapter):
     def create_new_user(self, user_data, tenant_id: str = None):
         """Create a new user as a part of the sign-up process - not supported yet"""
         raise NotImplementedError()
-
-    # def _get_login_attrs(self) -> dict:
-    #
-    #
-    #     return dict(login_attr=)
