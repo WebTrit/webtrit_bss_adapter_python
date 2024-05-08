@@ -48,6 +48,10 @@ ENV PORTASWITCH_SIP_SERVER_PORT="<sip-server-port>"
 # Shows whether to verify the HTTPs certificate of the PortaSwitch API while accessing it.
 ENV PORTASWITCH_VERIFY_HTTPS="False"
 
+# defines the type of account properties used for login, with the following possible values (optional):
+# * self-care - login for request and password from response (default value)
+# * sip - id for request and h323_password from response
+ENV PORTASWITCH_SIGNIN_CREDENTIALS="<signin-credentials>"
 
 EXPOSE $API_PORT
 

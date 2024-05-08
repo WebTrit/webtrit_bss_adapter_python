@@ -1,4 +1,3 @@
-
 import logging
 from datetime import datetime, timedelta
 
@@ -27,12 +26,10 @@ class AdminAPI(HTTPAPIConnectorWithLogin):
         self.api_token: str = config.get_conf_val('PortaSwitch', 'Admin', 'API', 'Token')
         self.use_api_token = self.api_token is not None
 
-        self.__otp_delivery_channel: str = config.get_conf_val('PortaSwitch', 'OTP', 'delivery',
-                                                               'channel', default = 'mail')
+        self.__otp_delivery_channel: str = config.get_conf_val('PortaSwitch', 'OTP', 'delivery', 'channel', default='mail')
         assert self.__otp_delivery_channel in ('sms', 'mail')
 
-        self.__shall_verify_https: bool = config.get_conf_val('PortaSwitch', 'Verify', 'HTTPS',
-                                                              default = 'True') == 'True'
+        self.__shall_verify_https: bool = config.get_conf_val('PortaSwitch', 'Verify', 'HTTPS', default='True') == 'True'
 
         super().__init__(api_server, api_user, 'use-token' if self.use_api_token else api_password)
 
@@ -76,12 +73,12 @@ class AdminAPI(HTTPAPIConnectorWithLogin):
         logging.debug(f"Sending Admin.API request: {module}/{method}/{params}")
 
         result = self.send_rest_request(
-            method = "POST",
-            path = f"/rest/{module}/{method}",
-            json = {
+            method="POST",
+            path=f"/rest/{module}/{method}",
+            json={
                 "params": params
             },
-            turn_off_login = turn_off_login,
+            turn_off_login=turn_off_login,
         )
 
         logging.debug(f"Processing the Admin.API result: {module}/{method}/{params}: \n {result}")
@@ -102,17 +99,17 @@ class AdminAPI(HTTPAPIConnectorWithLogin):
         if params is None:
             params: dict = {
                 "login": self.api_user,
-                
+
             }
         if self.use_api_token:
             params["token"] = self.api_token
         else:
             params["password"] = self.api_password
 
-        response = self.__send_request(module = 'Session',
-                                       method = 'login',
-                                       params = params,
-                                       turn_off_login = True)
+        response = self.__send_request(module='Session',
+                                       method='login',
+                                       params=params,
+                                       turn_off_login=True)
 
         if response and self.extract_access_token(response):
             # access token was extracted and stored
@@ -166,9 +163,9 @@ class AdminAPI(HTTPAPIConnectorWithLogin):
 
         """
         return self.__send_request(
-            module = 'Account',
-            method = 'get_account_list',
-            params = {
+            module='Account',
+            method='get_account_list',
+            params={
                 'i_customer': i_customer,
                 'with_aliases': 1,
             })
@@ -185,14 +182,14 @@ class AdminAPI(HTTPAPIConnectorWithLogin):
 
         """
         return self.__send_request(
-            module = 'AccessControl',
-            method = 'create_otp',
-            params = {
+            module='AccessControl',
+            method='create_otp',
+            params={
                 'send_to': 'account',
                 'id': user_ref,
                 'notification_type': self.__otp_delivery_channel,
                 'operation': 'General',
-            },)
+            }, )
 
     def verify_otp(self, otp_token: str) -> dict:
         """Requests PortaSwitch to verify the OTP token.
@@ -201,31 +198,29 @@ class AdminAPI(HTTPAPIConnectorWithLogin):
             :otp_token (str): The OTP token to be vefiried.
 
         Returns:
-            :(dict): The API method execution result.
-
+            dict: The API method execution result.
         """
         return self.__send_request(
-            module = 'AccessControl',
-            method = 'verify_otp',
-            params = {
+            module='AccessControl',
+            method='verify_otp',
+            params={
                 'one_time_password': otp_token,
                 'operation': 'General',
-            },)
+            }, )
 
-    def get_account_info(self, i_account: int) -> dict:
+    def get_account_info(self, **params) -> dict:
         """Returns the account_info by i_account.
 
         Parameters:
-            :i_account (int): The identifier of an account in the PortaSwitch system.
+            **params: Additional keyword arguments for account info search.
 
         Returns:
-            :(dict): The API method execution result that contains an account info.
-
+            dict: The API method execution result that contains an account info.
         """
         return self.__send_request(
-            module = 'Account',
-            method = 'get_account_info',
-            params = {
-                'i_account': i_account,
+            module='Account',
+            method='get_account_info',
+            params={
                 'without_service_features': 1,
+                **params
             })

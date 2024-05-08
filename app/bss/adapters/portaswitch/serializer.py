@@ -1,18 +1,16 @@
-
 import datetime
 
 from bss.types import (
     Balance, BalanceType, CDRInfo, ConnectStatus, ContactInfo, Direction, EndUser, Numbers, SIPInfo,
     SIPRegistrationStatus, SIPServer, UserServiceActiveStatus)
 
-
 #: dict: Contains a map between a PortaSwitch AccountInfo.billing_model and BalanceType.
 BILLING_MODEL_MAP: dict = {
-    -1: BalanceType.prepaid, # debit account
-    0: BalanceType.inapplicable, # voucher
-    1: BalanceType.postpaid, # credit account
-    2: BalanceType.unknown, # alias
-    4: BalanceType.unknown, # beneficiary
+    -1: BalanceType.prepaid,  # debit account
+    0: BalanceType.inapplicable,  # voucher
+    1: BalanceType.postpaid,  # credit account
+    2: BalanceType.unknown,  # alias
+    4: BalanceType.unknown,  # beneficiary
 }
 
 
@@ -46,38 +44,38 @@ class Serializer:
 
         """
         return EndUser(
-            alias_name = None, # TODO: shall we fill it?
-            balance = Balance(
-                amount = account_info['balance'],
-                balance_type = BILLING_MODEL_MAP.get(account_info['billing_model'],
-                                                    BalanceType.unknown),
-                credit_limit = account_info.get('credit_limit'),
-                currency = account_info['iso_4217'],
+            alias_name=None,  # TODO: shall we fill it?
+            balance=Balance(
+                amount=account_info['balance'],
+                balance_type=BILLING_MODEL_MAP.get(account_info['billing_model'],
+                                                   BalanceType.unknown),
+                credit_limit=account_info.get('credit_limit'),
+                currency=account_info['iso_4217'],
             ),
-            company_name = account_info.get('customer_name'),
-            email = account_info.get('email'),
-            first_name = account_info.get('firstname'),
-            last_name = account_info.get('lastname'),
-            numbers = Numbers(
-                additional = [alias['id'] for alias in aliases],
-                ext = account_info.get('extension_id'),
-                main = account_info['id'],
+            company_name=account_info.get('customer_name'),
+            email=account_info.get('email'),
+            first_name=account_info.get('firstname'),
+            last_name=account_info.get('lastname'),
+            numbers=Numbers(
+                additional=[alias['id'] for alias in aliases],
+                ext=account_info.get('extension_id'),
+                main=account_info['id'],
             ),
-            sip = SIPInfo(
-                auth_username = account_info['id'],
-                display_name = f"{account_info.get('firstname')} {account_info.get('lastname')}",
-                password = account_info['h323_password'],
-                sip_server = SIPServer(
-                    force_tcp = False,
-                    host = self.__sip_server_host,
-                    port = self.__sip_server_port,
+            sip=SIPInfo(
+                auth_username=account_info['id'],
+                display_name=f"{account_info.get('firstname')} {account_info.get('lastname')}",
+                password=account_info['h323_password'],
+                sip_server=SIPServer(
+                    force_tcp=False,
+                    host=self.__sip_server_host,
+                    port=self.__sip_server_port,
                 ),
-                username = account_info['id'],
+                username=account_info['id'],
             ),
-            status = UserServiceActiveStatus.active
-                    if account_info['is_active'] == 1
-                    else UserServiceActiveStatus.blocked,
-            time_zone = account_info['time_zone_name'],
+            status=UserServiceActiveStatus.active
+            if account_info['is_active'] == 1
+            else UserServiceActiveStatus.blocked,
+            time_zone=account_info['time_zone_name'],
         )
 
     def get_contact_info(self, account_info: dict) -> ContactInfo:
@@ -91,20 +89,20 @@ class Serializer:
 
         """
         return ContactInfo(
-            alias_name = '', # TODO: shall we fill it?
-            company_name = account_info.get('companyname', ''), # TODO: PortaSwitch sometimes does
-                                                                # not return it. Why?
-            email = account_info.get('email', None),
-            first_name = account_info.get('firstname', ''),
-            last_name = account_info.get('lastname', ''),
-            numbers = Numbers(
-                additional = [alias['id'] for alias in account_info.get('alias_list', [])],
-                ext = account_info.get('extension_id', ''),
-                main = account_info['id'],
+            alias_name='',  # TODO: shall we fill it?
+            company_name=account_info.get('companyname', ''),  # TODO: PortaSwitch sometimes does
+            # not return it. Why?
+            email=account_info.get('email', None),
+            first_name=account_info.get('firstname', ''),
+            last_name=account_info.get('lastname', ''),
+            numbers=Numbers(
+                additional=[alias['id'] for alias in account_info.get('alias_list', [])],
+                ext=account_info.get('extension_id', ''),
+                main=account_info['id'],
             ),
-            sip_status = SIPRegistrationStatus.registered
-                         if account_info['sip_status'] == 1
-                         else SIPRegistrationStatus.notregistered
+            sip_status=SIPRegistrationStatus.registered
+            if account_info['sip_status'] == 1
+            else SIPRegistrationStatus.notregistered
         )
 
     def get_cdr_info(self, cdr_info: dict) -> CDRInfo:
@@ -118,16 +116,16 @@ class Serializer:
 
         """
         return CDRInfo(
-            call_id = cdr_info['call_id'],
-            caller = cdr_info['CLI'],
-            callee = cdr_info['CLD'],
-            connect_time = datetime.datetime.fromtimestamp(int(cdr_info['unix_connect_time']),
-                                                           datetime.timezone.utc),
-            direction = Direction.incoming, # TODO determine the value according to CDR.
-            disconnect_reason = cdr_info['disconnect_reason'],
-            disconnect_time = datetime.datetime.fromtimestamp(int(cdr_info['unix_disconnect_time']),
-                                                              datetime.timezone.utc),
-            duration = cdr_info['charged_quantity'],
-            recording_id = cdr_info['i_xdr'], # our Admin UI downloads recordings by this.
-            status = ConnectStatus.accepted, # TODO determine the value according to CDR.
+            call_id=cdr_info['call_id'],
+            caller=cdr_info['CLI'],
+            callee=cdr_info['CLD'],
+            connect_time=datetime.datetime.fromtimestamp(int(cdr_info['unix_connect_time']),
+                                                         datetime.timezone.utc),
+            direction=Direction.incoming,  # TODO determine the value according to CDR.
+            disconnect_reason=cdr_info['disconnect_reason'],
+            disconnect_time=datetime.datetime.fromtimestamp(int(cdr_info['unix_disconnect_time']),
+                                                            datetime.timezone.utc),
+            duration=cdr_info['charged_quantity'],
+            recording_id=cdr_info['i_xdr'],  # our Admin UI downloads recordings by this.
+            status=ConnectStatus.accepted,  # TODO determine the value according to CDR.
         )

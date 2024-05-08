@@ -1,5 +1,6 @@
-
 import logging
+from typing import Final
+
 import requests
 from datetime import datetime
 
@@ -8,11 +9,10 @@ from bss.http_api import HTTPAPIConnector
 
 
 class AccountAPI(HTTPAPIConnector):
-    """Provides an access to Admin realm of the PortaSwitch API."""
+    """Provides access to Admin realm of the PortaSwitch API."""
 
-    #: bool: Shows whether this interface shall verify HTTPS certificates while accessing
-    #: the server.
-    __shall_verify_https: bool = True
+    #: Shows whether this interface shall verify HTTPS certificates while accessing the server
+    __shall_verify_https: Final[bool] = True
 
     def __init__(self, config: AppConfig):
         """The class constructor.
@@ -24,12 +24,12 @@ class AccountAPI(HTTPAPIConnector):
         api_server: str = config.get_conf_val('PortaSwitch', 'Account', 'API', 'Server')
 
         self.__shall_verify_https: bool = config.get_conf_val('PortaSwitch', 'Verify', 'HTTPS',
-                                                            default = 'True') == 'True'
+                                                              default='True') == 'True'
 
         super().__init__(api_server)
 
     def __send_request(self, module: str, method: str, params: dict,
-                       access_token: str|None = None) -> dict:
+                       access_token: str | None = None) -> dict:
         """Sends the Porta-Billing API method by means of HTTP POST request.
 
         Parameters:
@@ -51,17 +51,16 @@ class AccountAPI(HTTPAPIConnector):
             }
 
         result = self.send_rest_request(
-            method = "POST",
-            path = f"/rest/{module}/{method}",
-            json = {
+            method="POST",
+            path=f"/rest/{module}/{method}",
+            json={
                 "params": params
             },
-            headers = headers
+            headers=headers
         )
 
         logging.debug(f"Processing the Account.API result: {module}/{method}/{params}: \n {result}")
         return result
-
 
     def add_auth_info(self, url: str, request_params: dict) -> dict:
         """Change the parameters of requests.request call to add
@@ -118,11 +117,12 @@ class AccountAPI(HTTPAPIConnector):
 
         """
         return self.__send_request(
-            module = 'Session',
-            method = 'login',
-            params = {
+            module='Session',
+            method='login',
+            params={
                 'login': login,
-                'password': password
+                'password': password,
+                'token': password
             })
 
     def logout(self, access_token: str) -> dict:
@@ -136,9 +136,9 @@ class AccountAPI(HTTPAPIConnector):
 
         """
         return self.__send_request(
-            module = 'Session',
-            method = 'logout',
-            params = {
+            module='Session',
+            method='logout',
+            params={
                 'access_token': access_token,
             })
 
@@ -153,9 +153,9 @@ class AccountAPI(HTTPAPIConnector):
 
         """
         return self.__send_request(
-            module = 'Session',
-            method = 'refresh_access_token',
-            params = {
+            module='Session',
+            method='refresh_access_token',
+            params={
                 'refresh_token': refresh_token,
             })
 
@@ -170,9 +170,9 @@ class AccountAPI(HTTPAPIConnector):
 
         """
         return self.__send_request(
-            module = 'Session',
-            method = 'ping',
-            params = {
+            module='Session',
+            method='ping',
+            params={
                 'access_token': access_token,
             })
 
@@ -189,13 +189,13 @@ class AccountAPI(HTTPAPIConnector):
 
         """
         return self.__send_request(
-            module = 'Account',
-            method = 'get_account_info',
-            params = {
-                'detailed_info': 1, # to acquire the extension_id
+            module='Account',
+            method='get_account_info',
+            params={
+                'detailed_info': 1,  # to acquire the extension_id
                 'without_service_features': 1,
             },
-            access_token = access_token)
+            access_token=access_token)
 
     def get_alias_list(self, access_token: str) -> dict:
         """Returns the account_info of the account, which created a session related to
@@ -211,10 +211,10 @@ class AccountAPI(HTTPAPIConnector):
 
         """
         return self.__send_request(
-            module = 'Account',
-            method = 'get_alias_list',
-            params = {},
-            access_token = access_token)
+            module='Account',
+            method='get_alias_list',
+            params={},
+            access_token=access_token)
 
     def get_xdr_list(self, access_token: str, page: int, items_per_page: int,
                      time_from: datetime, time_to: datetime) -> dict:
@@ -234,9 +234,9 @@ class AccountAPI(HTTPAPIConnector):
 
         """
         return self.__send_request(
-            module = 'Account',
-            method = 'get_xdr_list',
-            params = {
+            module='Account',
+            method='get_xdr_list',
+            params={
                 'get_total': 1,
                 'show_unsuccessful': 1,
                 'limit': items_per_page,
@@ -244,7 +244,7 @@ class AccountAPI(HTTPAPIConnector):
                 'from_date': time_from.strftime('%Y-%m-%d %H:%M:%S'),
                 'to_date': time_to.strftime('%Y-%m-%d %H:%M:%S')
             },
-            access_token = access_token)
+            access_token=access_token)
 
     def get_call_recording(self, recording_id: int, access_token: str) -> bytes:
         """Returns the bytes of the call recording file.
@@ -259,9 +259,9 @@ class AccountAPI(HTTPAPIConnector):
 
         """
         return self.__send_request(
-            module = 'CDR',
-            method = 'get_call_recording',
-            params = {
+            module='CDR',
+            method='get_call_recording',
+            params={
                 'i_xdr': recording_id,
             },
-            access_token = access_token)
+            access_token=access_token)
