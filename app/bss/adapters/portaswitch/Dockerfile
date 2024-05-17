@@ -53,6 +53,18 @@ ENV PORTASWITCH_VERIFY_HTTPS="False"
 # * sip - id for request and h323_password from response
 ENV PORTASWITCH_SIGNIN_CREDENTIALS="<signin-credentials>"
 
+# Defines contacts list selection mode, with the following possible values (optional):
+# * accounts - account info from get_accounts_list API response (default value)
+# * extensions - extension info from get_extensions_list API response
+ENV PORTASWITCH_CONTACTS_SELECTING="<contacts-selecting>"
+
+# Defines a list of extension types for PORTASWITCH_CONTACTS_SELECTING=extensions mode, with the following possible values (optional):
+# * Account - extension type from response should be Account
+# * Group - extension type from response should be Group
+# * Unassigned - extension type from response should be Unassigned
+# By default does not apply filter by type
+ENV PORTASWITCH_CONTACTS_SELECTING_EXTENSION_TYPES="Account, Group, Unassigned"
+
 EXPOSE $API_PORT
 
 ENTRYPOINT ["./entrypoint.sh"]

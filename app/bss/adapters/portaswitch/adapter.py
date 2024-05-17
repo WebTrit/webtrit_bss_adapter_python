@@ -13,7 +13,7 @@ from report_error import WebTritErrorException
 from .account_api import AccountAPI
 from .admin_api import AdminAPI
 from .serializer import Serializer
-from .types import PortaSwitchSignInCredentialsType
+from .types import PortaSwitchSignInCredentialsType, PortaSwitchContactsSelectingMode, PortaSwitchExtensionType
 from .utils import generate_otp_id, extract_fault_code
 
 
@@ -39,6 +39,13 @@ class Adapter(BSSAdapter):
 
         signin_credentials = config.get_conf_val('PortaSwitch', 'SIGNIN', 'CREDENTIALS', default='self-care')
         self._signin_creds = PortaSwitchSignInCredentialsType(signin_credentials)
+
+        contacts_selecting = config.get_conf_val('PortaSwitch', 'CONTACTS', 'SELECTING', default='accounts')
+        self._contacts_selecting = PortaSwitchContactsSelectingMode(contacts_selecting)
+
+        ext_types = config.get_conf_val_as_list('PortaSwitch', 'CONTACTS', 'SELECTING', 'EXTENSION', 'TYPES')
+        self._contacts_selecting_ext_types = [PortaSwitchExtensionType(type) for type in ext_types] if ext_types else list(
+            PortaSwitchExtensionType)
 
         # No need to store it in a DB.
         # The correct realization of PortaSwitch token validation depends on session.
@@ -289,18 +296,23 @@ class Adapter(BSSAdapter):
 
         """
         try:
-            ## Extract i_customer
-            account_info: dict = self.__account_api.get_account_info(
-                access_token=safely_extract_scalar_value(session.access_token))['account_info']
+            account_info = self.__account_api.get_account_info(safely_extract_scalar_value(session.access_token))['account_info']
+            i_customer = int(account_info['i_customer'])
 
-            accounts: list = self.__admin_api.get_account_list(
-                i_customer=int(account_info['i_customer']))['account_list']
+            match self._contacts_selecting:
+                case PortaSwitchContactsSelectingMode.EXTENSIONS:
+                    extensions = self.__admin_api.get_extensions_list(i_customer)['extensions_list']
 
-            return [self.__serializer.get_contact_info(account) for account in accounts]
+                    return [self.__serializer.get_contact_info_by_extension(ext) for ext in extensions if
+                            ext['type'] in self._contacts_selecting_ext_types]
+                case PortaSwitchContactsSelectingMode.ACCOUNTS:
+                    accounts = self.__admin_api.get_account_list(i_customer)['accounts_list']
+
+                    return [self.__serializer.get_contact_info_by_account(account) for account in accounts]
 
         except WebTritErrorException as error:
-            faultcode = extract_fault_code(error)
-            if faultcode in ('Client.Session.check_auth.failed_to_process_access_token',):
+            fault_code = extract_fault_code(error)
+            if fault_code in ('Client.Session.check_auth.failed_to_process_access_token',):
                 # Race condition case, when session is validated and then the access_token dies.
                 raise WebTritErrorException(
                     status_code=404,

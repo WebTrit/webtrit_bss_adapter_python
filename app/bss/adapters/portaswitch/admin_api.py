@@ -170,6 +170,21 @@ class AdminAPI(HTTPAPIConnectorWithLogin):
                 'with_aliases': 1,
             })
 
+    def get_extensions_list(self, i_customer: int) -> dict:
+        """Returns information about extensions related to the input i_customer.
+            Parameters:
+                i_customer: int: The identifier of a customer which accounts to be returned.
+            Returns:
+                extensions_list: dict: The API method execution result that contains info about accounts.
+        """
+        return self.__send_request(
+            module='Customer',
+            method='get_extensions_list',
+            params={
+                'i_customer': i_customer,
+                'detailed_info': 1,
+            })
+
     def create_otp(self, user_ref: str) -> dict:
         """Requests PortaSwitch to generate an OTP token.
 

@@ -78,16 +78,15 @@ class Serializer:
             time_zone=account_info['time_zone_name'],
         )
 
-    def get_contact_info(self, account_info: dict) -> ContactInfo:
+    def get_contact_info_by_account(self, account_info: dict) -> ContactInfo:
         """Forms ContactInfo based on the input account_info.
+            Parameters:
+                account_info: dict: The information about the account to be added to ContactInfo.
 
-        Parameters:
-            :account_info (dict): The information about the account to be added to ContactInfo.
-
-        Returns:
-            :(ContactInfo): The filled structure of ContactInfo.
-
+            Returns:
+                ContactInfo: The filled structure of ContactInfo.
         """
+
         return ContactInfo(
             alias_name='',  # TODO: shall we fill it?
             company_name=account_info.get('companyname', ''),  # TODO: PortaSwitch sometimes does
@@ -103,6 +102,26 @@ class Serializer:
             sip_status=SIPRegistrationStatus.registered
             if account_info['sip_status'] == 1
             else SIPRegistrationStatus.notregistered
+        )
+
+    def get_contact_info_by_extension(self, extension_info: dict) -> ContactInfo:
+        """Forms ContactInfo based on the input extension_info.
+            Parameters:
+                extension_info: dict: The information about the extensions to be added to ContactInfo.
+
+            Returns:
+                ContactInfo: The filled structure of ContactInfo.
+        """
+
+        return ContactInfo(
+            alias_name=extension_info.get('name', ''),
+            first_name=extension_info.get('firstname', ''),
+            last_name=extension_info.get('lastname', ''),
+            numbers=Numbers(
+                additional=[],
+                ext=extension_info.get('id'),
+                main=extension_info.get('id'),
+            )
         )
 
     def get_cdr_info(self, cdr_info: dict) -> CDRInfo:

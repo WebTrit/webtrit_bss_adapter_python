@@ -18,6 +18,7 @@ Usage example:
         host = config.get_conf_val('Server', 'IP', default = "127.0.0.1")       
 """
 import os
+from typing import Any
 
 
 class AppConfig(dict):
@@ -71,7 +72,7 @@ class AppConfig(dict):
                 # no such element
                 val = None
                 break
-            val = self.get_case_insensitive(val, x, None )
+            val = self.get_case_insensitive(val, x, None)
 
         var_name = "_".join(path).upper()
         override_val = os.environ.get(var_name, None)
@@ -81,10 +82,19 @@ class AppConfig(dict):
 
         return final_val
 
+    def get_conf_val_as_list(self, *path, default=None, delimiter=',') -> list[Any]:
+        """Return a value of config parameter as list defined by its path and using `,` as delimiter"""
+        value = self.get_conf_val(*path, default=default)
+
+        if not value:
+            return default
+
+        return [item.strip() for item in value.split(delimiter) if item.strip()]
+
     def get_opt(self, section: str, param: str, default=None):
         """Same as get_conf_val but for 2-level configs (section + param name)"""
         return self.get_conf_val(section, param, default=default)
-    
+
     def get_config_branch(self, *path):
         """Return a sub-branch of the config tree, starting from the given path.
         The path elements are case INSENSITIVE, so "DB", "Cassandra", "foo", "bar"
@@ -97,9 +107,9 @@ class AppConfig(dict):
                 # no such element
                 val = None
                 break
-            val = self.get_case_insensitive(val, x, None )
+            val = self.get_case_insensitive(val, x, None)
         return AppConfig(val) if val is not None else None
-    
+
     def get_mandatory_conf_val(self, *path):
         """Same as get_conf_val but raises an exception if the value is not found"""
         val = self.get_conf_val(*path)
