@@ -301,12 +301,16 @@ class Adapter(BSSAdapter):
 
             match self._contacts_selecting:
                 case PortaSwitchContactsSelectingMode.EXTENSIONS:
+                    accounts = self.__admin_api.get_account_list(i_customer)['account_list']
+                    account_to_aliases = {account['i_account']: account.get('alias_list', []) for account in accounts}
                     extensions = self.__admin_api.get_extensions_list(i_customer)['extensions_list']
 
-                    return [self.__serializer.get_contact_info_by_extension(ext) for ext in extensions if
-                            ext['type'] in self._contacts_selecting_ext_types]
+                    return [
+                        self.__serializer.get_contact_info_by_extension(ext, account_to_aliases.get(ext.get('i_account'), []))
+                        for ext in extensions if
+                        ext['type'] in self._contacts_selecting_ext_types]
                 case PortaSwitchContactsSelectingMode.ACCOUNTS:
-                    accounts = self.__admin_api.get_account_list(i_customer)['accounts_list']
+                    accounts = self.__admin_api.get_account_list(i_customer)['account_list']
 
                     return [self.__serializer.get_contact_info_by_account(account) for account in accounts]
 

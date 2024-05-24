@@ -78,7 +78,8 @@ class Serializer:
             time_zone=account_info['time_zone_name'],
         )
 
-    def get_contact_info_by_account(self, account_info: dict) -> ContactInfo:
+    @staticmethod
+    def get_contact_info_by_account(account_info: dict) -> ContactInfo:
         """Forms ContactInfo based on the input account_info.
             Parameters:
                 account_info: dict: The information about the account to be added to ContactInfo.
@@ -104,10 +105,12 @@ class Serializer:
             else SIPRegistrationStatus.notregistered
         )
 
-    def get_contact_info_by_extension(self, extension_info: dict) -> ContactInfo:
+    @staticmethod
+    def get_contact_info_by_extension(extension_info: dict, aliases: list) -> ContactInfo:
         """Forms ContactInfo based on the input extension_info.
             Parameters:
                 extension_info: dict: The information about the extensions to be added to ContactInfo.
+                aliases: list: List of additional numbers.
 
             Returns:
                 ContactInfo: The filled structure of ContactInfo.
@@ -118,13 +121,14 @@ class Serializer:
             first_name=extension_info.get('firstname', ''),
             last_name=extension_info.get('lastname', ''),
             numbers=Numbers(
-                additional=[],
+                additional=aliases,
                 ext=extension_info.get('id'),
                 main=extension_info.get('id'),
             )
         )
 
-    def get_cdr_info(self, cdr_info: dict) -> CDRInfo:
+    @staticmethod
+    def get_cdr_info(cdr_info: dict) -> CDRInfo:
         """Forms CDRInfo based on the input cdr_info.
 
         Parameters:
