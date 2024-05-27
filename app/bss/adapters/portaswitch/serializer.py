@@ -1,4 +1,5 @@
 import datetime
+from typing import Optional
 
 from bss.types import (
     Balance, BalanceType, CDRInfo, ConnectStatus, ContactInfo, Direction, EndUser, Numbers, SIPInfo,
@@ -36,12 +37,11 @@ class Serializer:
         """Forms EndUser based on the input account_info and its aliases.
 
         Parameters:
-            :account_info (dict): The information about the account to be added to EndUser.
-            :aliases (list): The information about aliases of the account to be added to EndUser.
+            account_info :dict: The information about the account to be added to EndUser.
+            aliases :list: The information about aliases of the account to be added to EndUser.
 
         Returns:
-            :(EndUser): The filled structure of EndUser.
-
+            Response :EndUser: The filled structure of EndUser.
         """
         return EndUser(
             alias_name=None,  # TODO: shall we fill it?
@@ -63,7 +63,7 @@ class Serializer:
             ),
             sip=SIPInfo(
                 auth_username=account_info['id'],
-                display_name=f"{account_info.get('firstname')} {account_info.get('lastname')}",
+                display_name=self.compose_display_name(account_info.get('firstname'), account_info.get('lastname')),
                 password=account_info['h323_password'],
                 sip_server=SIPServer(
                     force_tcp=False,
@@ -152,3 +152,16 @@ class Serializer:
             recording_id=cdr_info['i_xdr'],  # our Admin UI downloads recordings by this.
             status=ConnectStatus.accepted,  # TODO determine the value according to CDR.
         )
+
+    @staticmethod
+    def compose_display_name(first_name: Optional[str], last_name: Optional[str]) -> str:
+        """Forms display name based on the input first_name and last_name.
+
+            Parameters:
+                first_name :str: Account first name.
+                last_name :str: Account last name.
+
+            Returns:
+                Response :str: The formed display name string.
+        """
+        return f"{first_name or ''} {last_name or ''}".strip()
