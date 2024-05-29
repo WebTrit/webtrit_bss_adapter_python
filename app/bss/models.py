@@ -608,6 +608,10 @@ class Contact(BaseModel):
         None,
         description='The current registration status of the user on the SIP server.',
     )
+    is_current_user: Optional[bool] = Field(
+        None,
+        description='Indicates whether the contact is associated with the same user who making the request.'
+    )
 
 
 class UserInfoShowResponse(BaseModel):

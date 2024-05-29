@@ -79,10 +79,11 @@ class Serializer:
         )
 
     @staticmethod
-    def get_contact_info_by_account(account_info: dict) -> ContactInfo:
+    def get_contact_info_by_account(account_info: dict, current_user: int) -> ContactInfo:
         """Forms ContactInfo based on the input account_info.
             Parameters:
                 account_info: dict: The information about the account to be added to ContactInfo.
+                current_user: int: i_account of the current user who making the request.
 
             Returns:
                 ContactInfo: The filled structure of ContactInfo.
@@ -102,15 +103,17 @@ class Serializer:
             ),
             sip_status=SIPRegistrationStatus.registered
             if account_info['sip_status'] == 1
-            else SIPRegistrationStatus.notregistered
+            else SIPRegistrationStatus.notregistered,
+            is_current_user=account_info['i_account'] == current_user,
         )
 
     @staticmethod
-    def get_contact_info_by_extension(extension_info: dict, aliases: list) -> ContactInfo:
+    def get_contact_info_by_extension(extension_info: dict, aliases: list, current_user: int) -> ContactInfo:
         """Forms ContactInfo based on the input extension_info.
             Parameters:
                 extension_info: dict: The information about the extensions to be added to ContactInfo.
                 aliases: list: List of additional numbers.
+                current_user: int: i_account of the current user who making the request.
 
             Returns:
                 ContactInfo: The filled structure of ContactInfo.
@@ -124,7 +127,8 @@ class Serializer:
                 additional=aliases,
                 ext=extension_info.get('id'),
                 main=extension_info.get('id'),
-            )
+            ),
+            is_current_user=extension_info.get('i_account') == current_user
         )
 
     @staticmethod

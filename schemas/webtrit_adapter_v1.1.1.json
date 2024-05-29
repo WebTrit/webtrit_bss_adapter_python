@@ -224,6 +224,11 @@
                             "notregistered"
                         ],
                         "type": "string"
+                    },
+                    "is_current_user": {
+                        "description": "Indicates whether the contact is associated with the same user who making the request.",
+                        "type": "boolean",
+                        "example": false
                     }
                 },
                 "required": [

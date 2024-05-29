@@ -24,7 +24,7 @@ class Adapter(BSSAdapter):
     Currently does not support OTP login.
 
     """
-    VERSION: Final[str] = "0.0.2"
+    VERSION: Final[str] = "0.0.3"
     OTP_DELIVERY_CHANNEL: Final[str] = 'email'
 
     def __init__(self, config: AppConfig):
@@ -298,6 +298,7 @@ class Adapter(BSSAdapter):
         try:
             account_info = self.__account_api.get_account_info(safely_extract_scalar_value(session.access_token))['account_info']
             i_customer = int(account_info['i_customer'])
+            i_account = int(account_info['i_account'])
 
             match self._contacts_selecting:
                 case PortaSwitchContactsSelectingMode.EXTENSIONS:
@@ -306,13 +307,16 @@ class Adapter(BSSAdapter):
                     extensions = self.__admin_api.get_extensions_list(i_customer)['extensions_list']
 
                     return [
-                        self.__serializer.get_contact_info_by_extension(ext, account_to_aliases.get(ext.get('i_account'), []))
+                        self.__serializer.get_contact_info_by_extension(
+                            ext,
+                            account_to_aliases.get(ext.get('i_account'), []),
+                            i_account)
                         for ext in extensions if
                         ext['type'] in self._contacts_selecting_ext_types]
                 case PortaSwitchContactsSelectingMode.ACCOUNTS:
                     accounts = self.__admin_api.get_account_list(i_customer)['account_list']
 
-                    return [self.__serializer.get_contact_info_by_account(account) for account in accounts]
+                    return [self.__serializer.get_contact_info_by_account(account, i_account) for account in accounts]
 
         except WebTritErrorException as error:
             fault_code = extract_fault_code(error)
@@ -327,7 +331,7 @@ class Adapter(BSSAdapter):
             raise error
 
         except (KeyError, TypeError):
-            ## Incorrect data from PortaSwitch API. Has the backward compatibility been broken?
+            # Incorrect data from PortaSwitch API. Has the backward compatibility been broken?
             raise WebTritErrorException(
                 status_code=500,
                 # code = APIAccessErrorCode.external_api_issue,
@@ -500,9 +504,7 @@ class Adapter(BSSAdapter):
                 )
 
             data: dict = self.__admin_api.verify_otp(otp_token=otp.code)
-            success: int = data['success']
-
-            if success == 0:
+            if not data['success']:
                 raise WebTritErrorException(
                     status_code=404,
                     # code = OTPNotFoundErrorCode.otp_not_found,
