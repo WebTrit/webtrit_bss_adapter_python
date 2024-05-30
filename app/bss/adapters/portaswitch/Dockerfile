@@ -65,6 +65,9 @@ ENV PORTASWITCH_CONTACTS_SELECTING="<contacts-selecting>"
 # By default does not apply filter by type
 ENV PORTASWITCH_CONTACTS_SELECTING_EXTENSION_TYPES="Account, Group, Unassigned"
 
+# Ensures that the contacts API filters accounts that do not have an `extension_id` (optional):
+ENV PORTASWITCH_CONTACTS_SKIP_WITHOUT_EXTENSION="True"
+
 EXPOSE $API_PORT
 
 ENTRYPOINT ["./entrypoint.sh"]

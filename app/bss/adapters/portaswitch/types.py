@@ -27,3 +27,13 @@ class PortaSwitchExtensionType(str, Enum):
     @classmethod
     def _missing_(cls, value):
         return cls.UNASSIGNED
+
+
+class PortaSwitchDualVersionSystem(str, Enum):
+    UNSPECIFIED = None
+    SOURCE = 'source'
+    TARGET = 'target'
+
+    @classmethod
+    def _missing_(cls, value):
+        return cls.UNSPECIFIED

@@ -13,7 +13,7 @@ from report_error import WebTritErrorException
 from .account_api import AccountAPI
 from .admin_api import AdminAPI
 from .serializer import Serializer
-from .types import PortaSwitchSignInCredentialsType, PortaSwitchContactsSelectingMode, PortaSwitchExtensionType
+from .types import PortaSwitchSignInCredentialsType, PortaSwitchContactsSelectingMode, PortaSwitchExtensionType, PortaSwitchDualVersionSystem
 from .utils import generate_otp_id, extract_fault_code
 
 
@@ -24,7 +24,7 @@ class Adapter(BSSAdapter):
     Currently does not support OTP login.
 
     """
-    VERSION: Final[str] = "0.0.3"
+    VERSION: Final[str] = "0.0.4"
     OTP_DELIVERY_CHANNEL: Final[str] = 'email'
 
     def __init__(self, config: AppConfig):
@@ -42,6 +42,9 @@ class Adapter(BSSAdapter):
 
         contacts_selecting = config.get_conf_val('PortaSwitch', 'CONTACTS', 'SELECTING', default='accounts')
         self._contacts_selecting = PortaSwitchContactsSelectingMode(contacts_selecting)
+
+        self._contacts_skip_without_ext = config.get_conf_val('PortaSwitch', 'CONTACTS', 'SKIP', 'WITHOUT', 'EXTENSION',
+                                                              default='False') == 'True'
 
         ext_types = config.get_conf_val_as_list('PortaSwitch', 'CONTACTS', 'SELECTING', 'EXTENSION', 'TYPES')
         self._contacts_selecting_ext_types = [PortaSwitchExtensionType(type) for type in ext_types] if ext_types else list(
@@ -316,7 +319,14 @@ class Adapter(BSSAdapter):
                 case PortaSwitchContactsSelectingMode.ACCOUNTS:
                     accounts = self.__admin_api.get_account_list(i_customer)['account_list']
 
-                    return [self.__serializer.get_contact_info_by_account(account, i_account) for account in accounts]
+                    contacts = []
+                    for account in accounts:
+                        dual_version_system = PortaSwitchDualVersionSystem(account.get('dual_version_system'))
+                        if dual_version_system != PortaSwitchDualVersionSystem.SOURCE:
+                            if not self._contacts_skip_without_ext or account.get('extension_id'):
+                                contacts.append(self.__serializer.get_contact_info_by_account(account, i_account))
+
+                    return contacts
 
         except WebTritErrorException as error:
             fault_code = extract_fault_code(error)
