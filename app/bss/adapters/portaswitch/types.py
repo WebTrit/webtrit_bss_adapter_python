@@ -1,7 +1,7 @@
 from enum import Enum
 
 
-class PortaSwitchSignInCredentialsType(str, Enum):
+class PortaSwitchSignInCredentialsType(Enum):
     SELF_CARE = 'self-care'
     SIP = 'sip'
 
@@ -10,7 +10,7 @@ class PortaSwitchSignInCredentialsType(str, Enum):
         return cls.SELF_CARE
 
 
-class PortaSwitchContactsSelectingMode(str, Enum):
+class PortaSwitchContactsSelectingMode(Enum):
     ACCOUNTS = 'accounts'
     EXTENSIONS = 'extensions'
 
@@ -19,7 +19,7 @@ class PortaSwitchContactsSelectingMode(str, Enum):
         return cls.ACCOUNTS
 
 
-class PortaSwitchExtensionType(str, Enum):
+class PortaSwitchExtensionType(Enum):
     UNASSIGNED = 'Unassigned'
     ACCOUNT = 'Account'
     GROUP = 'Group'
@@ -29,7 +29,7 @@ class PortaSwitchExtensionType(str, Enum):
         return cls.UNASSIGNED
 
 
-class PortaSwitchDualVersionSystem(str, Enum):
+class PortaSwitchDualVersionSystem(Enum):
     UNSPECIFIED = None
     SOURCE = 'source'
     TARGET = 'target'
@@ -37,3 +37,9 @@ class PortaSwitchDualVersionSystem(str, Enum):
     @classmethod
     def _missing_(cls, value):
         return cls.UNSPECIFIED
+
+
+class PortaSwitchMailboxMessageFlag(Enum):
+    SEEN = '\\Seen'
+    ANSWERED = '\\Answered'
+    FLAGGED = '\\Flagged'

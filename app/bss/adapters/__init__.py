@@ -2,6 +2,8 @@ import logging
 from abc import ABC, abstractmethod
 from datetime import datetime
 from pydantic import BaseModel
+
+from bss.models import UserVoicemailResponse
 from bss.types import (UserInfo, EndUser, ContactInfo, CDRInfo,
                        Capabilities,
                        UserCreateResponse,
@@ -124,35 +126,35 @@ class BSSAdapter(SessionManagement, OTPHandler,
                  CustomMethodCall, InAppSignup, AutoProvisionByToken):
     # names of config variables to turn on/off capabilities
     CONFIG_CAPABILITIES_OPTIONS = dict(
-        PASSWORD = dict(default = True, option = Capabilities.passwordSignin),
-        OTP = dict(default = False, option = Capabilities.otpSignin),
-        AUTO_PROVISION = dict(default = False, option = Capabilities.autoProvision),
-        SIGNUP = dict(default = False, option = Capabilities.signup),
-        CDRS = dict(default = False, option = Capabilities.callHistory),
-        RECORDINGS = dict(default = False, option = Capabilities.recordings),
+        PASSWORD=dict(default=True, option=Capabilities.passwordSignin),
+        OTP=dict(default=False, option=Capabilities.otpSignin),
+        AUTO_PROVISION=dict(default=False, option=Capabilities.autoProvision),
+        SIGNUP=dict(default=False, option=Capabilities.signup),
+        CDRS=dict(default=False, option=Capabilities.callHistory),
+        RECORDINGS=dict(default=False, option=Capabilities.recordings),
+        VOICEMAIL=dict(default=False, option=Capabilities.voicemail),
     )
     # what our adapter can do in general (what is coded)
     # should be overridden in the sub-class
-    CAPABILITIES = [
+    CAPABILITIES = []
 
-    ]
     def calculate_capabilities(self) -> List:
         """Calculate the adapter capabilities based on it's settings and config options"""
 
-        capabilities = self.CAPABILITIES 
+        capabilities = self.CAPABILITIES
         for option, data in self.CONFIG_CAPABILITIES_OPTIONS.items():
-           capability_id = data['option']
-           if capability_id in self.CAPABILITIES:
+            capability_id = data['option']
+            if capability_id in self.CAPABILITIES:
                 # we support it in general - let's see if it is enabled in config
                 if (cfg_val := self.config.get_conf_val("Capabilities",
-                                                       option, default = None)) \
-                    is not None:
+                                                        option, default=None)) \
+                        is not None:
                     # a value provided in the config
                     cfg_val = eval_as_bool(cfg_val)
                 else:
-                    # no defined in the config, use defaulr    
+                    # not defined in the config, use default
                     cfg_val = data.get('default', False)
-                
+
                 if cfg_val:
                     # include it
                     capabilities.append(capability_id)
@@ -199,6 +201,9 @@ class BSSAdapter(SessionManagement, OTPHandler,
         """Obtain user's information - most importantly, his/her SIP credentials."""
         raise NotImplementedError("Override this method in your sub-class")
 
+    def retrieve_user_mailbox(self, session: SessionInfo, user: UserInfo) -> UserVoicemailResponse:
+        raise NotImplementedError("Override this method in your sub-class")
+
     @abstractmethod
     def retrieve_contacts(self, session: SessionInfo, user: UserInfo) -> List[ContactInfo]:
         """List of other extensions in the PBX"""
@@ -206,22 +211,21 @@ class BSSAdapter(SessionManagement, OTPHandler,
 
     @abstractmethod
     def retrieve_calls(
-        self,
-        session: SessionInfo,
-        user: UserInfo,
-        date_from: datetime = None,
-        date_to: datetime = None,
+            self,
+            session: SessionInfo,
+            user: UserInfo,
+            date_from: datetime = None,
+            date_to: datetime = None,
     ) -> List[CDRInfo]:
         """Obtain CDRs (call history) of the user"""
         raise NotImplementedError("Override this method in your sub-class")
 
     @abstractmethod
     def retrieve_call_recording(
-        self, session: SessionInfo, recording_id: str
+            self, session: SessionInfo, recording_id: str
     ) -> bytes:
         """Get the media file for a previously recorded call."""
         raise NotImplementedError("Override this method in your sub-class")
-
 
     @classmethod
     def remap_dict(self, mapping: List[AttrMap], data: dict) -> dict:

@@ -4,16 +4,17 @@ from typing import Final
 from app_config import AppConfig
 from bss.adapters import BSSAdapter
 from bss.dbs import TiedKeyValue
+from bss.models import DeliveryChannel
 from bss.types import (
     CallRecordingId, Capabilities, CDRInfo, ContactInfo, EndUser,
     OTPCreateResponse, OTPVerifyRequest,
     SessionInfo, UserInfo,
-    safely_extract_scalar_value)
+    safely_extract_scalar_value, UserVoicemailResponse)
 from report_error import WebTritErrorException
-from .account_api import AccountAPI
-from .admin_api import AdminAPI
+from .api import AccountAPI, AdminAPI
 from .serializer import Serializer
-from .types import PortaSwitchSignInCredentialsType, PortaSwitchContactsSelectingMode, PortaSwitchExtensionType, PortaSwitchDualVersionSystem
+from .types import PortaSwitchSignInCredentialsType, PortaSwitchContactsSelectingMode, PortaSwitchExtensionType, \
+    PortaSwitchDualVersionSystem
 from .utils import generate_otp_id, extract_fault_code
 
 
@@ -25,7 +26,7 @@ class Adapter(BSSAdapter):
 
     """
     VERSION: Final[str] = "0.0.4"
-    OTP_DELIVERY_CHANNEL: Final[str] = 'email'
+    OTP_DELIVERY_CHANNEL: Final[DeliveryChannel] = DeliveryChannel.call
 
     def __init__(self, config: AppConfig):
         super().__init__(config)
@@ -83,6 +84,9 @@ class Adapter(BSSAdapter):
 
             # obtain the list of other extensions in the PBX
             Capabilities.extensions,
+
+            # obtain user's voicemail
+            Capabilities.voicemail,
         ]
 
     def authenticate(self, user: UserInfo, password: str = None) -> SessionInfo:
@@ -283,6 +287,35 @@ class Adapter(BSSAdapter):
             raise WebTritErrorException(
                 status_code=500,
                 # code = APIAccessErrorCode.external_api_issue,
+                error_message=f"Incorrect data from the Adaptee system {e}",
+            )
+
+    def retrieve_user_mailbox(self, session: SessionInfo, user: UserInfo) -> UserVoicemailResponse:
+        """Returns users voicemail messages"""
+        try:
+            mailbox_messages = self.__account_api.get_mailbox_messages(safely_extract_scalar_value(session.access_token))
+            voicemail_messages = [self.__serializer.get_voicemail_message(message) for message in mailbox_messages]
+
+            return UserVoicemailResponse(
+                messages=voicemail_messages,
+                has_new_messages=any(not message.seen for message in voicemail_messages)
+            )
+
+        except WebTritErrorException as error:
+            fault_code = extract_fault_code(error)
+            if fault_code in ('Client.Session.check_auth.failed_to_process_access_token',):
+                # Race condition case, when session is validated and then the access_token dies.
+                raise WebTritErrorException(
+                    status_code=404,
+                    error_message="User not found"
+                )
+
+            raise error
+
+        except (KeyError, TypeError) as e:
+            # Incorrect data from PortaSwitch API. Has the backward compatibility been broken?
+            raise WebTritErrorException(
+                status_code=500,
                 error_message=f"Incorrect data from the Adaptee system {e}",
             )
 

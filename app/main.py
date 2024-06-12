@@ -1,23 +1,20 @@
 from __future__ import annotations
 
-from typing import Optional, Union, Dict
+import logging
 import os
 import sys
+from datetime import datetime
+from typing import Optional, Union
+
 from fastapi import FastAPI, APIRouter, Depends, Response, Request, Header, Body
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
+from pydantic import conint
 from starlette.status import HTTP_204_NO_CONTENT
 
-import logging
-from pydantic import conint
-from datetime import datetime
-from report_error import raise_webtrit_error
-from app_config import AppConfig
 import bss.adapters
+from app_config import AppConfig
 from bss.adapters import initialize_bss_adapter
 from bss.constants import TENANT_ID_HTTP_HEADER
-from bss.types import Capabilities, UserInfo, ExtendedUserInfo, Health, safely_extract_scalar_value
-from request_trace import RouteWithLogging, log_formatter
-
 from bss.types import (
     BinaryResponse,
     CallRecordingId,
@@ -84,7 +81,16 @@ from bss.types import (
     SessionAutoProvisionInternalServerErrorErrorResponse,
     SessionAutoProvisionNotImplementedErrorResponse,
 
+    # voicemail
+    UserVoicemailResponse,
+    UserVoicemailUnauthorizedErrorResponse,
+    UserVoicemailNotFoundErrorResponse,
+    UserVoicemailInternalServerErrorResponse
 )
+from bss.types import Capabilities, ExtendedUserInfo, Health, safely_extract_scalar_value
+from report_error import raise_webtrit_error
+from request_trace import RouteWithLogging, log_formatter
+
 VERSION="0.1.0"
 API_VERSION_PREFIX = "/api/v1"
 
@@ -303,7 +309,7 @@ def create_session_otp(
     CreateSessionOtpInternalServerErrorErrorResponse,
 ]:
     """
-    Generate and send an OTP to the user
+    Generate and send an OTP to the usercreate_otp
     """
     global bss
 
@@ -630,6 +636,44 @@ def get_user_recording(
 
     # not supported by hosted PBX / BSS, return None
     return None
+
+
+@router.get(
+    '/user/voicemail',
+    response_model=UserVoicemailResponse,
+    responses={
+        '401': {'model': UserVoicemailUnauthorizedErrorResponse},
+        '404': {'model': UserVoicemailNotFoundErrorResponse},
+        '500': {'model': UserVoicemailInternalServerErrorResponse},
+    },
+    tags=['user'],
+)
+def get_user_voicemail(
+        auth_data: HTTPAuthorizationCredentials = Depends(security),
+        x_webtrit_tenant_id: Optional[str] = Header(None, alias=TENANT_ID_HTTP_HEADER),
+) -> Union[
+    UserVoicemailResponse,
+    UserVoicemailUnauthorizedErrorResponse,
+    UserVoicemailNotFoundErrorResponse,
+    UserVoicemailInternalServerErrorResponse,
+]:
+    """
+    Get user's voicemail
+    """
+    global bss, bss_capabilities
+
+    access_token = auth_data.credentials
+    session = bss.validate_session(access_token)
+
+    is_method_allowed(Capabilities.voicemail)
+
+    voicemail = bss.retrieve_user_mailbox(session, ExtendedUserInfo(
+        user_id=safely_extract_scalar_value(session.user_id),
+        tenant_id=bss.default_id_if_none(x_webtrit_tenant_id)
+    ))
+
+    return voicemail
+
 
 @router.post("/custom/public/{method_name}/{extra_path_params:path}",
           response_model=CustomResponse, tags=['custom'])

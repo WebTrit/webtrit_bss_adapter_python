@@ -104,6 +104,14 @@ from bss.models import (
     ProvisionSessionAutoNotImplementedErrorResponse as SessionAutoProvisionNotImplementedErrorResponse,
 
     Code as ErrorCode,
+
+    # voicemail
+    UserVoicemailResponse as UserVoicemailResponse,
+    VoicemailMessage as VoicemailMessage,
+    VoicemailMessageType as VoicemailMessageType,
+    UserVoicemailUnauthorizedErrorResponse as UserVoicemailUnauthorizedErrorResponse,
+    UserVoicemailNotFoundErrorResponse as UserVoicemailNotFoundErrorResponse,
+    UserVoicemailInternalServerErrorResponse as UserVoicemailInternalServerErrorResponse,
 )
 
 class UserInfo(BaseModel):

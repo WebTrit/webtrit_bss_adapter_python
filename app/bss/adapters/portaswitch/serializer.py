@@ -1,9 +1,10 @@
 import datetime
 from typing import Optional
 
+from .types import PortaSwitchMailboxMessageFlag
 from bss.types import (
     Balance, BalanceType, CDRInfo, ConnectStatus, ContactInfo, Direction, EndUser, Numbers, SIPInfo,
-    SIPRegistrationStatus, SIPServer, UserServiceActiveStatus)
+    SIPRegistrationStatus, SIPServer, UserServiceActiveStatus, VoicemailMessage, VoicemailMessageType)
 
 #: dict: Contains a map between a PortaSwitch AccountInfo.billing_model and BalanceType.
 BILLING_MODEL_MAP: dict = {
@@ -129,6 +130,25 @@ class Serializer:
                 main=extension_info.get('id'),
             ),
             is_current_user=extension_info.get('i_account') == current_user
+        )
+
+    @staticmethod
+    def get_voicemail_message(mailbox_message: dict) -> VoicemailMessage:
+        """
+        Forms VoicemailMessage based on the input mailbox_message.
+            Parameters:
+                mailbox_message: dict: The message from the account mailbox.
+
+             Returns:
+                VoicemailMessage: The filled structure of VoicemailMessage.
+        """
+
+        return VoicemailMessage(
+            id=str(mailbox_message['message_uid']),
+            type=VoicemailMessageType.FAX if mailbox_message.get('fax_pages') else VoicemailMessageType.VOICE,
+            duration=mailbox_message.get('voicemail_duration'),
+            date=datetime.datetime.strptime(mailbox_message['delivery_date'], "%d-%b-%Y %H:%M:%S %z"),
+            seen=PortaSwitchMailboxMessageFlag.SEEN.value in mailbox_message.get('flags', [])
         )
 
     @staticmethod

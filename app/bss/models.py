@@ -12,6 +12,7 @@ from pydantic import BaseModel, EmailStr, Field, conint
 
 Code = NewType('Code', str)
 
+
 class Detail(BaseModel):
     path: Optional[str] = None
     reason: Optional[str] = None
@@ -19,7 +20,7 @@ class Detail(BaseModel):
 
 class ErrorResponse(BaseModel):
     code: Optional[Code] = Field(None,
-                            description="""Additional error code identifier to help better handle
+                                 description="""Additional error code identifier to help better handle
                                             situations that fall within the same HTTP error code.
                                             E.g. a request to login is denied with 401 HTTP error
                                             but the code will additionally indicate the specific
@@ -521,6 +522,7 @@ class SupportedEnum(Enum):
     recordings = 'recordings'
     callHistory = 'callHistory'
     extensions = 'extensions'
+    voicemail = 'voicemail'
 
 
 class SystemInfoShowResponse(BaseModel):
@@ -716,3 +718,57 @@ class UserCreateResponse(BaseModel):
 class UserHistoryIndexResponse(BaseModel):
     items: Optional[List[CDRInfo]] = None
     pagination: Optional[Pagination] = None
+
+
+class VoicemailMessageType(Enum):
+    VOICE = 'voice'
+    FAX = 'fax'
+
+
+class VoicemailMessage(BaseModel):
+    id: str = Field(
+        description='The unique ID of the message.',
+        example='1654',
+    )
+    type: VoicemailMessageType = Field(
+        description='The type of the message',
+        example=VoicemailMessageType.VOICE
+    )
+    duration: Optional[float] = Field(
+        description='The duration of the voice message in seconds.',
+        example=3.45,
+    )
+    date: datetime = Field(
+        description='The delivery date of the message.',
+        example="07-Jun-2024 12:32:19 +0000",
+    )
+    seen: bool = Field(
+        description='Indicates whether this message has been seen.',
+        example=True,
+    )
+
+
+class UserVoicemailResponse(BaseModel):
+    messages: List[VoicemailMessage]
+    has_new_messages: bool
+
+
+class UserVoicemailUnauthorizedErrorResponse(ErrorResponse):
+    code: Optional[str] = Field(
+        None,
+        description='`code` field values that are defined (but can be expanded) are:\n- `authorization_header_missing`\n- `bearer_credentials_missing`\n- `access_token_invalid`\n- `access_token_expired`\n- `unknown`',
+    )
+
+
+class UserVoicemailNotFoundErrorResponse(ErrorResponse):
+    code: Optional[str] = Field(
+        None,
+        description='`code` field values that are defined (but can be expanded) are:\n- `session_not_found`\n- `user_not_found`',
+    )
+
+
+class UserVoicemailInternalServerErrorResponse(ErrorResponse):
+    code: Optional[str] = Field(
+        None,
+        description='`code` field values that are defined (but can be expanded) are:\n- `external_api_issue`',
+    )
