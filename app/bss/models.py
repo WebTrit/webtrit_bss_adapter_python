@@ -829,3 +829,24 @@ class UserVoicemailDetailsInternalServerErrorResponse(ErrorResponse):
         None,
         description='`code` field values that are defined (but can be expanded) are:\n- `external_api_issue`',
     )
+
+
+class UserVoicemailMessageAttachmentUnauthorizedErrorResponse(ErrorResponse):
+    code: Optional[str] = Field(
+        None,
+        description='`code` field values that are defined (but can be expanded) are:\n- `authorization_header_missing`\n- `bearer_credentials_missing`\n- `access_token_invalid`\n- `access_token_expired`\n- `unknown`',
+    )
+
+
+class UserVoicemailMessageAttachmentNotFoundErrorResponse(ErrorResponse):
+    code: Optional[str] = Field(
+        None,
+        description='`code` field values that are defined (but can be expanded) are:\n- `session_not_found`\n- `user_not_found` \n- `message_not_found`',
+    )
+
+
+class UserVoicemailMessageAttachmentInternalServerErrorResponse(ErrorResponse):
+    code: Optional[str] = Field(
+        None,
+        description='`code` field values that are defined (but can be expanded) are:\n- `external_api_issue`',
+    )

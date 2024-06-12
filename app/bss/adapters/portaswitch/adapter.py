@@ -290,8 +290,15 @@ class Adapter(BSSAdapter):
                 error_message=f"Incorrect data from the Adaptee system {e}",
             )
 
-    def retrieve_user_voicemail(self, session: SessionInfo, user: UserInfo) -> UserVoicemailResponse:
-        """Returns users voicemail messages"""
+    def retrieve_voicemail(self, session: SessionInfo, user: UserInfo) -> UserVoicemailResponse:
+        """Returns users voicemail messages
+            Parameters:
+                session :SessionInfo: The session of the PortaSwitch account.
+                user :UserInfo: The information about the PortaSwitch account.
+
+            Returns:
+                EndUser: Filled structure of the UserVoicemailResponse.
+        """
         try:
             mailbox_messages = self.__account_api.get_mailbox_messages(safely_extract_scalar_value(session.access_token))
             voicemail_messages = [self.__serializer.get_voicemail_message(message) for message in mailbox_messages]
@@ -319,10 +326,19 @@ class Adapter(BSSAdapter):
                 error_message=f"Incorrect data from the Adaptee system {e}",
             )
 
-    def retrieve_user_voicemail_details(self, session: SessionInfo, user: UserInfo, message_id: str) -> VoicemailMessageDetails:
-        """Returns users voicemail message detail"""
+    def retrieve_voicemail_details(self, session: SessionInfo, user: UserInfo, message_id: str) -> VoicemailMessageDetails:
+        """Returns users voicemail message detail
+            Parameters:
+                session :SessionInfo: The session of the PortaSwitch account.
+                user :UserInfo: The information about the PortaSwitch account.
+                message_id :str: The unique ID of the voicemail message.
+
+            Returns:
+                EndUser: Filled structure of the VoicemailMessageDetails.
+        """
         try:
-            message_details = self.__account_api.get_mailbox_message_details(safely_extract_scalar_value(session.access_token), message_id)
+            message_details = self.__account_api.get_mailbox_message_details(safely_extract_scalar_value(session.access_token),
+                                                                             message_id)
 
             return self.__serializer.get_voicemail_message_details(message_details)
 
@@ -342,6 +358,40 @@ class Adapter(BSSAdapter):
             raise WebTritErrorException(
                 status_code=500,
                 error_message=f"Incorrect data from the Adaptee system {e}",
+            )
+
+    def retrieve_voicemail_message_attachment(self, session: SessionInfo, message_id: str) -> bytes:
+        """Returns the binary representation for attachent of the voicemail message.
+
+            Parameters:
+                session (SessionInfo): The session of the PortaSwitch account.
+                message_id :str: The unique ID of the voicemail message.
+
+            Returns:
+                :bytes: Raw bytes of a message attachment.
+        """
+        try:
+            return self.__account_api.get_mailbox_message_attachment(
+                safely_extract_scalar_value(session.access_token),
+                message_id,
+            )
+
+        except WebTritErrorException as error:
+            fault_code = extract_fault_code(error)
+            if fault_code in ('Client.Session.check_auth.failed_to_process_access_token',):
+                # Race condition case, when session is validated and then the access_token dies.
+                raise WebTritErrorException(
+                    status_code=404,
+                    error_message="User not found"
+                )
+
+            raise error
+
+        except (KeyError, TypeError):
+            # Incorrect data from PortaSwitch API. Has the backward compatibility been broken?
+            raise WebTritErrorException(
+                status_code=500,
+                error_message="Incorrect data from the Adaptee system",
             )
 
     def retrieve_contacts(self, session: SessionInfo, user: UserInfo) -> list[ContactInfo]:

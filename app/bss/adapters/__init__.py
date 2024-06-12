@@ -200,11 +200,16 @@ class BSSAdapter(SessionManagement, OTPHandler,
         """Obtain user's information - most importantly, his/her SIP credentials."""
         raise NotImplementedError("Override this method in your sub-class")
 
-    def retrieve_user_voicemail(self, session: SessionInfo, user: UserInfo) -> UserVoicemailResponse:
-        """Obtain user's voicebox information - most importantly, his/her SIP credentials."""
+    def retrieve_voicemail(self, session: SessionInfo, user: UserInfo) -> UserVoicemailResponse:
+        """Obtain user's voicebox information"""
         raise NotImplementedError("Override this method in your sub-class")
 
-    def retrieve_user_voicemail_details(self, session: SessionInfo, user: UserInfo, message_id: str) -> VoicemailMessageDetails:
+    def retrieve_voicemail_details(self, session: SessionInfo, user: UserInfo, message_id: str) -> VoicemailMessageDetails:
+        """Obtain user's voicebox message details information"""
+        raise NotImplementedError("Override this method in your sub-class")
+
+    def retrieve_voicemail_message_attachment(self, session: SessionInfo, message_id: str) -> bytes:
+        """Obtain the media file for a user's voicebox message"""
         raise NotImplementedError("Override this method in your sub-class")
 
     @abstractmethod
