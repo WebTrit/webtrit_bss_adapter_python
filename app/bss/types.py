@@ -108,10 +108,15 @@ from bss.models import (
     # voicemail
     UserVoicemailResponse as UserVoicemailResponse,
     VoicemailMessage as VoicemailMessage,
+    VoicemailMessageDetails as VoicemailMessageDetails,
+    VoicemailMessageAttachment as VoicemailMessageAttachment,
     VoicemailMessageType as VoicemailMessageType,
     UserVoicemailUnauthorizedErrorResponse as UserVoicemailUnauthorizedErrorResponse,
     UserVoicemailNotFoundErrorResponse as UserVoicemailNotFoundErrorResponse,
     UserVoicemailInternalServerErrorResponse as UserVoicemailInternalServerErrorResponse,
+    UserVoicemailDetailsUnauthorizedErrorResponse as UserVoicemailDetailsUnauthorizedErrorResponse,
+    UserVoicemailDetailsNotFoundErrorResponse as UserVoicemailDetailsNotFoundErrorResponse,
+    UserVoicemailDetailsInternalServerErrorResponse as UserVoicemailDetailsInternalServerErrorResponse,
 )
 
 class UserInfo(BaseModel):
@@ -135,7 +140,7 @@ class ExtendedUserInfo(UserInfo):
 
 
 class OTPCreateResponse(SessionOtpCreateResponse):
-    tenant_id: Optional[str] = None # unique ID of tenant's environment   
+    tenant_id: Optional[str] = None # unique ID of tenant's environment
 
 
 class OTP(BaseModel):
@@ -169,7 +174,7 @@ class Health(BaseModel):
 
 def orjson_dumps(v, *, default):
     return orjson.dumps(v, default=default).decode('utf-8')
- 
+
 class Serialiazable(BaseModel):
     """Object that can be converted into JSON structure"""
 
@@ -177,7 +182,7 @@ class Serialiazable(BaseModel):
         json_loads = orjson.loads
         json_dumps = orjson_dumps
 
-    
+
 class SuccessResponse(BaseModel):
     """The success response"""
     message: Optional[str] = None
@@ -211,7 +216,7 @@ class CallToAction(BaseModel):
     description: Optional[str] = Field(description='Extended info about the action (to be shown in the tool-tip, etc.)',
                                    example='Invite your colleagues or friends to use webTrit, so you can call each other for free',
                                    default = None)
-    
+
 class CallToActionLink(CallToAction):
     type: CallToActionType = Field(description='How this CTA should be rendered',
                                    example='Link', default=CallToActionType.LINK)

@@ -1,10 +1,10 @@
 import datetime
 from typing import Optional
 
-from .types import PortaSwitchMailboxMessageFlag
 from bss.types import (
     Balance, BalanceType, CDRInfo, ConnectStatus, ContactInfo, Direction, EndUser, Numbers, SIPInfo,
-    SIPRegistrationStatus, SIPServer, UserServiceActiveStatus, VoicemailMessage, VoicemailMessageType)
+    SIPRegistrationStatus, SIPServer, UserServiceActiveStatus, VoicemailMessage, VoicemailMessageType, VoicemailMessageDetails, VoicemailMessageAttachment)
+from .types import PortaSwitchMailboxMessageFlag
 
 #: dict: Contains a map between a PortaSwitch AccountInfo.billing_model and BalanceType.
 BILLING_MODEL_MAP: dict = {
@@ -147,8 +147,47 @@ class Serializer:
             id=str(mailbox_message['message_uid']),
             type=VoicemailMessageType.FAX if mailbox_message.get('fax_pages') else VoicemailMessageType.VOICE,
             duration=mailbox_message.get('voicemail_duration'),
+            fax_pages=mailbox_message.get('fax_pages'),
+            size=mailbox_message['size'],
             date=datetime.datetime.strptime(mailbox_message['delivery_date'], "%d-%b-%Y %H:%M:%S %z"),
             seen=PortaSwitchMailboxMessageFlag.SEEN.value in mailbox_message.get('flags', [])
+        )
+
+    @staticmethod
+    def get_voicemail_message_details(mailbox_message_details: dict) -> VoicemailMessageDetails:
+        """
+        Forms VoicemailMessageDetails based on the input mailbox_message_details.
+            Parameters:
+                mailbox_message_details: dict: The unique ID of the message.
+
+             Returns:
+                VoicemailMessageDetails: The filled structure of VoicemailMessageDetails.
+        """
+        voicemail_message = Serializer.get_voicemail_message(mailbox_message_details)
+
+        return VoicemailMessageDetails(
+            **voicemail_message.dict(),
+            sender=mailbox_message_details['from'],
+            receiver=mailbox_message_details['to'],
+            attachments=[Serializer.get_voicemail_message_attachment(att) for att in mailbox_message_details['body_structures']],
+        )
+
+    @staticmethod
+    def get_voicemail_message_attachment(attachment_body_structure: dict) -> VoicemailMessageAttachment:
+        """
+        Forms VoicemailMessageAttachment based on the input attachment_body_structure.
+            Parameters:
+                attachment_body_structure: dict: Details of all message attachments.
+
+             Returns:
+                VoicemailMessageAttachment: The filled structure of VoicemailMessageAttachment.
+        """
+
+        return VoicemailMessageAttachment(
+          type=attachment_body_structure['bodytype'],
+          subtype=attachment_body_structure['bodysubtype'],
+          size=attachment_body_structure['bodysize'],
+          filename=attachment_body_structure['file_name'],
         )
 
     @staticmethod

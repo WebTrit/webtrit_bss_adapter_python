@@ -1,23 +1,22 @@
 import logging
 from abc import ABC, abstractmethod
 from datetime import datetime
+from typing import List, Dict, Optional, Callable
+
 from pydantic import BaseModel
 
-from bss.models import UserVoicemailResponse
+from app_config import AppConfig
+from bss.adapters.otp import OTPHandler, SampleOTPHandler
+from bss.adapters.session_management import SessionManagement
+from bss.sessions import SessionInfo
 from bss.types import (UserInfo, EndUser, ContactInfo, CDRInfo,
                        Capabilities,
                        UserCreateResponse,
-                    #    APIAccessErrorCode, FailedAuthCode, UserNotFoundCode, UserAccessErrorCode,
-                    #    RefreshTokenErrorCode,
-                       CustomResponse, CustomRequest,
+                       CustomResponse, CustomRequest, UserVoicemailResponse, VoicemailMessageDetails,
                        eval_as_bool)
-from bss.sessions import SessionStorage, SessionInfo
-from bss.adapters.otp import OTPHandler, SampleOTPHandler
-from app_config import AppConfig
-from report_error import raise_webtrit_error
 from module_loader import ModuleLoader
-from bss.adapters.session_management import SessionManagement
-from typing import List, Dict, Any, Optional, Callable
+from report_error import raise_webtrit_error
+
 
 class AttrMap(BaseModel):
     """Define how to map the attributes of one data structure
@@ -46,7 +45,7 @@ class CustomMethodCall(ABC):
     data during signup; or getting a list of 'call-to-action' items
     such as promotions to show in the app; or anything else.        
     """
-    
+
     def custom_method_public(self,
                         method_name: str,
                         data: CustomRequest,
@@ -201,7 +200,11 @@ class BSSAdapter(SessionManagement, OTPHandler,
         """Obtain user's information - most importantly, his/her SIP credentials."""
         raise NotImplementedError("Override this method in your sub-class")
 
-    def retrieve_user_mailbox(self, session: SessionInfo, user: UserInfo) -> UserVoicemailResponse:
+    def retrieve_user_voicemail(self, session: SessionInfo, user: UserInfo) -> UserVoicemailResponse:
+        """Obtain user's voicebox information - most importantly, his/her SIP credentials."""
+        raise NotImplementedError("Override this method in your sub-class")
+
+    def retrieve_user_voicemail_details(self, session: SessionInfo, user: UserInfo, message_id: str) -> VoicemailMessageDetails:
         raise NotImplementedError("Override this method in your sub-class")
 
     @abstractmethod
@@ -319,7 +322,7 @@ class BSSAdapterExternalDB(BSSAdapter, SampleOTPHandler):
                 self.sessions.store_session(session)
                 return session
 
-            raise_webtrit_error(401, 
+            raise_webtrit_error(401,
                     error_message = "Password validation fails",
                     extra_error_code="incorrect_credentials")
 
@@ -375,7 +378,7 @@ class BSSAdapterExternalDB(BSSAdapter, SampleOTPHandler):
     def signup(self, user_data, tenant_id: str = None) -> UserCreateResponse:
         """Create a new user / customer as a part of the sign-up process"""
         raise NotImplementedError("Override this method in your sub-class")
-    
+
     def create_new_user(self, user_data, tenant_id: str = None) -> UserCreateResponse:
         """Deprecated version"""
         raise NotImplementedError("This method has been renamed to 'signup', update your code")

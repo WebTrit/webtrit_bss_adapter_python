@@ -282,3 +282,23 @@ class AccountAPI(HTTPAPIConnector):
             params={},
             access_token=access_token,
         )['messages']
+
+    def get_mailbox_message_details(self, access_token: str, message_id: str) -> dict:
+        """
+        Returns the mailbox of the account, which created a session related to the access_token.
+            Parameters:
+                access_token :str: The token that enables the API user to be authenticated in the PortaBilling API using the account realm.
+                message_id :str: The unique ID of the message.
+
+            Returns:
+                Response :dict: The API method execution result that contains a details of mailbox message.
+        """
+
+        return self.__send_request(
+            module='Account',
+            method='get_mailbox_message_details',
+            params={
+                "message_uid": message_id,
+            },
+            access_token=access_token,
+        )

@@ -9,7 +9,7 @@ from bss.types import (
     CallRecordingId, Capabilities, CDRInfo, ContactInfo, EndUser,
     OTPCreateResponse, OTPVerifyRequest,
     SessionInfo, UserInfo,
-    safely_extract_scalar_value, UserVoicemailResponse)
+    safely_extract_scalar_value, UserVoicemailResponse, VoicemailMessageDetails)
 from report_error import WebTritErrorException
 from .api import AccountAPI, AdminAPI
 from .serializer import Serializer
@@ -290,7 +290,7 @@ class Adapter(BSSAdapter):
                 error_message=f"Incorrect data from the Adaptee system {e}",
             )
 
-    def retrieve_user_mailbox(self, session: SessionInfo, user: UserInfo) -> UserVoicemailResponse:
+    def retrieve_user_voicemail(self, session: SessionInfo, user: UserInfo) -> UserVoicemailResponse:
         """Returns users voicemail messages"""
         try:
             mailbox_messages = self.__account_api.get_mailbox_messages(safely_extract_scalar_value(session.access_token))
@@ -300,6 +300,31 @@ class Adapter(BSSAdapter):
                 messages=voicemail_messages,
                 has_new_messages=any(not message.seen for message in voicemail_messages)
             )
+
+        except WebTritErrorException as error:
+            fault_code = extract_fault_code(error)
+            if fault_code in ('Client.Session.check_auth.failed_to_process_access_token',):
+                # Race condition case, when session is validated and then the access_token dies.
+                raise WebTritErrorException(
+                    status_code=404,
+                    error_message="User not found"
+                )
+
+            raise error
+
+        except (KeyError, TypeError) as e:
+            # Incorrect data from PortaSwitch API. Has the backward compatibility been broken?
+            raise WebTritErrorException(
+                status_code=500,
+                error_message=f"Incorrect data from the Adaptee system {e}",
+            )
+
+    def retrieve_user_voicemail_details(self, session: SessionInfo, user: UserInfo, message_id: str) -> VoicemailMessageDetails:
+        """Returns users voicemail message detail"""
+        try:
+            message_details = self.__account_api.get_mailbox_message_details(safely_extract_scalar_value(session.access_token), message_id)
+
+            return self.__serializer.get_voicemail_message_details(message_details)
 
         except WebTritErrorException as error:
             fault_code = extract_fault_code(error)

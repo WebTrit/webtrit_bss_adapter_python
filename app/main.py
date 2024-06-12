@@ -82,10 +82,15 @@ from bss.types import (
     SessionAutoProvisionNotImplementedErrorResponse,
 
     # voicemail
+    VoicemailMessageDetails,
+    VoicemailMessageAttachment,
     UserVoicemailResponse,
     UserVoicemailUnauthorizedErrorResponse,
     UserVoicemailNotFoundErrorResponse,
-    UserVoicemailInternalServerErrorResponse
+    UserVoicemailInternalServerErrorResponse,
+    UserVoicemailDetailsUnauthorizedErrorResponse,
+    UserVoicemailDetailsNotFoundErrorResponse,
+    UserVoicemailDetailsInternalServerErrorResponse,
 )
 from bss.types import Capabilities, ExtendedUserInfo, Health, safely_extract_scalar_value
 from report_error import raise_webtrit_error
@@ -667,12 +672,51 @@ def get_user_voicemail(
 
     is_method_allowed(Capabilities.voicemail)
 
-    voicemail = bss.retrieve_user_mailbox(session, ExtendedUserInfo(
+    voicemail = bss.retrieve_user_voicemail(session, ExtendedUserInfo(
         user_id=safely_extract_scalar_value(session.user_id),
         tenant_id=bss.default_id_if_none(x_webtrit_tenant_id)
     ))
 
     return voicemail
+
+@router.get(
+    '/user/voicemail/{message_id}',
+    response_model=VoicemailMessageDetails,
+    responses={
+        '401': {'model': UserVoicemailDetailsUnauthorizedErrorResponse},
+        '404': {'model': UserVoicemailDetailsNotFoundErrorResponse},
+        '500': {'model': UserVoicemailDetailsInternalServerErrorResponse},
+    },
+    tags=['user'],
+)
+def get_user_voicemail_detail(
+        message_id: str,
+        auth_data: HTTPAuthorizationCredentials = Depends(security),
+        x_webtrit_tenant_id: Optional[str] = Header(None, alias=TENANT_ID_HTTP_HEADER),
+) -> Union[
+    VoicemailMessageDetails,
+    UserVoicemailDetailsUnauthorizedErrorResponse,
+    UserVoicemailDetailsNotFoundErrorResponse,
+    UserVoicemailDetailsInternalServerErrorResponse,
+]:
+    """
+    Get user's voicemail detail
+    """
+    global bss, bss_capabilities
+
+    access_token = auth_data.credentials
+    session = bss.validate_session(access_token)
+
+    is_method_allowed(Capabilities.voicemail)
+
+    return bss.retrieve_user_voicemail_details(
+        session,
+        ExtendedUserInfo(
+            user_id=safely_extract_scalar_value(session.user_id),
+            tenant_id=bss.default_id_if_none(x_webtrit_tenant_id)
+        ),
+        message_id
+    )
 
 
 @router.post("/custom/public/{method_name}/{extra_path_params:path}",
