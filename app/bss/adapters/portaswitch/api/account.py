@@ -1,11 +1,13 @@
 import logging
 from datetime import datetime
-from typing import Final, List
+from typing import Final, List, Union, Iterator
 
 import requests
 
 from app_config import AppConfig
 from bss.http_api import HTTPAPIConnector
+
+DEFAULT_CHUNK_SIZE: Final[int] = 8192
 
 
 class AccountAPI(HTTPAPIConnector):
@@ -28,9 +30,9 @@ class AccountAPI(HTTPAPIConnector):
 
         super().__init__(api_server)
 
-    def __send_request(self, module: str, method: str, params: dict,
-                       access_token: str | None = None) -> dict:
-        """Sends the Porta-Billing API method by means of HTTP POST request.
+    def __send_request(self, module: str, method: str, params: dict, stream: bool | None = None,
+                       access_token: str | None = None) -> Union[dict, bytes, Iterator]:
+        """Sends the PortaBilling API method by means of HTTP POST request.
 
         Parameters:
             :module (str): The module of the Porta-Billing API methods from which the method to be
@@ -56,7 +58,8 @@ class AccountAPI(HTTPAPIConnector):
             json={
                 "params": params
             },
-            headers=headers
+            headers=headers,
+            stream=stream,
         )
 
         logging.debug(f"Processing the Account.API result: {module}/{method}/{params}: \n {result}")
@@ -81,16 +84,16 @@ class AccountAPI(HTTPAPIConnector):
 
         return request_params
 
-    def decode_response(self, response: requests.models.Response) -> dict:
+    def decode_response(self, response: requests.models.Response) -> Union[dict, bytes, Iterator]:
         """Decode the response.
 
         Parameters:
             :response (requests.models.Response): The response to be decoded.
 
         Returns:
-            :(dict|bytes): Returns dict with parsed JSON in case the response contains JSON content
-                type. Returns bytes if the response is an attachment.
-
+            Response :dict|bytes: Returns dict with parsed JSON in case the response contains JSON content type.
+                Returns bytes if the response is an attachment.
+                Returns Iterator if the response marked as `chunked`
         """
 
         headers = response.headers
@@ -98,10 +101,10 @@ class AccountAPI(HTTPAPIConnector):
             return response.json()
 
         if 'attachment' in headers.get('Content-Disposition', ''):
-            ## TODO: consider reading in chunks. See: requests.models.Response.iter_content.
-            ## In our case the 'Transfer-Encoding' header has the 'chunked' value.
-
-            return response.content
+            if 'chunked' in headers.get('Transfer-Encoding', ''):
+                return response.iter_content(DEFAULT_CHUNK_SIZE)
+            else:
+                return response.content
 
         raise ValueError('Not expected response')
 
@@ -303,7 +306,7 @@ class AccountAPI(HTTPAPIConnector):
             access_token=access_token,
         )
 
-    def get_mailbox_message_attachment(self, access_token: str, message_id: str) -> bytes:
+    def get_mailbox_message_attachment(self, access_token: str, message_id: str) -> Iterator:
         """
         Returns the mailbox message attachment of the account, which created a session related to the access_token.
             Parameters:
@@ -318,8 +321,8 @@ class AccountAPI(HTTPAPIConnector):
             module='Account',
             method='get_mailbox_message_attachment',
             params={
-                "message_uid": message_id,
-                "format": "mp3"
+                "message_uid": message_id
             },
+            stream=True,
             access_token=access_token,
         )

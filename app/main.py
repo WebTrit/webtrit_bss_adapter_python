@@ -9,6 +9,7 @@ from typing import Optional, Union
 from fastapi import FastAPI, APIRouter, Depends, Response, Request, Header, Body
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from pydantic import conint
+from starlette.responses import StreamingResponse
 from starlette.status import HTTP_204_NO_CONTENT
 
 import bss.adapters
@@ -661,9 +662,6 @@ def get_user_voicemail(
     UserVoicemailNotFoundErrorResponse,
     UserVoicemailInternalServerErrorResponse,
 ]:
-    """
-    Get user's voicemail
-    """
     global bss, bss_capabilities
 
     access_token = auth_data.credentials
@@ -688,7 +686,7 @@ def get_user_voicemail(
     },
     tags=['user'],
 )
-def get_user_voicemail_details(
+def get_user_voicemail_message_details(
         message_id: str,
         auth_data: HTTPAuthorizationCredentials = Depends(security),
         x_webtrit_tenant_id: Optional[str] = Header(None, alias=TENANT_ID_HTTP_HEADER),
@@ -698,9 +696,6 @@ def get_user_voicemail_details(
     UserVoicemailDetailsNotFoundErrorResponse,
     UserVoicemailDetailsInternalServerErrorResponse,
 ]:
-    """
-    Get user's voicemail details
-    """
     global bss, bss_capabilities
 
     access_token = auth_data.credentials
@@ -721,7 +716,7 @@ def get_user_voicemail_details(
 @router.get(
     '/user/voicemail/{message_id}/attachment',
     # Prevent FastAPI to validate the response as JSON (default response class).
-    response_class=Response,
+    response_class=StreamingResponse,
     responses={
         '401': {'model': UserVoicemailMessageAttachmentUnauthorizedErrorResponse},
         '404': {'model': UserVoicemailMessageAttachmentNotFoundErrorResponse},
@@ -745,9 +740,9 @@ def get_user_voicemail_message_attachment(
 
     access_token = auth_data.credentials
     session = bss.validate_session(access_token)
+    content_iterator = bss.retrieve_voicemail_message_attachment(session, message_id)
 
-    return Response(content=bss.retrieve_voicemail_message_attachment(session, message_id))
-
+    return StreamingResponse(content_iterator, media_type="application/octet-stream")
 
 @router.post("/custom/public/{method_name}/{extra_path_params:path}",
           response_model=CustomResponse, tags=['custom'])

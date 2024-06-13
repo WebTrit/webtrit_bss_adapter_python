@@ -1,5 +1,5 @@
 from datetime import datetime, timedelta
-from typing import Final
+from typing import Final, Iterator
 
 from app_config import AppConfig
 from bss.adapters import BSSAdapter
@@ -360,7 +360,7 @@ class Adapter(BSSAdapter):
                 error_message=f"Incorrect data from the Adaptee system {e}",
             )
 
-    def retrieve_voicemail_message_attachment(self, session: SessionInfo, message_id: str) -> bytes:
+    def retrieve_voicemail_message_attachment(self, session: SessionInfo, message_id: str) -> Iterator:
         """Returns the binary representation for attachent of the voicemail message.
 
             Parameters:

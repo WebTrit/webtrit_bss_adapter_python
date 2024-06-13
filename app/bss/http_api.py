@@ -1,9 +1,11 @@
 import logging
-import requests
-from datetime import datetime, timedelta
 from abc import ABC, abstractmethod
+from datetime import datetime, timedelta
+
+import requests
+
 from report_error import raise_webtrit_error
-#from bss.types import SignupExtAPIErrorCode as ExtAPIErrorCode
+
 
 class HTTPAPIConnector(ABC):
     """Extract data from a remote server via REST/GRAPHQL or other HTTP-based API"""
@@ -41,16 +43,18 @@ class HTTPAPIConnector(ABC):
     def send_rest_request(self,
                           method: str,
                           path: str,
-                          server = None,
-                          data = None,
-                          json = None,
-                          headers = { 'Content-Type': 'application/json'}) -> dict:
+                          server=None,
+                          data=None,
+                          json=None,
+                          stream=None,
+                          headers={'Content-Type': 'application/json'}) -> dict:
         """Send a HTTP request to the server and return the JSON response as a dict"""
         url = (server if server else self.api_server) + path
         params = {
-                'headers': headers.copy() if headers else None,
-                'data': data.copy() if data else None,
-                'json': json.copy() if json else None
+            'headers': headers.copy() if headers else None,
+            'data': data.copy() if data else None,
+            'json': json.copy() if json else None,
+            'stream': stream,
         }
         params_final = self.add_auth_info(url, params)
 
@@ -64,18 +68,18 @@ class HTTPAPIConnector(ABC):
         except requests.exceptions.Timeout:
             logging.debug(f"Connection to {self.api_server} timed out")
             raise_webtrit_error(500,
-                    error_message="Request execution error on the other side",
-                    bss_request_trace = {
-                        'method': method,
-                        'url': url,
-                        **params
-                        },
-                    bss_response_trace = {
-                        'status_code': 408,
-                        'text': 'Timed out',
-                        'response_content': {}
-                    }
-                )
+                                error_message="Request execution error on the other side",
+                                bss_request_trace={
+                                    'method': method,
+                                    'url': url,
+                                    **params
+                                },
+                                bss_response_trace={
+                                    'status_code': 408,
+                                    'text': 'Timed out',
+                                    'response_content': {}
+                                }
+                                )
         except requests.exceptions.RequestException as e:
             logging.debug(f"Request error: {e}")
 
@@ -87,17 +91,17 @@ class HTTPAPIConnector(ABC):
                 pass
 
             raise_webtrit_error(500,
-                    error_message="Request execution error on the BSS/VoIP system side",
-                    bss_request_trace = {
-                        'method': method,
-                        'url': url,
-                        } | params,
-                    bss_response_trace = {
-                        'status_code': 500,
-                        'text': f"{e}",
-                        'response_content': response_content
-                    }
-                )
+                                error_message="Request execution error on the BSS/VoIP system side",
+                                bss_request_trace={
+                                                      'method': method,
+                                                      'url': url,
+                                                  } | params,
+                                bss_response_trace={
+                                    'status_code': 500,
+                                    'text': f"{e}",
+                                    'response_content': response_content
+                                }
+                                )
 
     def decode_response(self, response) -> dict:
         """Decode the JSON response from the server into a dict.
@@ -110,7 +114,7 @@ class HTTPAPIConnector(ABC):
 class HTTPAPIConnectorWithLogin(HTTPAPIConnector):
     """Use HTTP-based API that requires to login first
     to obtain an access token for this session"""
-    REFRESH_TOKEN_IN_ADVANCE = 10 # minutes
+    REFRESH_TOKEN_IN_ADVANCE = 10  # minutes
 
     #: str: The login of the API user.
     api_user = None
@@ -133,11 +137,11 @@ class HTTPAPIConnectorWithLogin(HTTPAPIConnector):
     def send_rest_request(self,
                           method: str,
                           path: str,
-                          server = None,
-                          data = None,
-                          json = None,
-                          headers = { 'Content-Type': 'application/json'},
-                          turn_off_login = False) -> dict:
+                          server=None,
+                          data=None,
+                          json=None,
+                          headers={'Content-Type': 'application/json'},
+                          turn_off_login=False) -> dict:
         """Send a HTTP request to the server and return the JSON response as a dict"""
         if not turn_off_login and self.have_to_login():
             # we do not have an access token, need to log in first
@@ -163,11 +167,11 @@ class HTTPAPIConnectorWithLogin(HTTPAPIConnector):
                     logging.debug("The access token expired, logging in again")
                     self.login()
             elif self.access_token_expires_at - datetime.now() < \
-                timedelta(minutes=self.REFRESH_TOKEN_IN_ADVANCE) \
+                    timedelta(minutes=self.REFRESH_TOKEN_IN_ADVANCE) \
                     and self.refresh_token:
                 # proactiveluy refresh the token a bit before the expiration time
                 logging.debug("The access token will expire soon " +
-                    f"{self.access_token_expires_at.isoformat()}, refreshing it")
+                              f"{self.access_token_expires_at.isoformat()}, refreshing it")
                 self.refresh()
 
         return False if self.access_token else True
@@ -193,5 +197,3 @@ class HTTPAPIConnectorWithLogin(HTTPAPIConnector):
         """Override this method in your sub-class to provide the ability
         to exchange a refresh token for a new session access token."""
         pass
-
-

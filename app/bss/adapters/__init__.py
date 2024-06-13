@@ -1,7 +1,7 @@
 import logging
 from abc import ABC, abstractmethod
 from datetime import datetime
-from typing import List, Dict, Optional, Callable
+from typing import List, Dict, Optional, Callable, Union, Iterator
 
 from pydantic import BaseModel
 
@@ -208,7 +208,7 @@ class BSSAdapter(SessionManagement, OTPHandler,
         """Obtain user's voicebox message details information"""
         raise NotImplementedError("Override this method in your sub-class")
 
-    def retrieve_voicemail_message_attachment(self, session: SessionInfo, message_id: str) -> bytes:
+    def retrieve_voicemail_message_attachment(self, session: SessionInfo, message_id: str) -> Union[bytes, Iterator]:
         """Obtain the media file for a user's voicebox message"""
         raise NotImplementedError("Override this method in your sub-class")
 
