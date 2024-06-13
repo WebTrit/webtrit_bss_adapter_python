@@ -25,7 +25,7 @@ class Adapter(BSSAdapter):
     Currently does not support OTP login.
 
     """
-    VERSION: Final[str] = "0.0.4"
+    VERSION: Final[str] = "0.1.0"
     OTP_DELIVERY_CHANNEL: Final[DeliveryChannel] = DeliveryChannel.call
 
     def __init__(self, config: AppConfig):
