@@ -781,7 +781,7 @@ class VoicemailMessageDetails(VoicemailMessage):
     attachments: List[VoicemailMessageAttachment]
 
 
-class UserVoicemailMessageSeen(BaseModel):
+class UserVoicemailMessagePatch(BaseModel):
     seen: bool
 
 

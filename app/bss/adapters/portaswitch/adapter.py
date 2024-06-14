@@ -9,7 +9,7 @@ from bss.types import (
     CallRecordingId, Capabilities, CDRInfo, ContactInfo, EndUser,
     OTPCreateResponse, OTPVerifyRequest,
     SessionInfo, UserInfo,
-    safely_extract_scalar_value, UserVoicemailsResponse, UserVoicemailMessageSeen, VoicemailMessageDetails)
+    safely_extract_scalar_value, UserVoicemailsResponse, UserVoicemailMessagePatch, VoicemailMessageDetails)
 from report_error import WebTritErrorException
 from .api import AccountAPI, AdminAPI
 from .serializer import Serializer
@@ -393,17 +393,19 @@ class Adapter(BSSAdapter):
         except (KeyError, TypeError):
             raise WebTritErrorException(500, "Incorrect data from the Adaptee system")
 
-    def patch_voicemail_message_seen(self, session: SessionInfo, message_id: str, seen: bool) -> UserVoicemailMessageSeen:
-        """Update seen attribute for a user's voicebox message.
+    def patch_voicemail_message(self, session: SessionInfo, message_id: str, body: UserVoicemailMessagePatch) -> UserVoicemailMessagePatch:
+        """Update attributes for a user's voicebox message.
 
             Parameters:
                 session (SessionInfo): The session of the PortaSwitch account.
                 message_id :str: The unique ID of the voicemail message.
-                seen: :bool: Set the flag if it is `True`, remove the flag otherwise.
+                body: :bool: Attributes to patch.
 
             Returns:
                 Response :UserVoicemailMessageSeenResponse: Filled structure of the UserVoicemailMessageSeenResponse.
         """
+        seen = body.seen
+
         try:
             self.__account_api.set_mailbox_message_flag(
                 safely_extract_scalar_value(session.access_token),
@@ -412,7 +414,7 @@ class Adapter(BSSAdapter):
                 PortaSwitchMailboxMessageFlagAction.SET if seen else PortaSwitchMailboxMessageFlagAction.UNSET
             )
 
-            return UserVoicemailMessageSeen(seen=seen)
+            return UserVoicemailMessagePatch(seen=seen)
 
         except WebTritErrorException as error:
             fault_code = extract_fault_code(error)

@@ -107,7 +107,7 @@ from bss.models import (
 
     # voicemail
     UserVoicemailsResponse as UserVoicemailsResponse,
-    UserVoicemailMessageSeen as UserVoicemailMessageSeen,
+    UserVoicemailMessagePatch as UserVoicemailMessagePatch,
     VoicemailMessage as VoicemailMessage,
     VoicemailMessageDetails as VoicemailMessageDetails,
     VoicemailMessageAttachment as VoicemailMessageAttachment,
