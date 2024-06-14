@@ -3,7 +3,8 @@ from typing import Optional
 
 from bss.types import (
     Balance, BalanceType, CDRInfo, ConnectStatus, ContactInfo, Direction, EndUser, Numbers, SIPInfo,
-    SIPRegistrationStatus, SIPServer, UserServiceActiveStatus, VoicemailMessage, VoicemailMessageType, VoicemailMessageDetails, VoicemailMessageAttachment)
+    SIPRegistrationStatus, SIPServer, UserServiceActiveStatus, VoicemailMessage, VoicemailMessageType, VoicemailMessageDetails,
+    VoicemailMessageAttachment)
 from .types import PortaSwitchMailboxMessageFlag
 
 #: dict: Contains a map between a PortaSwitch AccountInfo.billing_model and BalanceType.
@@ -147,7 +148,6 @@ class Serializer:
             id=str(mailbox_message['message_uid']),
             type=VoicemailMessageType.FAX if mailbox_message.get('fax_pages') else VoicemailMessageType.VOICE,
             duration=mailbox_message.get('voicemail_duration'),
-            fax_pages=mailbox_message.get('fax_pages'),
             size=mailbox_message['size'],
             date=datetime.datetime.strptime(mailbox_message['delivery_date'], "%d-%b-%Y %H:%M:%S %z"),
             seen=f'\\{PortaSwitchMailboxMessageFlag.SEEN.value}' in mailbox_message.get('flags', [])
@@ -167,8 +167,8 @@ class Serializer:
 
         return VoicemailMessageDetails(
             **voicemail_message.dict(),
-            sender=mailbox_message_details['from'],
-            receiver=mailbox_message_details['to'],
+            sender=Serializer.parse_voicemail_message_sender_user_ref(mailbox_message_details['from']),
+            receiver=Serializer.parse_voicemail_message_receiver_user_ref(mailbox_message_details['to']),
             attachments=[Serializer.get_voicemail_message_attachment(att) for att in mailbox_message_details['body_structures']],
         )
 
@@ -184,10 +184,10 @@ class Serializer:
         """
 
         return VoicemailMessageAttachment(
-          type=attachment_body_structure['bodytype'],
-          subtype=attachment_body_structure['bodysubtype'],
-          size=attachment_body_structure['bodysize'],
-          filename=attachment_body_structure['file_name'],
+            type=attachment_body_structure['bodytype'],
+            subtype=attachment_body_structure['bodysubtype'],
+            size=attachment_body_structure['bodysize'],
+            filename=attachment_body_structure['file_name'],
         )
 
     @staticmethod
@@ -228,3 +228,11 @@ class Serializer:
                 Response :str: The formed display name string.
         """
         return f"{first_name or ''} {last_name or ''}".strip()
+
+    @staticmethod
+    def parse_voicemail_message_sender_user_ref(sender: str) -> str:
+        return sender.split(' ')[1][1:]
+
+    @staticmethod
+    def parse_voicemail_message_receiver_user_ref(receiver: str) -> str:
+        return receiver.split(' ')[0]

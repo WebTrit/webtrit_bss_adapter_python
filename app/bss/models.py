@@ -737,9 +737,6 @@ class VoicemailMessage(BaseModel):
         description='The duration of the voice message in seconds.',
         example=3.45,
     )
-    fax_pages: Optional[int] = Field(
-        description='The number of fax pages in the message.',
-    )
     size: int = Field(
         description='The total size of all attachments in the message in KB.',
         example=5,
@@ -788,7 +785,7 @@ class UserVoicemailMessageSeen(BaseModel):
     seen: bool
 
 
-class UserVoicemailResponse(BaseModel):
+class UserVoicemailsResponse(BaseModel):
     messages: List[VoicemailMessage]
     has_new_messages: bool
 
@@ -853,6 +850,13 @@ class UserVoicemailMessageAttachmentInternalServerErrorResponse(ErrorResponse):
     code: Optional[str] = Field(
         None,
         description='`code` field values that are defined (but can be expanded) are:\n- `external_api_issue`',
+    )
+
+
+class UserVoicemailMessageAttachmentUnprocessableEntityErrorResponse(ErrorResponse):
+    code: Optional[str] = Field(
+        None,
+        description='`code` field values that are defined (but can be expanded) are:\n- `unsupported_file_format`',
     )
 
 

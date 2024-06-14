@@ -12,7 +12,7 @@ from bss.sessions import SessionInfo
 from bss.types import (UserInfo, EndUser, ContactInfo, CDRInfo,
                        Capabilities,
                        UserCreateResponse,
-                       CustomResponse, CustomRequest, UserVoicemailResponse, UserVoicemailMessageSeen,
+                       CustomResponse, CustomRequest, UserVoicemailsResponse, UserVoicemailMessageSeen,
                        VoicemailMessageDetails,
                        eval_as_bool)
 from module_loader import ModuleLoader
@@ -201,20 +201,20 @@ class BSSAdapter(SessionManagement, OTPHandler,
         """Obtain user's information - most importantly, his/her SIP credentials."""
         raise NotImplementedError("Override this method in your sub-class")
 
-    def retrieve_voicemail(self, session: SessionInfo, user: UserInfo) -> UserVoicemailResponse:
-        """Obtain user's voicebox information"""
+    def retrieve_voicemails(self, session: SessionInfo, user: UserInfo) -> UserVoicemailsResponse:
+        """Obtain user's voicemails"""
         raise NotImplementedError("Override this method in your sub-class")
 
-    def retrieve_voicemail_details(self, session: SessionInfo, user: UserInfo, message_id: str) -> VoicemailMessageDetails:
-        """Obtain user's voicebox message details information"""
+    def retrieve_voicemail_message_details(self, session: SessionInfo, user: UserInfo, message_id: str) -> VoicemailMessageDetails:
+        """Obtain user's voicemail message details information"""
         raise NotImplementedError("Override this method in your sub-class")
 
-    def retrieve_voicemail_message_attachment(self, session: SessionInfo, message_id: str) -> Union[bytes, Iterator]:
-        """Obtain the media file for a user's voicebox message"""
+    def retrieve_voicemail_message_attachment(self, session: SessionInfo, message_id: str, file_format: str) -> Union[bytes, Iterator]:
+        """Obtain the media file for a user's voicemail message"""
         raise NotImplementedError("Override this method in your sub-class")
 
     def patch_voicemail_message_seen(self, session: SessionInfo, message_id: str, seen: bool) -> UserVoicemailMessageSeen:
-        """Update seen attribute for a user's voicebox message"""
+        """Update seen attribute for a user's voicemail message"""
         raise NotImplementedError("Override this method in your sub-class")
 
     @abstractmethod

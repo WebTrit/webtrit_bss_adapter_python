@@ -84,7 +84,7 @@ from bss.types import (
 
     # voicemail
     VoicemailMessageDetails,
-    UserVoicemailResponse,
+    UserVoicemailsResponse,
     UserVoicemailUnauthorizedErrorResponse,
     UserVoicemailMessageSeen,
     UserVoicemailNotFoundErrorResponse,
@@ -97,6 +97,7 @@ from bss.types import (
     UserVoicemailMessageAttachmentInternalServerErrorResponse,
     UserVoicemailMessageSeenUnauthorizedErrorResponse,
     UserVoicemailMessageSeenNotFoundErrorResponse,
+    UserVoicemailMessageAttachmentUnprocessableEntityErrorResponse,
     UserVoicemailMessageSeenInternalServerErrorResponse,
 )
 from bss.types import Capabilities, ExtendedUserInfo, Health, safely_extract_scalar_value
@@ -648,8 +649,8 @@ def get_user_recording(
 
 
 @router.get(
-    '/user/voicemail',
-    response_model=UserVoicemailResponse,
+    '/user/voicemails',
+    response_model=UserVoicemailsResponse,
     responses={
         '401': {'model': UserVoicemailUnauthorizedErrorResponse},
         '404': {'model': UserVoicemailNotFoundErrorResponse},
@@ -657,11 +658,11 @@ def get_user_recording(
     },
     tags=['user'],
 )
-def get_user_voicemail(
+def get_user_voicemails(
         auth_data: HTTPAuthorizationCredentials = Depends(security),
         x_webtrit_tenant_id: Optional[str] = Header(None, alias=TENANT_ID_HTTP_HEADER),
 ) -> Union[
-    UserVoicemailResponse,
+    UserVoicemailsResponse,
     UserVoicemailUnauthorizedErrorResponse,
     UserVoicemailNotFoundErrorResponse,
     UserVoicemailInternalServerErrorResponse,
@@ -673,7 +674,7 @@ def get_user_voicemail(
 
     is_method_allowed(Capabilities.voicemail)
 
-    voicemail = bss.retrieve_voicemail(session, ExtendedUserInfo(
+    voicemail = bss.retrieve_voicemails(session, ExtendedUserInfo(
         user_id=safely_extract_scalar_value(session.user_id),
         tenant_id=bss.default_id_if_none(x_webtrit_tenant_id)
     ))
@@ -682,7 +683,7 @@ def get_user_voicemail(
 
 
 @router.get(
-    '/user/voicemail/{message_id}',
+    '/user/voicemails/{message_id}',
     response_model=VoicemailMessageDetails,
     responses={
         '401': {'model': UserVoicemailDetailsUnauthorizedErrorResponse},
@@ -708,7 +709,7 @@ def get_user_voicemail_message_details(
 
     is_method_allowed(Capabilities.voicemail)
 
-    return bss.retrieve_voicemail_details(
+    return bss.retrieve_voicemail_message_details(
         session,
         ExtendedUserInfo(
             user_id=safely_extract_scalar_value(session.user_id),
@@ -719,24 +720,26 @@ def get_user_voicemail_message_details(
 
 
 @router.get(
-    '/user/voicemail/{message_id}/attachment',
-    # Prevent FastAPI to validate the response as JSON (default response class).
+    '/user/voicemails/{message_id}/attachment',
     response_class=StreamingResponse,
     responses={
         '401': {'model': UserVoicemailMessageAttachmentUnauthorizedErrorResponse},
         '404': {'model': UserVoicemailMessageAttachmentNotFoundErrorResponse},
+        '422': {'model': UserVoicemailMessageAttachmentUnprocessableEntityErrorResponse},
         '500': {'model': UserVoicemailMessageAttachmentInternalServerErrorResponse},
     },
     tags=['user'],
 )
 def get_user_voicemail_message_attachment(
         message_id: str,
+        file_format: str = None,
         auth_data: HTTPAuthorizationCredentials = Depends(security),
         _x_webtrit_tenant_id: Optional[str] = Header(None, alias=TENANT_ID_HTTP_HEADER),
 ) -> Union[
     BinaryResponse,
     UserVoicemailMessageAttachmentUnauthorizedErrorResponse,
     UserVoicemailMessageAttachmentNotFoundErrorResponse,
+    UserVoicemailMessageAttachmentUnprocessableEntityErrorResponse,
     UserVoicemailMessageAttachmentInternalServerErrorResponse,
 ]:
     global bss, bss_capabilities
@@ -745,13 +748,13 @@ def get_user_voicemail_message_attachment(
 
     access_token = auth_data.credentials
     session = bss.validate_session(access_token)
-    content_iterator = bss.retrieve_voicemail_message_attachment(session, message_id)
+    content_iterator = bss.retrieve_voicemail_message_attachment(session, message_id, file_format)
 
     return StreamingResponse(content_iterator, media_type="application/octet-stream")
 
 
 @router.patch(
-    '/user/voicemail/{message_id}/seen',
+    '/user/voicemails/{message_id}/seen',
     response_model=UserVoicemailMessageSeen,
     responses={
         '401': {'model': UserVoicemailMessageSeenUnauthorizedErrorResponse},

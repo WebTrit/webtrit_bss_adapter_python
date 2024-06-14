@@ -307,12 +307,13 @@ class AccountAPI(HTTPAPIConnector):
             access_token=access_token,
         )
 
-    def get_mailbox_message_attachment(self, access_token: str, message_id: str) -> Iterator:
+    def get_mailbox_message_attachment(self, access_token: str, message_id: str, file_format: str) -> Iterator:
         """
         Returns the mailbox message attachment of the account, which created a session related to the access_token.
             Parameters:
                 access_token :str: The token that enables the API user to be authenticated in the PortaBilling API using the account realm.
                 message_id :str: The unique ID of the message.
+                file_format :str: Provided file format.
 
             Returns:
                 Response :bytes: The API method execution result that contains a raw bytes of a mailbox message attachment.
@@ -322,7 +323,8 @@ class AccountAPI(HTTPAPIConnector):
             module='Account',
             method='get_mailbox_message_attachment',
             params={
-                "message_uid": message_id
+                "message_uid": message_id,
+                "format": file_format
             },
             stream=True,
             access_token=access_token,

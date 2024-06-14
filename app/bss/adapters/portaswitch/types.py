@@ -48,3 +48,13 @@ class PortaSwitchMailboxMessageFlag(Enum):
 class PortaSwitchMailboxMessageFlagAction(Enum):
     SET = 'set_flag'
     UNSET = 'remove_flag'
+
+
+class PortaSwitchMailboxMessageAttachmentFormat(Enum):
+    WAV = 'wav'
+    MP3 = 'mp3'
+    AU = 'au'
+
+    @classmethod
+    def has_value(cls, value):
+        return value in cls._value2member_map_

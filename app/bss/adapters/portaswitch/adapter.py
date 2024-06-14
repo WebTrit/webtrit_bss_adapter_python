@@ -9,12 +9,13 @@ from bss.types import (
     CallRecordingId, Capabilities, CDRInfo, ContactInfo, EndUser,
     OTPCreateResponse, OTPVerifyRequest,
     SessionInfo, UserInfo,
-    safely_extract_scalar_value, UserVoicemailResponse, UserVoicemailMessageSeen, VoicemailMessageDetails)
+    safely_extract_scalar_value, UserVoicemailsResponse, UserVoicemailMessageSeen, VoicemailMessageDetails)
 from report_error import WebTritErrorException
 from .api import AccountAPI, AdminAPI
 from .serializer import Serializer
 from .types import PortaSwitchSignInCredentialsType, PortaSwitchContactsSelectingMode, PortaSwitchExtensionType, \
-    PortaSwitchDualVersionSystem, PortaSwitchMailboxMessageFlag, PortaSwitchMailboxMessageFlagAction
+    PortaSwitchDualVersionSystem, PortaSwitchMailboxMessageFlag, PortaSwitchMailboxMessageFlagAction, \
+    PortaSwitchMailboxMessageAttachmentFormat
 from .utils import generate_otp_id, extract_fault_code
 
 
@@ -290,7 +291,7 @@ class Adapter(BSSAdapter):
                 error_message=f"Incorrect data from the Adaptee system {e}",
             )
 
-    def retrieve_voicemail(self, session: SessionInfo, user: UserInfo) -> UserVoicemailResponse:
+    def retrieve_voicemails(self, session: SessionInfo, user: UserInfo) -> UserVoicemailsResponse:
         """Returns users voicemail messages
             Parameters:
                 session :SessionInfo: The session of the PortaSwitch account.
@@ -303,7 +304,7 @@ class Adapter(BSSAdapter):
             mailbox_messages = self.__account_api.get_mailbox_messages(safely_extract_scalar_value(session.access_token))
             voicemail_messages = [self.__serializer.get_voicemail_message(message) for message in mailbox_messages]
 
-            return UserVoicemailResponse(
+            return UserVoicemailsResponse(
                 messages=voicemail_messages,
                 has_new_messages=any(not message.seen for message in voicemail_messages)
             )
@@ -311,7 +312,6 @@ class Adapter(BSSAdapter):
         except WebTritErrorException as error:
             fault_code = extract_fault_code(error)
             if fault_code in ('Client.Session.check_auth.failed_to_process_access_token',):
-                # Race condition case, when session is validated and then the access_token dies.
                 raise WebTritErrorException(
                     status_code=404,
                     error_message="User not found"
@@ -320,13 +320,13 @@ class Adapter(BSSAdapter):
             raise error
 
         except (KeyError, TypeError) as e:
-            # Incorrect data from PortaSwitch API. Has the backward compatibility been broken?
             raise WebTritErrorException(
                 status_code=500,
                 error_message=f"Incorrect data from the Adaptee system {e}",
             )
 
-    def retrieve_voicemail_details(self, session: SessionInfo, user: UserInfo, message_id: str) -> VoicemailMessageDetails:
+    def retrieve_voicemail_message_details(self, session: SessionInfo, user: UserInfo,
+                                           message_id: str) -> VoicemailMessageDetails:
         """Returns users voicemail message detail
             Parameters:
                 session :SessionInfo: The session of the PortaSwitch account.
@@ -337,15 +337,16 @@ class Adapter(BSSAdapter):
                 EndUser: Filled structure of the VoicemailMessageDetails.
         """
         try:
-            message_details = self.__account_api.get_mailbox_message_details(safely_extract_scalar_value(session.access_token),
-                                                                             message_id)
+            message_details = self.__account_api.get_mailbox_message_details(
+                safely_extract_scalar_value(session.access_token),
+                message_id
+            )
 
             return self.__serializer.get_voicemail_message_details(message_details)
 
         except WebTritErrorException as error:
             fault_code = extract_fault_code(error)
             if fault_code in ('Client.Session.check_auth.failed_to_process_access_token',):
-                # Race condition case, when session is validated and then the access_token dies.
                 raise WebTritErrorException(
                     status_code=404,
                     error_message="User not found"
@@ -354,45 +355,43 @@ class Adapter(BSSAdapter):
             raise error
 
         except (KeyError, TypeError) as e:
-            # Incorrect data from PortaSwitch API. Has the backward compatibility been broken?
             raise WebTritErrorException(
                 status_code=500,
                 error_message=f"Incorrect data from the Adaptee system {e}",
             )
 
-    def retrieve_voicemail_message_attachment(self, session: SessionInfo, message_id: str) -> Iterator:
+    def retrieve_voicemail_message_attachment(self, session: SessionInfo, message_id: str, file_format: str) -> Iterator:
         """Returns the binary representation for attachent of the voicemail message.
 
             Parameters:
-                session (SessionInfo): The session of the PortaSwitch account.
+                session :SessionInfo: The session of the PortaSwitch account.
                 message_id :str: The unique ID of the voicemail message.
+                file_format :PortaSwitchMailboxMessageAttachmentFormat: Provided file format.
 
             Returns:
                 :bytes: Raw bytes of a message attachment.
         """
+
+        file_format = file_format and file_format.lower()
+        if file_format and not PortaSwitchMailboxMessageAttachmentFormat.has_value(file_format):
+            raise WebTritErrorException(422, "Not supported file format", code="unsupported_file_format")
+
         try:
             return self.__account_api.get_mailbox_message_attachment(
                 safely_extract_scalar_value(session.access_token),
                 message_id,
+                file_format or PortaSwitchMailboxMessageAttachmentFormat.WAV.value
             )
 
         except WebTritErrorException as error:
             fault_code = extract_fault_code(error)
             if fault_code in ('Client.Session.check_auth.failed_to_process_access_token',):
-                # Race condition case, when session is validated and then the access_token dies.
-                raise WebTritErrorException(
-                    status_code=404,
-                    error_message="User not found"
-                )
+                raise WebTritErrorException(404, "User not found")
 
             raise error
 
         except (KeyError, TypeError):
-            # Incorrect data from PortaSwitch API. Has the backward compatibility been broken?
-            raise WebTritErrorException(
-                status_code=500,
-                error_message="Incorrect data from the Adaptee system",
-            )
+            raise WebTritErrorException(500, "Incorrect data from the Adaptee system")
 
     def patch_voicemail_message_seen(self, session: SessionInfo, message_id: str, seen: bool) -> UserVoicemailMessageSeen:
         """Update seen attribute for a user's voicebox message.
