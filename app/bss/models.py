@@ -731,7 +731,7 @@ class VoicemailMessage(BaseModel):
         example='1654',
     )
     type: VoicemailMessageType = Field(
-        description='The type of the message'
+        description='The type of the message.'
     )
     duration: Optional[float] = Field(
         description='The duration of the voice message in seconds.',
@@ -740,8 +740,8 @@ class VoicemailMessage(BaseModel):
     fax_pages: Optional[int] = Field(
         description='The number of fax pages in the message.',
     )
-    size: float = Field(
-        description='The total size of the message in KB.',
+    size: int = Field(
+        description='The total size of all attachments in the message in KB.',
         example=5,
     )
     date: datetime = Field(
@@ -762,13 +762,13 @@ class VoicemailMessageAttachment(BaseModel):
         description='The MIME subtype of the body.',
         example='basic',
     )
-    size: float = Field(
+    size: int = Field(
         description='The size of the body in KB.',
         example=5,
     )
     filename: str = Field(
         description='The name of the attached file.',
-        example=5,
+        example="voice_message_2024-06-07_12-32-03.au",
     )
 
 
@@ -782,6 +782,10 @@ class VoicemailMessageDetails(VoicemailMessage):
         example='123009 <123009@sip.webtrit.com>',
     )
     attachments: List[VoicemailMessageAttachment]
+
+
+class UserVoicemailMessageSeen(BaseModel):
+    seen: bool
 
 
 class UserVoicemailResponse(BaseModel):
@@ -846,6 +850,27 @@ class UserVoicemailMessageAttachmentNotFoundErrorResponse(ErrorResponse):
 
 
 class UserVoicemailMessageAttachmentInternalServerErrorResponse(ErrorResponse):
+    code: Optional[str] = Field(
+        None,
+        description='`code` field values that are defined (but can be expanded) are:\n- `external_api_issue`',
+    )
+
+
+class UserVoicemailMessageSeenUnauthorizedErrorResponse(ErrorResponse):
+    code: Optional[str] = Field(
+        None,
+        description='`code` field values that are defined (but can be expanded) are:\n- `authorization_header_missing`\n- `bearer_credentials_missing`\n- `access_token_invalid`\n- `access_token_expired`\n- `unknown`',
+    )
+
+
+class UserVoicemailMessageSeenNotFoundErrorResponse(ErrorResponse):
+    code: Optional[str] = Field(
+        None,
+        description='`code` field values that are defined (but can be expanded) are:\n- `session_not_found`\n- `user_not_found` \n- `message_not_found`',
+    )
+
+
+class UserVoicemailMessageSeenInternalServerErrorResponse(ErrorResponse):
     code: Optional[str] = Field(
         None,
         description='`code` field values that are defined (but can be expanded) are:\n- `external_api_issue`',

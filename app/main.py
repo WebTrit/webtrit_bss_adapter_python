@@ -86,6 +86,7 @@ from bss.types import (
     VoicemailMessageDetails,
     UserVoicemailResponse,
     UserVoicemailUnauthorizedErrorResponse,
+    UserVoicemailMessageSeen,
     UserVoicemailNotFoundErrorResponse,
     UserVoicemailInternalServerErrorResponse,
     UserVoicemailDetailsUnauthorizedErrorResponse,
@@ -93,7 +94,10 @@ from bss.types import (
     UserVoicemailDetailsInternalServerErrorResponse,
     UserVoicemailMessageAttachmentUnauthorizedErrorResponse,
     UserVoicemailMessageAttachmentNotFoundErrorResponse,
-    UserVoicemailMessageAttachmentInternalServerErrorResponse
+    UserVoicemailMessageAttachmentInternalServerErrorResponse,
+    UserVoicemailMessageSeenUnauthorizedErrorResponse,
+    UserVoicemailMessageSeenNotFoundErrorResponse,
+    UserVoicemailMessageSeenInternalServerErrorResponse,
 )
 from bss.types import Capabilities, ExtendedUserInfo, Health, safely_extract_scalar_value
 from report_error import raise_webtrit_error
@@ -676,6 +680,7 @@ def get_user_voicemail(
 
     return voicemail
 
+
 @router.get(
     '/user/voicemail/{message_id}',
     response_model=VoicemailMessageDetails,
@@ -727,7 +732,7 @@ def get_user_voicemail_message_details(
 def get_user_voicemail_message_attachment(
         message_id: str,
         auth_data: HTTPAuthorizationCredentials = Depends(security),
-        x_webtrit_tenant_id: Optional[str] = Header(None, alias=TENANT_ID_HTTP_HEADER),
+        _x_webtrit_tenant_id: Optional[str] = Header(None, alias=TENANT_ID_HTTP_HEADER),
 ) -> Union[
     BinaryResponse,
     UserVoicemailMessageAttachmentUnauthorizedErrorResponse,
@@ -743,6 +748,38 @@ def get_user_voicemail_message_attachment(
     content_iterator = bss.retrieve_voicemail_message_attachment(session, message_id)
 
     return StreamingResponse(content_iterator, media_type="application/octet-stream")
+
+
+@router.patch(
+    '/user/voicemail/{message_id}/seen',
+    response_model=UserVoicemailMessageSeen,
+    responses={
+        '401': {'model': UserVoicemailMessageSeenUnauthorizedErrorResponse},
+        '404': {'model': UserVoicemailMessageSeenNotFoundErrorResponse},
+        '500': {'model': UserVoicemailMessageSeenInternalServerErrorResponse},
+    },
+    tags=['user'],
+)
+def patch_user_voicemail_message_seen(
+        message_id: str,
+        body: UserVoicemailMessageSeen,
+        auth_data: HTTPAuthorizationCredentials = Depends(security),
+        x_webtrit_tenant_id: Optional[str] = Header(None, alias=TENANT_ID_HTTP_HEADER),
+) -> Union[
+    UserVoicemailMessageSeen,
+    UserVoicemailMessageSeenUnauthorizedErrorResponse,
+    UserVoicemailMessageSeenNotFoundErrorResponse,
+    UserVoicemailMessageSeenInternalServerErrorResponse,
+]:
+    global bss, bss_capabilities
+
+    access_token = auth_data.credentials
+    session = bss.validate_session(access_token)
+
+    is_method_allowed(Capabilities.voicemail)
+
+    return bss.patch_voicemail_message_seen(session, message_id, body.seen)
+
 
 @router.post("/custom/public/{method_name}/{extra_path_params:path}",
           response_model=CustomResponse, tags=['custom'])

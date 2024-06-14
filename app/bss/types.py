@@ -107,6 +107,7 @@ from bss.models import (
 
     # voicemail
     UserVoicemailResponse as UserVoicemailResponse,
+    UserVoicemailMessageSeen as UserVoicemailMessageSeen,
     VoicemailMessage as VoicemailMessage,
     VoicemailMessageDetails as VoicemailMessageDetails,
     VoicemailMessageAttachment as VoicemailMessageAttachment,
@@ -120,6 +121,9 @@ from bss.models import (
     UserVoicemailMessageAttachmentUnauthorizedErrorResponse as UserVoicemailMessageAttachmentUnauthorizedErrorResponse,
     UserVoicemailMessageAttachmentNotFoundErrorResponse as UserVoicemailMessageAttachmentNotFoundErrorResponse,
     UserVoicemailMessageAttachmentInternalServerErrorResponse as UserVoicemailMessageAttachmentInternalServerErrorResponse,
+    UserVoicemailMessageSeenUnauthorizedErrorResponse as UserVoicemailMessageSeenUnauthorizedErrorResponse,
+    UserVoicemailMessageSeenNotFoundErrorResponse as UserVoicemailMessageSeenNotFoundErrorResponse,
+    UserVoicemailMessageSeenInternalServerErrorResponse as UserVoicemailMessageSeenInternalServerErrorResponse,
 )
 
 class UserInfo(BaseModel):

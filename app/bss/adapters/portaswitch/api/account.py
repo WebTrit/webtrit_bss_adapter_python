@@ -5,6 +5,7 @@ from typing import Final, List, Union, Iterator
 import requests
 
 from app_config import AppConfig
+from bss.adapters.portaswitch.types import PortaSwitchMailboxMessageFlag, PortaSwitchMailboxMessageFlagAction
 from bss.http_api import HTTPAPIConnector
 
 DEFAULT_CHUNK_SIZE: Final[int] = 8192
@@ -324,5 +325,29 @@ class AccountAPI(HTTPAPIConnector):
                 "message_uid": message_id
             },
             stream=True,
+            access_token=access_token,
+        )
+
+    def set_mailbox_message_flag(self, access_token: str, message_id: str, flag: PortaSwitchMailboxMessageFlag, action: PortaSwitchMailboxMessageFlagAction) -> dict:
+        """
+        Returns the mailbox message details of the account, which created a session related to the access_token.
+            Parameters:
+                access_token :str: The token that enables the API user to be authenticated in the PortaBilling API using the account realm.
+                message_id :str: The unique ID of the message.
+                flag: :PortaSwitchMailboxMessageFlag: The flag to set.
+                action: :PortaSwitchMailboxMessageFlagAction: Set the flag if it has value `set_flag`, remove the flag otherwise.
+
+            Returns:
+                Response :dict: The API method execution result.
+        """
+
+        return self.__send_request(
+            module='Account',
+            method='set_mailbox_messages_flag',
+            params={
+                "action": action.value,
+                "flag": flag.value,
+                "message_uids": [message_id]
+            },
             access_token=access_token,
         )

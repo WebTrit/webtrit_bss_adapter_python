@@ -12,7 +12,8 @@ from bss.sessions import SessionInfo
 from bss.types import (UserInfo, EndUser, ContactInfo, CDRInfo,
                        Capabilities,
                        UserCreateResponse,
-                       CustomResponse, CustomRequest, UserVoicemailResponse, VoicemailMessageDetails,
+                       CustomResponse, CustomRequest, UserVoicemailResponse, UserVoicemailMessageSeen,
+                       VoicemailMessageDetails,
                        eval_as_bool)
 from module_loader import ModuleLoader
 from report_error import raise_webtrit_error
@@ -210,6 +211,10 @@ class BSSAdapter(SessionManagement, OTPHandler,
 
     def retrieve_voicemail_message_attachment(self, session: SessionInfo, message_id: str) -> Union[bytes, Iterator]:
         """Obtain the media file for a user's voicebox message"""
+        raise NotImplementedError("Override this method in your sub-class")
+
+    def patch_voicemail_message_seen(self, session: SessionInfo, message_id: str, seen: bool) -> UserVoicemailMessageSeen:
+        """Update seen attribute for a user's voicebox message"""
         raise NotImplementedError("Override this method in your sub-class")
 
     @abstractmethod

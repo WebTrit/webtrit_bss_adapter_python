@@ -40,6 +40,11 @@ class PortaSwitchDualVersionSystem(Enum):
 
 
 class PortaSwitchMailboxMessageFlag(Enum):
-    SEEN = '\\Seen'
-    ANSWERED = '\\Answered'
-    FLAGGED = '\\Flagged'
+    SEEN = 'Seen'
+    ANSWERED = 'Answered'
+    FLAGGED = 'Flagged'
+
+
+class PortaSwitchMailboxMessageFlagAction(Enum):
+    SET = 'set_flag'
+    UNSET = 'remove_flag'

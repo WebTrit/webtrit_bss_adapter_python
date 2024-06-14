@@ -150,7 +150,7 @@ class Serializer:
             fax_pages=mailbox_message.get('fax_pages'),
             size=mailbox_message['size'],
             date=datetime.datetime.strptime(mailbox_message['delivery_date'], "%d-%b-%Y %H:%M:%S %z"),
-            seen=PortaSwitchMailboxMessageFlag.SEEN.value in mailbox_message.get('flags', [])
+            seen=f'\\{PortaSwitchMailboxMessageFlag.SEEN.value}' in mailbox_message.get('flags', [])
         )
 
     @staticmethod

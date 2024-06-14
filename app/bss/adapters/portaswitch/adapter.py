@@ -9,12 +9,12 @@ from bss.types import (
     CallRecordingId, Capabilities, CDRInfo, ContactInfo, EndUser,
     OTPCreateResponse, OTPVerifyRequest,
     SessionInfo, UserInfo,
-    safely_extract_scalar_value, UserVoicemailResponse, VoicemailMessageDetails)
+    safely_extract_scalar_value, UserVoicemailResponse, UserVoicemailMessageSeen, VoicemailMessageDetails)
 from report_error import WebTritErrorException
 from .api import AccountAPI, AdminAPI
 from .serializer import Serializer
 from .types import PortaSwitchSignInCredentialsType, PortaSwitchContactsSelectingMode, PortaSwitchExtensionType, \
-    PortaSwitchDualVersionSystem
+    PortaSwitchDualVersionSystem, PortaSwitchMailboxMessageFlag, PortaSwitchMailboxMessageFlagAction
 from .utils import generate_otp_id, extract_fault_code
 
 
@@ -25,8 +25,8 @@ class Adapter(BSSAdapter):
     Currently does not support OTP login.
 
     """
-    VERSION: Final[str] = "0.1.0"
-    OTP_DELIVERY_CHANNEL: Final[DeliveryChannel] = DeliveryChannel.call
+    VERSION: Final[str] = "0.1.1"
+    OTP_DELIVERY_CHANNEL: Final[DeliveryChannel] = DeliveryChannel.email
 
     def __init__(self, config: AppConfig):
         super().__init__(config)
@@ -389,6 +389,43 @@ class Adapter(BSSAdapter):
 
         except (KeyError, TypeError):
             # Incorrect data from PortaSwitch API. Has the backward compatibility been broken?
+            raise WebTritErrorException(
+                status_code=500,
+                error_message="Incorrect data from the Adaptee system",
+            )
+
+    def patch_voicemail_message_seen(self, session: SessionInfo, message_id: str, seen: bool) -> UserVoicemailMessageSeen:
+        """Update seen attribute for a user's voicebox message.
+
+            Parameters:
+                session (SessionInfo): The session of the PortaSwitch account.
+                message_id :str: The unique ID of the voicemail message.
+                seen: :bool: Set the flag if it is `True`, remove the flag otherwise.
+
+            Returns:
+                Response :UserVoicemailMessageSeenResponse: Filled structure of the UserVoicemailMessageSeenResponse.
+        """
+        try:
+            self.__account_api.set_mailbox_message_flag(
+                safely_extract_scalar_value(session.access_token),
+                message_id,
+                PortaSwitchMailboxMessageFlag.SEEN,
+                PortaSwitchMailboxMessageFlagAction.SET if seen else PortaSwitchMailboxMessageFlagAction.UNSET
+            )
+
+            return UserVoicemailMessageSeen(seen=seen)
+
+        except WebTritErrorException as error:
+            fault_code = extract_fault_code(error)
+            if fault_code in ('Client.Session.check_auth.failed_to_process_access_token',):
+                raise WebTritErrorException(
+                    status_code=404,
+                    error_message="User not found"
+                )
+
+            raise error
+
+        except (KeyError, TypeError):
             raise WebTritErrorException(
                 status_code=500,
                 error_message="Incorrect data from the Adaptee system",
