@@ -95,10 +95,13 @@ from bss.types import (
     UserVoicemailMessageAttachmentUnauthorizedErrorResponse,
     UserVoicemailMessageAttachmentNotFoundErrorResponse,
     UserVoicemailMessageAttachmentInternalServerErrorResponse,
-    UserVoicemailMessageSeenUnauthorizedErrorResponse,
-    UserVoicemailMessageSeenNotFoundErrorResponse,
+    UserVoicemailMessagePatchUnauthorizedErrorResponse,
+    UserVoicemailMessagePatchNotFoundErrorResponse,
     UserVoicemailMessageAttachmentUnprocessableEntityErrorResponse,
-    UserVoicemailMessageSeenInternalServerErrorResponse,
+    UserVoicemailMessagePatchInternalServerErrorResponse,
+    UserVoicemailMessageDeleteUnauthorizedErrorResponse,
+    UserVoicemailMessageDeleteNotFoundErrorResponse,
+    UserVoicemailMessageDeleteInternalServerErrorResponse,
 )
 from bss.types import Capabilities, ExtendedUserInfo, Health, safely_extract_scalar_value
 from report_error import raise_webtrit_error
@@ -723,9 +726,9 @@ def get_user_voicemail_message_details(
     '/user/voicemails/{message_id}',
     response_model=UserVoicemailMessagePatch,
     responses={
-        '401': {'model': UserVoicemailMessageSeenUnauthorizedErrorResponse},
-        '404': {'model': UserVoicemailMessageSeenNotFoundErrorResponse},
-        '500': {'model': UserVoicemailMessageSeenInternalServerErrorResponse},
+        '401': {'model': UserVoicemailMessagePatchUnauthorizedErrorResponse},
+        '404': {'model': UserVoicemailMessagePatchNotFoundErrorResponse},
+        '500': {'model': UserVoicemailMessagePatchInternalServerErrorResponse},
     },
     tags=['user'],
 )
@@ -736,9 +739,9 @@ def patch_user_voicemail_message(
         _x_webtrit_tenant_id: Optional[str] = Header(None, alias=TENANT_ID_HTTP_HEADER),
 ) -> Union[
     UserVoicemailMessagePatch,
-    UserVoicemailMessageSeenUnauthorizedErrorResponse,
-    UserVoicemailMessageSeenNotFoundErrorResponse,
-    UserVoicemailMessageSeenInternalServerErrorResponse,
+    UserVoicemailMessagePatchUnauthorizedErrorResponse,
+    UserVoicemailMessagePatchNotFoundErrorResponse,
+    UserVoicemailMessagePatchInternalServerErrorResponse,
 ]:
     global bss, bss_capabilities
 
@@ -748,6 +751,37 @@ def patch_user_voicemail_message(
     is_method_allowed(Capabilities.voicemail)
 
     return bss.patch_voicemail_message(session, message_id, body)
+
+
+@router.delete(
+    '/user/voicemails/{message_id}',
+    response_model=None,
+    responses={
+        '401': {'model': UserVoicemailMessageDeleteUnauthorizedErrorResponse},
+        '404': {'model': UserVoicemailMessageDeleteNotFoundErrorResponse},
+        '500': {'model': UserVoicemailMessageDeleteInternalServerErrorResponse},
+    },
+    tags=['user'],
+)
+def delete_user_voicemail_message(
+        message_id: str,
+        auth_data: HTTPAuthorizationCredentials = Depends(security),
+        _x_webtrit_tenant_id: Optional[str] = Header(None, alias=TENANT_ID_HTTP_HEADER),
+) -> Union[
+    None,
+    UserVoicemailMessageDeleteUnauthorizedErrorResponse,
+    UserVoicemailMessageDeleteNotFoundErrorResponse,
+    UserVoicemailMessageDeleteInternalServerErrorResponse,
+]:
+    global bss, bss_capabilities
+
+    access_token = auth_data.credentials
+    session = bss.validate_session(access_token)
+
+    is_method_allowed(Capabilities.voicemail)
+    bss.delete_voicemail_message(session, message_id)
+
+    return Response(status_code=204)
 
 
 @router.get(

@@ -393,11 +393,12 @@ class Adapter(BSSAdapter):
         except (KeyError, TypeError):
             raise WebTritErrorException(500, "Incorrect data from the Adaptee system")
 
-    def patch_voicemail_message(self, session: SessionInfo, message_id: str, body: UserVoicemailMessagePatch) -> UserVoicemailMessagePatch:
+    def patch_voicemail_message(self, session: SessionInfo, message_id: str,
+                                body: UserVoicemailMessagePatch) -> UserVoicemailMessagePatch:
         """Update attributes for a user's voicebox message.
 
             Parameters:
-                session (SessionInfo): The session of the PortaSwitch account.
+                session :SessionInfo: The session of the PortaSwitch account.
                 message_id :str: The unique ID of the voicemail message.
                 body: :bool: Attributes to patch.
 
@@ -415,6 +416,34 @@ class Adapter(BSSAdapter):
             )
 
             return UserVoicemailMessagePatch(seen=seen)
+
+        except WebTritErrorException as error:
+            fault_code = extract_fault_code(error)
+            if fault_code in ('Client.Session.check_auth.failed_to_process_access_token',):
+                raise WebTritErrorException(
+                    status_code=404,
+                    error_message="User not found"
+                )
+
+            raise error
+
+        except (KeyError, TypeError):
+            raise WebTritErrorException(
+                status_code=500,
+                error_message="Incorrect data from the Adaptee system",
+            )
+
+    def delete_voicemail_message(self, session: SessionInfo, message_id: str) -> None:
+        """Delete an existing user's voicebox message.
+            Parameters:
+                session :SessionInfo: The session of the PortaSwitch account.
+                message_id :str: The unique ID of the voicemail message.
+        """
+        try:
+            self.__account_api.delete_mailbox_message(
+                safely_extract_scalar_value(session.access_token),
+                message_id
+            )
 
         except WebTritErrorException as error:
             fault_code = extract_fault_code(error)

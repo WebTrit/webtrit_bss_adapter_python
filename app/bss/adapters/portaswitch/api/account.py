@@ -330,7 +330,8 @@ class AccountAPI(HTTPAPIConnector):
             access_token=access_token,
         )
 
-    def set_mailbox_message_flag(self, access_token: str, message_id: str, flag: PortaSwitchMailboxMessageFlag, action: PortaSwitchMailboxMessageFlagAction) -> dict:
+    def set_mailbox_message_flag(self, access_token: str, message_id: str, flag: PortaSwitchMailboxMessageFlag,
+                                 action: PortaSwitchMailboxMessageFlagAction) -> dict:
         """
         Returns the mailbox message details of the account, which created a session related to the access_token.
             Parameters:
@@ -349,6 +350,23 @@ class AccountAPI(HTTPAPIConnector):
             params={
                 "action": action.value,
                 "flag": flag.value,
+                "message_uids": [message_id]
+            },
+            access_token=access_token,
+        )
+
+    def delete_mailbox_message(self, access_token: str, message_id: str) -> None:
+        """
+        Deletes the mailbox message of the account, which created a session related to the access_token.
+            Parameters:
+                access_token :str: The token that enables the API user to be authenticated in the PortaBilling API using the account realm.
+                message_id :str: The unique ID of the message.
+        """
+
+        return self.__send_request(
+            module='Account',
+            method='delete_mailbox_messages',
+            params={
                 "message_uids": [message_id]
             },
             access_token=access_token,

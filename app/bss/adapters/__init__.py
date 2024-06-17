@@ -217,6 +217,10 @@ class BSSAdapter(SessionManagement, OTPHandler,
         """Update attributes for a user's voicemail message"""
         raise NotImplementedError("Override this method in your sub-class")
 
+    def delete_voicemail_message(self, session: SessionInfo, message_id: str) -> None:
+        """Delete an existing user's voicemail message"""
+        raise NotImplementedError("Override this method in your sub-class")
+
     @abstractmethod
     def retrieve_contacts(self, session: SessionInfo, user: UserInfo) -> List[ContactInfo]:
         """List of other extensions in the PBX"""
