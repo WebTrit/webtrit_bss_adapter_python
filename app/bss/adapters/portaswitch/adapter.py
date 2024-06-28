@@ -26,7 +26,7 @@ class Adapter(BSSAdapter):
     Currently does not support OTP login.
 
     """
-    VERSION: Final[str] = "0.1.1"
+    VERSION: Final[str] = "0.1.2"
     OTP_DELIVERY_CHANNEL: Final[DeliveryChannel] = DeliveryChannel.email
 
     def __init__(self, config: AppConfig):
@@ -51,6 +51,8 @@ class Adapter(BSSAdapter):
         ext_types = config.get_conf_val_as_list('PortaSwitch', 'CONTACTS', 'SELECTING', 'EXTENSION', 'TYPES')
         self._contacts_selecting_ext_types = [PortaSwitchExtensionType(type) for type in ext_types] if ext_types else list(
             PortaSwitchExtensionType)
+
+        self._ignore_otp_accounts = config.get_conf_val_as_list('PortaSwitch', 'IGNORE', 'OTP', 'ACCOUNTS', default=[])
 
         # No need to store it in a DB.
         # The correct realization of PortaSwitch token validation depends on session.
@@ -681,29 +683,19 @@ class Adapter(BSSAdapter):
             # We need the otp_id only for storing the i_account.
             otp_id = safely_extract_scalar_value(otp.otp_id)
 
-            if otp_id not in self.__opt_id_storage:
-                raise WebTritErrorException(
-                    status_code=404,
-                    # code = OTPNotFoundErrorCode.otp_not_found,
-                    error_message=f"Incorrect OTP code: {otp.code}"
-                )
+            i_account: int = self.__opt_id_storage.get(otp_id)
+            if not i_account:
+                raise WebTritErrorException(status_code=404, error_message=f"Incorrect OTP code: {otp.code}")
 
             data: dict = self.__admin_api.verify_otp(otp_token=otp.code)
-            if not data['success']:
-                raise WebTritErrorException(
-                    status_code=404,
-                    # code = OTPNotFoundErrorCode.otp_not_found,
-                    error_message=f"Incorrect OTP code: {otp.code}"
-                )
+            if i_account not in self._ignore_otp_accounts and not data['success']:
+                raise WebTritErrorException(status_code=404, error_message=f"Incorrect OTP code: {otp.code}")
 
-            i_account: int = self.__opt_id_storage.pop(otp_id)
+            self.__opt_id_storage.pop(otp_id)
 
             # Emulate account login.
-            account_info: dict = self.__admin_api.get_account_info(
-                i_account=i_account)['account_info']
-
-            session_data: dict = self.__account_api.login(
-                account_info['login'], account_info['password'])
+            account_info: dict = self.__admin_api.get_account_info(i_account=i_account)['account_info']
+            session_data: dict = self.__account_api.login(account_info['login'], account_info['password'])
 
             return SessionInfo(
                 user_id=account_info['i_account'],
