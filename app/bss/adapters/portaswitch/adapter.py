@@ -52,7 +52,7 @@ class Adapter(BSSAdapter):
         self._contacts_selecting_ext_types = [PortaSwitchExtensionType(type) for type in ext_types] if ext_types else list(
             PortaSwitchExtensionType)
 
-        self._ignore_otp_accounts = config.get_conf_val_as_list('PortaSwitch', 'IGNORE', 'OTP', 'ACCOUNTS', default=[])
+        self._otp_ignore_accounts = config.get_conf_val_as_list('PortaSwitch', 'OTP', 'IGNORE', 'ACCOUNTS', default=[])
 
         # No need to store it in a DB.
         # The correct realization of PortaSwitch token validation depends on session.
@@ -688,7 +688,7 @@ class Adapter(BSSAdapter):
                 raise WebTritErrorException(status_code=404, error_message=f"Incorrect OTP code: {otp.code}")
 
             data: dict = self.__admin_api.verify_otp(otp_token=otp.code)
-            if i_account not in self._ignore_otp_accounts and not data['success']:
+            if i_account not in self._otp_ignore_accounts and not data['success']:
                 raise WebTritErrorException(status_code=404, error_message=f"Incorrect OTP code: {otp.code}")
 
             self.__opt_id_storage.pop(otp_id)

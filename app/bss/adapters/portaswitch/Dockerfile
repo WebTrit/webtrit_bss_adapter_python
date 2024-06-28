@@ -69,7 +69,7 @@ ENV PORTASWITCH_CONTACTS_SELECTING_EXTENSION_TYPES="Account, Group, Unassigned"
 ENV PORTASWITCH_CONTACTS_SKIP_WITHOUT_EXTENSION="True"
 
 # Defines list of the account's ids (i_account) which can use any OTP verification code for authentication - usually used for demo purposes (optional):
-ENV PORTASWITCH_IGNORE_OTP_ACCOUNTS="6088"
+ENV PORTASWITCH_OTP_IGNORE_ACCOUNTS="6088"
 
 EXPOSE $API_PORT
 
