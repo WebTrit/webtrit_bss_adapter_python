@@ -31,7 +31,7 @@
           "session"
         ],
         "summary": "Create Session",
-        "description": "Login user using username and password",
+        "description": "Login user using user_ref and password",
         "operationId": "create_session_api_v1_session_post",
         "parameters": [
           {
@@ -2993,15 +2993,13 @@
       "SessionCreateRequest": {
         "title": "SessionCreateRequest",
         "required": [
-          "login",
+          "user_ref",
           "password"
         ],
         "type": "object",
         "properties": {
-          "login": {
-            "title": "Login",
-            "type": "string",
-            "description": "User's `login` on the **Adaptee**."
+          "user_ref": {
+            "$ref": "#/components/schemas/UserRef"
           },
           "password": {
             "title": "Password",

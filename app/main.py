@@ -191,20 +191,21 @@ def create_session(
     CreateSessionInternalServerErrorErrorResponse,
 ]:
     """
-    Login user using username and password
+    Login user using user_ref and password
     """
     global bss
 
     is_method_allowed(Capabilities.passwordSignin)
 
-    if not (body.login and body.password):
+    if not (body.user_ref and body.password):
         # missing parameters
-        raise_webtrit_error(422, "Missing login & password")
+        raise_webtrit_error(422, "Missing user_ref & password")
 
+    user_ref = safely_extract_scalar_value(body.user_ref)
     user = ExtendedUserInfo(user_id = 'N/A', # do not know it yet
                     client_agent = request.headers.get('User-Agent', 'Unknown'),
                     tenant_id = bss.default_id_if_none(x_webtrit_tenant_id),
-                    login = body.login)
+                    login = user_ref)
     session = bss.authenticate(user, body.password)
     return session
 
