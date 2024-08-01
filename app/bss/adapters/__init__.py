@@ -37,6 +37,7 @@ class AttrMap(BaseModel):
     old_key: Optional[str] = None  # if not provided, the old name is used
     converter: Optional[Callable] = None  # custom conversion function
 
+
 class CustomMethodCall(ABC):
     """A prototype for implemeting your own, custom methods in the adapter. 
     
@@ -44,13 +45,14 @@ class CustomMethodCall(ABC):
     data during signup; or getting a list of 'call-to-action' items
     such as promotions to show in the app; or anything else.        
     """
-    
+
     def custom_method_public(self,
-                        method_name: str,
-                        data: CustomRequest,
-                        headers: Optional[Dict] = {},
-                        extra_path_params: Optional[str] = None,
-                        tenant_id: str = None) -> CustomResponse:
+                             method_name: str,
+                             data: CustomRequest,
+                             headers: Optional[Dict] = {},
+                             extra_path_params: Optional[str] = None,
+                             tenant_id: str = None,
+                             lang: str = None) -> CustomResponse:
         """
         This method is unprotected and is called prior to authenticating the user
         - e.g. while signing up return the list of available packages a customer can pick.
@@ -73,13 +75,14 @@ class CustomMethodCall(ABC):
         pass
 
     def custom_method_private(self,
-                        session: SessionInfo,
-                        user_id: str,
-                        method_name: str,
-                        data: CustomRequest,
-                        headers: Optional[Dict] = {},
-                        extra_path_params: Optional[str] = None,
-                        tenant_id: str = None) -> CustomResponse:
+                              session: SessionInfo,
+                              user_id: str,
+                              method_name: str,
+                              data: CustomRequest,
+                              headers: Optional[Dict] = {},
+                              extra_path_params: Optional[str] = None,
+                              tenant_id: str = None,
+                              lang: str = None) -> CustomResponse:
         """Same thing as custom_method_public but is only allowed
         to be called when an app is already established an authenticated
         session on behalf of the user.
@@ -95,12 +98,15 @@ class CustomMethodCall(ABC):
         """
         pass
 
+
 class AutoProvisionByToken(ABC):
     """Establish a new authenticated session based on a temporary token,
     provided via SMS/email/QR code/etc."""
+
     def autoprovision_session(self, config_token: str, tenant_id: str = None) -> SessionInfo:
         """Verify the token and if it is valid - return the info about a new session."""
         raise NotImplementedError("Override this method in your sub-class")
+
 
 class InAppSignup(ABC):
     """Allow users to register from the app, passing the data via the WebTrit and adapter
@@ -124,35 +130,35 @@ class BSSAdapter(SessionManagement, OTPHandler,
                  CustomMethodCall, InAppSignup, AutoProvisionByToken):
     # names of config variables to turn on/off capabilities
     CONFIG_CAPABILITIES_OPTIONS = dict(
-        PASSWORD = dict(default = True, option = Capabilities.passwordSignin),
-        OTP = dict(default = False, option = Capabilities.otpSignin),
-        AUTO_PROVISION = dict(default = False, option = Capabilities.autoProvision),
-        SIGNUP = dict(default = False, option = Capabilities.signup),
-        CDRS = dict(default = False, option = Capabilities.callHistory),
-        RECORDINGS = dict(default = False, option = Capabilities.recordings),
+        PASSWORD=dict(default=True, option=Capabilities.passwordSignin),
+        OTP=dict(default=False, option=Capabilities.otpSignin),
+        AUTO_PROVISION=dict(default=False, option=Capabilities.autoProvision),
+        SIGNUP=dict(default=False, option=Capabilities.signup),
+        CDRS=dict(default=False, option=Capabilities.callHistory),
+        RECORDINGS=dict(default=False, option=Capabilities.recordings),
+        VOICEMAIL=dict(default=False, option=Capabilities.voicemail),
     )
     # what our adapter can do in general (what is coded)
     # should be overridden in the sub-class
-    CAPABILITIES = [
+    CAPABILITIES = []
 
-    ]
     def calculate_capabilities(self) -> List:
         """Calculate the adapter capabilities based on it's settings and config options"""
 
-        capabilities = self.CAPABILITIES 
+        capabilities = self.CAPABILITIES
         for option, data in self.CONFIG_CAPABILITIES_OPTIONS.items():
-           capability_id = data['option']
-           if capability_id in self.CAPABILITIES:
+            capability_id = data['option']
+            if capability_id in self.CAPABILITIES:
                 # we support it in general - let's see if it is enabled in config
                 if (cfg_val := self.config.get_conf_val("Capabilities",
-                                                       option, default = None)) \
-                    is not None:
+                                                        option, default=None)) \
+                        is not None:
                     # a value provided in the config
                     cfg_val = eval_as_bool(cfg_val)
                 else:
-                    # no defined in the config, use defaulr    
+                    # not defined in the config, use default
                     cfg_val = data.get('default', False)
-                
+
                 if cfg_val:
                     # include it
                     capabilities.append(capability_id)
@@ -319,14 +325,13 @@ class BSSAdapterExternalDB(BSSAdapter, SampleOTPHandler):
                 self.sessions.store_session(session)
                 return session
 
-            raise_webtrit_error(401, 
+            raise_webtrit_error(401,
                     error_message = "Password validation fails",
                     extra_error_code="incorrect_credentials")
 
         # something is wrong. your code should raise its own exception
         # with a more descriptive message to simplify the process of fixing the problem
-        raise_webtrit_error(401, error_message = "User authentication error")
-
+        raise_webtrit_error(401, error_message="User authentication error")
 
     def retrieve_user(self, session: SessionInfo, user: UserInfo) -> EndUser:
         """Obtain user's information - most importantly, his/her SIP credentials."""
@@ -336,7 +341,7 @@ class BSSAdapterExternalDB(BSSAdapter, SampleOTPHandler):
             return self.produce_user_object(user_data)
 
         # no such session
-        raise_webtrit_error(404, error_message = "User not found")
+        raise_webtrit_error(404, error_message="User not found")
 
     # these are the "standard" methods from BSSAdapter you are expected to override
     @classmethod
@@ -356,18 +361,18 @@ class BSSAdapterExternalDB(BSSAdapter, SampleOTPHandler):
 
     @abstractmethod
     def retrieve_calls(
-        self,
-        session: SessionInfo,
-        user: UserInfo,
-        date_from: datetime = None,
-        date_to: datetime = None,
+            self,
+            session: SessionInfo,
+            user: UserInfo,
+            date_from: datetime = None,
+            date_to: datetime = None,
     ) -> List[CDRInfo]:
         """Obtain CDRs (call history) of the user"""
         raise NotImplementedError("Override this method in your sub-class")
 
     @abstractmethod
     def retrieve_call_recording(
-        self, session: SessionInfo, recording_id: str
+            self, session: SessionInfo, recording_id: str
     ) -> bytes:
         """Get the media file for a previously recorded call."""
         raise NotImplementedError("Override this method in your sub-class")
@@ -375,10 +380,11 @@ class BSSAdapterExternalDB(BSSAdapter, SampleOTPHandler):
     def signup(self, user_data, tenant_id: str = None) -> UserCreateResponse:
         """Create a new user / customer as a part of the sign-up process"""
         raise NotImplementedError("Override this method in your sub-class")
-    
+
     def create_new_user(self, user_data, tenant_id: str = None) -> UserCreateResponse:
         """Deprecated version"""
         raise NotImplementedError("This method has been renamed to 'signup', update your code")
+
 
 # initialize BSS Adapter
 def initialize_bss_adapter(root_package: str, config: AppConfig) -> BSSAdapter:
