@@ -39,6 +39,7 @@ class AttrMap(BaseModel):
     old_key: Optional[str] = None  # if not provided, the old name is used
     converter: Optional[Callable] = None  # custom conversion function
 
+
 class CustomMethodCall(ABC):
     """A prototype for implemeting your own, custom methods in the adapter. 
     
@@ -48,11 +49,12 @@ class CustomMethodCall(ABC):
     """
 
     def custom_method_public(self,
-                        method_name: str,
-                        data: CustomRequest,
-                        headers: Optional[Dict] = {},
-                        extra_path_params: Optional[str] = None,
-                        tenant_id: str = None) -> CustomResponse:
+                             method_name: str,
+                             data: CustomRequest,
+                             headers: Optional[Dict] = {},
+                             extra_path_params: Optional[str] = None,
+                             tenant_id: str = None,
+                             lang: str = None) -> CustomResponse:
         """
         This method is unprotected and is called prior to authenticating the user
         - e.g. while signing up return the list of available packages a customer can pick.
@@ -75,13 +77,14 @@ class CustomMethodCall(ABC):
         pass
 
     def custom_method_private(self,
-                        session: SessionInfo,
-                        user_id: str,
-                        method_name: str,
-                        data: CustomRequest,
-                        headers: Optional[Dict] = {},
-                        extra_path_params: Optional[str] = None,
-                        tenant_id: str = None) -> CustomResponse:
+                              session: SessionInfo,
+                              user_id: str,
+                              method_name: str,
+                              data: CustomRequest,
+                              headers: Optional[Dict] = {},
+                              extra_path_params: Optional[str] = None,
+                              tenant_id: str = None,
+                              lang: str = None) -> CustomResponse:
         """Same thing as custom_method_public but is only allowed
         to be called when an app is already established an authenticated
         session on behalf of the user.
@@ -97,12 +100,15 @@ class CustomMethodCall(ABC):
         """
         pass
 
+
 class AutoProvisionByToken(ABC):
     """Establish a new authenticated session based on a temporary token,
     provided via SMS/email/QR code/etc."""
+
     def autoprovision_session(self, config_token: str, tenant_id: str = None) -> SessionInfo:
         """Verify the token and if it is valid - return the info about a new session."""
         raise NotImplementedError("Override this method in your sub-class")
+
 
 class InAppSignup(ABC):
     """Allow users to register from the app, passing the data via the WebTrit and adapter
@@ -205,15 +211,18 @@ class BSSAdapter(SessionManagement, OTPHandler,
         """Obtain user's voicemails"""
         raise NotImplementedError("Override this method in your sub-class")
 
-    def retrieve_voicemail_message_details(self, session: SessionInfo, user: UserInfo, message_id: str) -> VoicemailMessageDetails:
+    def retrieve_voicemail_message_details(self, session: SessionInfo, user: UserInfo,
+                                           message_id: str) -> VoicemailMessageDetails:
         """Obtain user's voicemail message details information"""
         raise NotImplementedError("Override this method in your sub-class")
 
-    def retrieve_voicemail_message_attachment(self, session: SessionInfo, message_id: str, file_format: str) -> Union[bytes, Iterator]:
+    def retrieve_voicemail_message_attachment(self, session: SessionInfo, message_id: str, file_format: str) -> Union[
+        bytes, Iterator]:
         """Obtain the media file for a user's voicemail message"""
         raise NotImplementedError("Override this method in your sub-class")
 
-    def patch_voicemail_message(self, session: SessionInfo, message_id: str, body: UserVoicemailMessagePatch) -> UserVoicemailMessagePatch:
+    def patch_voicemail_message(self, session: SessionInfo, message_id: str,
+                                body: UserVoicemailMessagePatch) -> UserVoicemailMessagePatch:
         """Update attributes for a user's voicemail message"""
         raise NotImplementedError("Override this method in your sub-class")
 
@@ -337,13 +346,12 @@ class BSSAdapterExternalDB(BSSAdapter, SampleOTPHandler):
                 return session
 
             raise_webtrit_error(401,
-                    error_message = "Password validation fails",
-                    extra_error_code="incorrect_credentials")
+                                error_message="Password validation fails",
+                                extra_error_code="incorrect_credentials")
 
         # something is wrong. your code should raise its own exception
         # with a more descriptive message to simplify the process of fixing the problem
-        raise_webtrit_error(401, error_message = "User authentication error")
-
+        raise_webtrit_error(401, error_message="User authentication error")
 
     def retrieve_user(self, session: SessionInfo, user: UserInfo) -> EndUser:
         """Obtain user's information - most importantly, his/her SIP credentials."""
@@ -353,7 +361,7 @@ class BSSAdapterExternalDB(BSSAdapter, SampleOTPHandler):
             return self.produce_user_object(user_data)
 
         # no such session
-        raise_webtrit_error(404, error_message = "User not found")
+        raise_webtrit_error(404, error_message="User not found")
 
     # these are the "standard" methods from BSSAdapter you are expected to override
     @classmethod
@@ -373,18 +381,18 @@ class BSSAdapterExternalDB(BSSAdapter, SampleOTPHandler):
 
     @abstractmethod
     def retrieve_calls(
-        self,
-        session: SessionInfo,
-        user: UserInfo,
-        date_from: datetime = None,
-        date_to: datetime = None,
+            self,
+            session: SessionInfo,
+            user: UserInfo,
+            date_from: datetime = None,
+            date_to: datetime = None,
     ) -> List[CDRInfo]:
         """Obtain CDRs (call history) of the user"""
         raise NotImplementedError("Override this method in your sub-class")
 
     @abstractmethod
     def retrieve_call_recording(
-        self, session: SessionInfo, recording_id: str
+            self, session: SessionInfo, recording_id: str
     ) -> bytes:
         """Get the media file for a previously recorded call."""
         raise NotImplementedError("Override this method in your sub-class")
@@ -396,6 +404,7 @@ class BSSAdapterExternalDB(BSSAdapter, SampleOTPHandler):
     def create_new_user(self, user_data, tenant_id: str = None) -> UserCreateResponse:
         """Deprecated version"""
         raise NotImplementedError("This method has been renamed to 'signup', update your code")
+
 
 # initialize BSS Adapter
 def initialize_bss_adapter(root_package: str, config: AppConfig) -> BSSAdapter:
