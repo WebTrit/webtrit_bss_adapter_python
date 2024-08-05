@@ -1467,6 +1467,15 @@
             },
             "name": "X-WebTrit-Tenant-ID",
             "in": "header"
+          },
+          {
+            "required": false,
+            "schema": {
+              "title": "Accept-Language",
+              "type": "string"
+            },
+            "name": "Accept-Language",
+            "in": "header"
           }
         ],
         "requestBody": {
@@ -1491,12 +1500,42 @@
               }
             }
           },
-          "422": {
-            "description": "Validation Error",
+          "403": {
+            "description": "Forbidden",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
+                  "$ref": "#/components/schemas/CustomForbiddenErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CustomNotFoundErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Unprocessable Entity",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CustomUnprocessableEntityErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CustomInternalServerErrorResponse"
                 }
               }
             }
@@ -1539,6 +1578,15 @@
             },
             "name": "X-WebTrit-Tenant-ID",
             "in": "header"
+          },
+          {
+            "required": false,
+            "schema": {
+              "title": "Accept-Language",
+              "type": "string"
+            },
+            "name": "Accept-Language",
+            "in": "header"
           }
         ],
         "requestBody": {
@@ -1573,12 +1621,42 @@
               }
             }
           },
-          "422": {
-            "description": "Validation Error",
+          "403": {
+            "description": "Forbidden",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
+                  "$ref": "#/components/schemas/CustomForbiddenErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CustomNotFoundErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Unprocessable Entity",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CustomUnprocessableEntityErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CustomInternalServerErrorResponse"
                 }
               }
             }
@@ -2049,6 +2127,130 @@
             "title": "Code",
             "type": "string",
             "description": "`code` field values that are defined (but can be expanded) are:\n- `validation_error`\n- `signup_limit_reached`"
+          },
+          "details": {
+            "title": "Details",
+            "type": "array",
+            "items": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/Detail"
+                },
+                {
+                  "type": "object"
+                }
+              ]
+            },
+            "description": "Additional details related to the error code, which depend on the specific error.\n"
+          },
+          "message": {
+            "title": "Message",
+            "type": "string",
+            "description": "Description of the error."
+          }
+        }
+      },
+      "CustomForbiddenErrorResponse": {
+        "title": "CustomForbiddenErrorResponse",
+        "type": "object",
+        "properties": {
+          "code": {
+            "title": "Code",
+            "type": "string",
+            "description": "`code` field values that are defined (but can be expanded) are:\n- `user_not_allowed`"
+          },
+          "details": {
+            "title": "Details",
+            "type": "array",
+            "items": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/Detail"
+                },
+                {
+                  "type": "object"
+                }
+              ]
+            },
+            "description": "Additional details related to the error code, which depend on the specific error.\n"
+          },
+          "message": {
+            "title": "Message",
+            "type": "string",
+            "description": "Description of the error."
+          }
+        }
+      },
+      "CustomInternalServerErrorResponse": {
+        "title": "CustomInternalServerErrorResponse",
+        "type": "object",
+        "properties": {
+          "code": {
+            "title": "Code",
+            "type": "string",
+            "description": "`code` field values that are defined (but can be expanded) are:\n- `external_api_issue`"
+          },
+          "details": {
+            "title": "Details",
+            "type": "array",
+            "items": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/Detail"
+                },
+                {
+                  "type": "object"
+                }
+              ]
+            },
+            "description": "Additional details related to the error code, which depend on the specific error.\n"
+          },
+          "message": {
+            "title": "Message",
+            "type": "string",
+            "description": "Description of the error."
+          }
+        }
+      },
+      "CustomNotFoundErrorResponse": {
+        "title": "CustomNotFoundErrorResponse",
+        "type": "object",
+        "properties": {
+          "code": {
+            "title": "Code",
+            "type": "string",
+            "description": "`code` field values that are defined (but can be expanded) are:\n- `method_not_found`\n- `tenant_not_found`"
+          },
+          "details": {
+            "title": "Details",
+            "type": "array",
+            "items": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/Detail"
+                },
+                {
+                  "type": "object"
+                }
+              ]
+            },
+            "description": "Additional details related to the error code, which depend on the specific error.\n"
+          },
+          "message": {
+            "title": "Message",
+            "type": "string",
+            "description": "Description of the error."
+          }
+        }
+      },
+      "CustomUnprocessableEntityErrorResponse": {
+        "title": "CustomUnprocessableEntityErrorResponse",
+        "type": "object",
+        "properties": {
+          "code": {
+            "title": "Code",
+            "type": "string",
+            "description": "`code` field values that are defined (but can be expanded) are:\n- `validation_error`"
           },
           "details": {
             "title": "Details",
