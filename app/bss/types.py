@@ -128,6 +128,12 @@ from bss.models import (
     UserVoicemailMessageDeleteUnauthorizedErrorResponse as UserVoicemailMessageDeleteUnauthorizedErrorResponse,
     UserVoicemailMessageDeleteNotFoundErrorResponse as UserVoicemailMessageDeleteNotFoundErrorResponse,
     UserVoicemailMessageDeleteInternalServerErrorResponse as UserVoicemailMessageDeleteInternalServerErrorResponse,
+
+    # custom
+    CustomForbiddenErrorResponse as CustomForbiddenErrorResponse,
+    CustomNotFoundErrorResponse as CustomNotFoundErrorResponse,
+    CustomUnprocessableEntityErrorResponse as CustomUnprocessableEntityErrorResponse,
+    CustomInternalServerErrorResponse as CustomInternalServerErrorResponse,
 )
 
 class UserInfo(BaseModel):
