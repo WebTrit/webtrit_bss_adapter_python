@@ -361,6 +361,34 @@ class PrivateCustomUnauthorizedErrorResponse(ErrorResponse):
     )
 
 
+class CustomForbiddenErrorResponse(ErrorResponse):
+    code: Optional[str] = Field(
+        None,
+        description='`code` field values that are defined (but can be expanded) are:\n- `user_not_allowed`',
+    )
+
+
+class CustomNotFoundErrorResponse(ErrorResponse):
+    code: Optional[str] = Field(
+        None,
+        description='`code` field values that are defined (but can be expanded) are:\n- `method_not_found`\n- `tenant_not_found`',
+    )
+
+
+class CustomUnprocessableEntityErrorResponse(ErrorResponse):
+    code: Optional[str] = Field(
+        None,
+        description='`code` field values that are defined (but can be expanded) are:\n- `validation_error`',
+    )
+
+
+class CustomInternalServerErrorResponse(ErrorResponse):
+    code: Optional[str] = Field(
+        None,
+        description='`code` field values that are defined (but can be expanded) are:\n- `external_api_issue`',
+    )
+
+
 class DeleteSessionUnauthorizedErrorResponse(ErrorResponse):
     code: Optional[str] = Field(
         None,

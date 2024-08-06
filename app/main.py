@@ -78,6 +78,10 @@ from bss.types import (
     CustomRequest,
     CustomResponse,
     PrivateCustomUnauthorizedErrorResponse,
+    CustomForbiddenErrorResponse,
+    CustomNotFoundErrorResponse,
+    CustomUnprocessableEntityErrorResponse,
+    CustomInternalServerErrorResponse,
 
     SessionAutoProvisionRequest,
     SessionAutoProvisionUnauthorizedErrorResponse,
@@ -86,7 +90,6 @@ from bss.types import (
     SessionAutoProvisionNotImplementedErrorResponse,
 
 )
-VERSION="0.1.0"
 from bss.types import Capabilities, ExtendedUserInfo, Health, safely_extract_scalar_value
 from report_error import raise_webtrit_error
 from request_trace import RouteWithLogging, log_formatter
@@ -657,7 +660,13 @@ def custom_method_public(
         x_webtrit_tenant_id: Optional[str] = Header(None, alias=TENANT_ID_HTTP_HEADER),
         accept_language: Optional[str] = Header(None, alias=ACCEPT_LANGUAGE_HEADER),
         extra_path_params: Optional[str] = None,
-) -> CustomResponse:
+) -> Union[
+    CustomResponse,
+    CustomForbiddenErrorResponse,
+    CustomNotFoundErrorResponse,
+    CustomUnprocessableEntityErrorResponse,
+    CustomInternalServerErrorResponse,
+]:
     """
         The invocation of custom methods not explicitly defined in the documentation,
     expanding functionality through predefined rules.
@@ -680,7 +689,13 @@ def custom_method_public(
 @router.post(
     "/custom/private/{method_name}/{extra_path_params:path}",
     response_model=CustomResponse,
-    responses={'401': {'model': PrivateCustomUnauthorizedErrorResponse}},
+    responses={
+        '401': {'model': PrivateCustomUnauthorizedErrorResponse},
+        '403': {'model': CustomForbiddenErrorResponse},
+        '404': {'model': CustomNotFoundErrorResponse},
+        '422': {'model': CustomUnprocessableEntityErrorResponse},
+        '500': {'model': CustomInternalServerErrorResponse},
+    },
     tags=['custom'],
 )
 def custom_method_private(
@@ -691,7 +706,14 @@ def custom_method_private(
         accept_language: Optional[str] = Header(None, alias=ACCEPT_LANGUAGE_HEADER),
         extra_path_params: Optional[str] = None,
         auth_data: HTTPAuthorizationCredentials = Depends(security),
-) -> Union[CustomResponse, PrivateCustomUnauthorizedErrorResponse]:
+) -> Union[
+    CustomResponse,
+    PrivateCustomUnauthorizedErrorResponse,
+    CustomForbiddenErrorResponse,
+    CustomNotFoundErrorResponse,
+    CustomUnprocessableEntityErrorResponse,
+    CustomInternalServerErrorResponse,
+]:
     """
         The invocation of custom methods with access token verification not explicitly
     defined in the documentation, expanding functionality through predefined rules.
