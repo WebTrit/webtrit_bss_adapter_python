@@ -1,21 +1,23 @@
 import logging
 from abc import ABC, abstractmethod
 from datetime import datetime
+from typing import List, Dict, Optional, Callable, Union, Iterator
+
 from pydantic import BaseModel
+
+from app_config import AppConfig
+from bss.adapters.otp import OTPHandler, SampleOTPHandler
+from bss.adapters.session_management import SessionManagement
+from bss.sessions import SessionInfo
 from bss.types import (UserInfo, EndUser, ContactInfo, CDRInfo,
                        Capabilities,
                        UserCreateResponse,
-                    #    APIAccessErrorCode, FailedAuthCode, UserNotFoundCode, UserAccessErrorCode,
-                    #    RefreshTokenErrorCode,
-                       CustomResponse, CustomRequest,
+                       CustomResponse, CustomRequest, UserVoicemailsResponse, UserVoicemailMessagePatch,
+                       VoicemailMessageDetails,
                        eval_as_bool)
-from bss.sessions import SessionStorage, SessionInfo
-from bss.adapters.otp import OTPHandler, SampleOTPHandler
-from app_config import AppConfig
-from report_error import raise_webtrit_error
 from module_loader import ModuleLoader
-from bss.adapters.session_management import SessionManagement
-from typing import List, Dict, Any, Optional, Callable
+from report_error import raise_webtrit_error
+
 
 class AttrMap(BaseModel):
     """Define how to map the attributes of one data structure
@@ -136,6 +138,7 @@ class BSSAdapter(SessionManagement, OTPHandler,
         SIGNUP=dict(default=False, option=Capabilities.signup),
         CDRS=dict(default=False, option=Capabilities.callHistory),
         RECORDINGS=dict(default=False, option=Capabilities.recordings),
+        VOICEMAIL=dict(default=False, option=Capabilities.voicemail),
     )
     # what our adapter can do in general (what is coded)
     # should be overridden in the sub-class
@@ -204,6 +207,29 @@ class BSSAdapter(SessionManagement, OTPHandler,
         """Obtain user's information - most importantly, his/her SIP credentials."""
         raise NotImplementedError("Override this method in your sub-class")
 
+    def retrieve_voicemails(self, session: SessionInfo, user: UserInfo) -> UserVoicemailsResponse:
+        """Obtain user's voicemails"""
+        raise NotImplementedError("Override this method in your sub-class")
+
+    def retrieve_voicemail_message_details(self, session: SessionInfo, user: UserInfo,
+                                           message_id: str) -> VoicemailMessageDetails:
+        """Obtain user's voicemail message details information"""
+        raise NotImplementedError("Override this method in your sub-class")
+
+    def retrieve_voicemail_message_attachment(self, session: SessionInfo, message_id: str, file_format: str) -> Union[
+        bytes, Iterator]:
+        """Obtain the media file for a user's voicemail message"""
+        raise NotImplementedError("Override this method in your sub-class")
+
+    def patch_voicemail_message(self, session: SessionInfo, message_id: str,
+                                body: UserVoicemailMessagePatch) -> UserVoicemailMessagePatch:
+        """Update attributes for a user's voicemail message"""
+        raise NotImplementedError("Override this method in your sub-class")
+
+    def delete_voicemail_message(self, session: SessionInfo, message_id: str) -> None:
+        """Delete an existing user's voicemail message"""
+        raise NotImplementedError("Override this method in your sub-class")
+
     @abstractmethod
     def retrieve_contacts(self, session: SessionInfo, user: UserInfo) -> List[ContactInfo]:
         """List of other extensions in the PBX"""
@@ -211,18 +237,18 @@ class BSSAdapter(SessionManagement, OTPHandler,
 
     @abstractmethod
     def retrieve_calls(
-        self,
-        session: SessionInfo,
-        user: UserInfo,
-        date_from: datetime = None,
-        date_to: datetime = None,
+            self,
+            session: SessionInfo,
+            user: UserInfo,
+            date_from: datetime = None,
+            date_to: datetime = None,
     ) -> List[CDRInfo]:
         """Obtain CDRs (call history) of the user"""
         raise NotImplementedError("Override this method in your sub-class")
 
     @abstractmethod
     def retrieve_call_recording(
-        self, session: SessionInfo, recording_id: str
+            self, session: SessionInfo, recording_id: str
     ) -> bytes:
         """Get the media file for a previously recorded call."""
         raise NotImplementedError("Override this method in your sub-class")
@@ -325,8 +351,8 @@ class BSSAdapterExternalDB(BSSAdapter, SampleOTPHandler):
                 return session
 
             raise_webtrit_error(401,
-                    error_message = "Password validation fails",
-                    extra_error_code="incorrect_credentials")
+                                error_message="Password validation fails",
+                                extra_error_code="incorrect_credentials")
 
         # something is wrong. your code should raise its own exception
         # with a more descriptive message to simplify the process of fixing the problem

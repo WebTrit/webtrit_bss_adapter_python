@@ -1,23 +1,20 @@
 from __future__ import annotations
 
-from typing import Optional, Union, Dict
+import logging
 import os
 import sys
+from datetime import datetime
+from typing import Optional, Union
+
 from fastapi import FastAPI, APIRouter, Depends, Response, Request, Header, Body
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
+from pydantic import conint
+from starlette.responses import StreamingResponse
 from starlette.status import HTTP_204_NO_CONTENT
 
-import logging
-from pydantic import conint
-from datetime import datetime
-from report_error import raise_webtrit_error, WebTritErrorException
-from app_config import AppConfig
 import bss.adapters
+from app_config import AppConfig
 from bss.adapters import initialize_bss_adapter
-from bss.constants import TENANT_ID_HTTP_HEADER
-from bss.types import Capabilities, UserInfo, ExtendedUserInfo, Health, safely_extract_scalar_value
-from request_trace import RouteWithLogging, log_formatter
-
 from bss.constants import TENANT_ID_HTTP_HEADER, ACCEPT_LANGUAGE_HEADER
 from bss.types import (
     BinaryResponse,
@@ -89,8 +86,29 @@ from bss.types import (
     SessionAutoProvisionInternalServerErrorErrorResponse,
     SessionAutoProvisionNotImplementedErrorResponse,
 
+    # voicemail
+    VoicemailMessageDetails,
+    UserVoicemailsResponse,
+    UserVoicemailUnauthorizedErrorResponse,
+    UserVoicemailMessagePatch,
+    UserVoicemailNotFoundErrorResponse,
+    UserVoicemailInternalServerErrorResponse,
+    UserVoicemailDetailsUnauthorizedErrorResponse,
+    UserVoicemailDetailsNotFoundErrorResponse,
+    UserVoicemailDetailsInternalServerErrorResponse,
+    UserVoicemailMessageAttachmentUnauthorizedErrorResponse,
+    UserVoicemailMessageAttachmentNotFoundErrorResponse,
+    UserVoicemailMessageAttachmentInternalServerErrorResponse,
+    UserVoicemailMessagePatchUnauthorizedErrorResponse,
+    UserVoicemailMessagePatchNotFoundErrorResponse,
+    UserVoicemailMessageAttachmentUnprocessableEntityErrorResponse,
+    UserVoicemailMessagePatchInternalServerErrorResponse,
+    UserVoicemailMessageDeleteUnauthorizedErrorResponse,
+    UserVoicemailMessageDeleteNotFoundErrorResponse,
+    UserVoicemailMessageDeleteInternalServerErrorResponse,
 )
 from bss.types import Capabilities, ExtendedUserInfo, Health, safely_extract_scalar_value
+from report_error import WebTritErrorException
 from report_error import raise_webtrit_error
 from request_trace import RouteWithLogging, log_formatter
 
@@ -180,20 +198,21 @@ def create_session(
     CreateSessionInternalServerErrorErrorResponse,
 ]:
     """
-    Login user using username and password
+    Login user using user_ref and password
     """
     global bss
 
     is_method_allowed(Capabilities.passwordSignin)
 
-    if not (body.login and body.password):
+    if not (body.user_ref and body.password):
         # missing parameters
-        raise_webtrit_error(422, "Missing login & password")
+        raise_webtrit_error(422, "Missing user_ref & password")
 
-    user = ExtendedUserInfo(user_id = 'N/A', # do not know it yet
-                    client_agent = request.headers.get('User-Agent', 'Unknown'),
-                    tenant_id = bss.default_id_if_none(x_webtrit_tenant_id),
-                    login = body.login)
+    user_ref = safely_extract_scalar_value(body.user_ref)
+    user = ExtendedUserInfo(user_id='N/A',  # do not know it yet
+                            client_agent=request.headers.get('User-Agent', 'Unknown'),
+                            tenant_id=bss.default_id_if_none(x_webtrit_tenant_id),
+                            login=user_ref)
     session = bss.authenticate(user, body.password)
     return session
 
@@ -508,8 +527,6 @@ def delete_user(
     return Response(status_code=HTTP_204_NO_CONTENT, headers={'content-type': 'application/json'})
 
 
-
-
 @router.get(
     '/user/contacts',
     response_model=Contacts,
@@ -651,8 +668,184 @@ def get_user_recording(
 
     return Response(content=recording)
 
-@router.post("/custom/public/{method_name}/{extra_path_params:path}",
-             response_model=CustomResponse, tags=['custom'])
+
+@router.get(
+    '/user/voicemails',
+    response_model=UserVoicemailsResponse,
+    responses={
+        '401': {'model': UserVoicemailUnauthorizedErrorResponse},
+        '404': {'model': UserVoicemailNotFoundErrorResponse},
+        '500': {'model': UserVoicemailInternalServerErrorResponse},
+    },
+    tags=['user'],
+)
+def get_user_voicemails(
+        auth_data: HTTPAuthorizationCredentials = Depends(security),
+        x_webtrit_tenant_id: Optional[str] = Header(None, alias=TENANT_ID_HTTP_HEADER),
+) -> Union[
+    UserVoicemailsResponse,
+    UserVoicemailUnauthorizedErrorResponse,
+    UserVoicemailNotFoundErrorResponse,
+    UserVoicemailInternalServerErrorResponse,
+]:
+    global bss, bss_capabilities
+
+    access_token = auth_data.credentials
+    session = bss.validate_session(access_token)
+
+    is_method_allowed(Capabilities.voicemail)
+
+    voicemail = bss.retrieve_voicemails(session, ExtendedUserInfo(
+        user_id=safely_extract_scalar_value(session.user_id),
+        tenant_id=bss.default_id_if_none(x_webtrit_tenant_id)
+    ))
+
+    return voicemail
+
+
+@router.get(
+    '/user/voicemails/{message_id}',
+    response_model=VoicemailMessageDetails,
+    responses={
+        '401': {'model': UserVoicemailDetailsUnauthorizedErrorResponse},
+        '404': {'model': UserVoicemailDetailsNotFoundErrorResponse},
+        '500': {'model': UserVoicemailDetailsInternalServerErrorResponse},
+    },
+    tags=['user'],
+)
+def get_user_voicemail_message_details(
+        message_id: str,
+        auth_data: HTTPAuthorizationCredentials = Depends(security),
+        x_webtrit_tenant_id: Optional[str] = Header(None, alias=TENANT_ID_HTTP_HEADER),
+) -> Union[
+    VoicemailMessageDetails,
+    UserVoicemailDetailsUnauthorizedErrorResponse,
+    UserVoicemailDetailsNotFoundErrorResponse,
+    UserVoicemailDetailsInternalServerErrorResponse,
+]:
+    global bss, bss_capabilities
+
+    access_token = auth_data.credentials
+    session = bss.validate_session(access_token)
+
+    is_method_allowed(Capabilities.voicemail)
+
+    return bss.retrieve_voicemail_message_details(
+        session,
+        ExtendedUserInfo(
+            user_id=safely_extract_scalar_value(session.user_id),
+            tenant_id=bss.default_id_if_none(x_webtrit_tenant_id)
+        ),
+        message_id
+    )
+
+
+@router.patch(
+    '/user/voicemails/{message_id}',
+    response_model=UserVoicemailMessagePatch,
+    responses={
+        '401': {'model': UserVoicemailMessagePatchUnauthorizedErrorResponse},
+        '404': {'model': UserVoicemailMessagePatchNotFoundErrorResponse},
+        '500': {'model': UserVoicemailMessagePatchInternalServerErrorResponse},
+    },
+    tags=['user'],
+)
+def patch_user_voicemail_message(
+        message_id: str,
+        body: UserVoicemailMessagePatch,
+        auth_data: HTTPAuthorizationCredentials = Depends(security),
+        _x_webtrit_tenant_id: Optional[str] = Header(None, alias=TENANT_ID_HTTP_HEADER),
+) -> Union[
+    UserVoicemailMessagePatch,
+    UserVoicemailMessagePatchUnauthorizedErrorResponse,
+    UserVoicemailMessagePatchNotFoundErrorResponse,
+    UserVoicemailMessagePatchInternalServerErrorResponse,
+]:
+    global bss, bss_capabilities
+
+    access_token = auth_data.credentials
+    session = bss.validate_session(access_token)
+
+    is_method_allowed(Capabilities.voicemail)
+
+    return bss.patch_voicemail_message(session, message_id, body)
+
+
+@router.delete(
+    '/user/voicemails/{message_id}',
+    response_model=None,
+    responses={
+        '401': {'model': UserVoicemailMessageDeleteUnauthorizedErrorResponse},
+        '404': {'model': UserVoicemailMessageDeleteNotFoundErrorResponse},
+        '500': {'model': UserVoicemailMessageDeleteInternalServerErrorResponse},
+    },
+    tags=['user'],
+)
+def delete_user_voicemail_message(
+        message_id: str,
+        auth_data: HTTPAuthorizationCredentials = Depends(security),
+        _x_webtrit_tenant_id: Optional[str] = Header(None, alias=TENANT_ID_HTTP_HEADER),
+) -> Union[
+    None,
+    UserVoicemailMessageDeleteUnauthorizedErrorResponse,
+    UserVoicemailMessageDeleteNotFoundErrorResponse,
+    UserVoicemailMessageDeleteInternalServerErrorResponse,
+]:
+    global bss, bss_capabilities
+
+    access_token = auth_data.credentials
+    session = bss.validate_session(access_token)
+
+    is_method_allowed(Capabilities.voicemail)
+    bss.delete_voicemail_message(session, message_id)
+
+    return Response(status_code=204)
+
+
+@router.get(
+    '/user/voicemails/{message_id}/attachment',
+    response_class=StreamingResponse,
+    responses={
+        '401': {'model': UserVoicemailMessageAttachmentUnauthorizedErrorResponse},
+        '404': {'model': UserVoicemailMessageAttachmentNotFoundErrorResponse},
+        '422': {'model': UserVoicemailMessageAttachmentUnprocessableEntityErrorResponse},
+        '500': {'model': UserVoicemailMessageAttachmentInternalServerErrorResponse},
+    },
+    tags=['user'],
+)
+def get_user_voicemail_message_attachment(
+        message_id: str,
+        file_format: str = None,
+        auth_data: HTTPAuthorizationCredentials = Depends(security),
+        _x_webtrit_tenant_id: Optional[str] = Header(None, alias=TENANT_ID_HTTP_HEADER),
+) -> Union[
+    BinaryResponse,
+    UserVoicemailMessageAttachmentUnauthorizedErrorResponse,
+    UserVoicemailMessageAttachmentNotFoundErrorResponse,
+    UserVoicemailMessageAttachmentUnprocessableEntityErrorResponse,
+    UserVoicemailMessageAttachmentInternalServerErrorResponse,
+]:
+    global bss, bss_capabilities
+
+    is_method_allowed(Capabilities.voicemail)
+
+    access_token = auth_data.credentials
+    session = bss.validate_session(access_token)
+    content_iterator = bss.retrieve_voicemail_message_attachment(session, message_id, file_format)
+
+    return StreamingResponse(content_iterator, media_type="application/octet-stream")
+
+
+@router.post(
+    "/custom/public/{method_name}/{extra_path_params:path}",
+    response_model=CustomResponse,
+    responses={
+        '403': {'model': CustomForbiddenErrorResponse},
+        '404': {'model': CustomNotFoundErrorResponse},
+        '422': {'model': CustomUnprocessableEntityErrorResponse},
+        '500': {'model': CustomInternalServerErrorResponse},
+    },
+    tags=['custom'])
 def custom_method_public(
         request: Request,
         method_name: str,

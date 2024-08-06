@@ -31,7 +31,7 @@
           "session"
         ],
         "summary": "Create Session",
-        "description": "Login user using username and password",
+        "description": "Login user using user_ref and password",
         "operationId": "create_session_api_v1_session_post",
         "parameters": [
           {
@@ -1005,6 +1005,433 @@
         ]
       }
     },
+    "/api/v1/user/voicemails": {
+      "get": {
+        "tags": [
+          "user"
+        ],
+        "summary": "Get User Voicemails",
+        "operationId": "get_user_voicemails_api_v1_user_voicemails_get",
+        "parameters": [
+          {
+            "required": false,
+            "schema": {
+              "title": "X-Webtrit-Tenant-Id",
+              "type": "string"
+            },
+            "name": "X-WebTrit-Tenant-ID",
+            "in": "header"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UserVoicemailsResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UserVoicemailUnauthorizedErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UserVoicemailNotFoundErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UserVoicemailInternalServerErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/api/v1/user/voicemails/{message_id}": {
+      "get": {
+        "tags": [
+          "user"
+        ],
+        "summary": "Get User Voicemail Message Details",
+        "operationId": "get_user_voicemail_message_details_api_v1_user_voicemails__message_id__get",
+        "parameters": [
+          {
+            "required": true,
+            "schema": {
+              "title": "Message Id",
+              "type": "string"
+            },
+            "name": "message_id",
+            "in": "path"
+          },
+          {
+            "required": false,
+            "schema": {
+              "title": "X-Webtrit-Tenant-Id",
+              "type": "string"
+            },
+            "name": "X-WebTrit-Tenant-ID",
+            "in": "header"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VoicemailMessageDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UserVoicemailDetailsUnauthorizedErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UserVoicemailDetailsNotFoundErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UserVoicemailDetailsInternalServerErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      },
+      "delete": {
+        "tags": [
+          "user"
+        ],
+        "summary": "Delete User Voicemail Message",
+        "operationId": "delete_user_voicemail_message_api_v1_user_voicemails__message_id__delete",
+        "parameters": [
+          {
+            "required": true,
+            "schema": {
+              "title": "Message Id",
+              "type": "string"
+            },
+            "name": "message_id",
+            "in": "path"
+          },
+          {
+            "required": false,
+            "schema": {
+              "title": "X-Webtrit-Tenant-Id",
+              "type": "string"
+            },
+            "name": "X-WebTrit-Tenant-ID",
+            "in": "header"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UserVoicemailMessageDeleteUnauthorizedErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UserVoicemailMessageDeleteNotFoundErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UserVoicemailMessageDeleteInternalServerErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      },
+      "patch": {
+        "tags": [
+          "user"
+        ],
+        "summary": "Patch User Voicemail Message",
+        "operationId": "patch_user_voicemail_message_api_v1_user_voicemails__message_id__patch",
+        "parameters": [
+          {
+            "required": true,
+            "schema": {
+              "title": "Message Id",
+              "type": "string"
+            },
+            "name": "message_id",
+            "in": "path"
+          },
+          {
+            "required": false,
+            "schema": {
+              "title": "X-Webtrit-Tenant-Id",
+              "type": "string"
+            },
+            "name": "X-WebTrit-Tenant-ID",
+            "in": "header"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UserVoicemailMessagePatch"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UserVoicemailMessagePatch"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UserVoicemailMessagePatchUnauthorizedErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UserVoicemailMessagePatchNotFoundErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UserVoicemailMessagePatchInternalServerErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/api/v1/user/voicemails/{message_id}/attachment": {
+      "get": {
+        "tags": [
+          "user"
+        ],
+        "summary": "Get User Voicemail Message Attachment",
+        "operationId": "get_user_voicemail_message_attachment_api_v1_user_voicemails__message_id__attachment_get",
+        "parameters": [
+          {
+            "required": true,
+            "schema": {
+              "title": "Message Id",
+              "type": "string"
+            },
+            "name": "message_id",
+            "in": "path"
+          },
+          {
+            "required": false,
+            "schema": {
+              "title": "File Format",
+              "type": "string"
+            },
+            "name": "file_format",
+            "in": "query"
+          },
+          {
+            "required": false,
+            "schema": {
+              "title": "X-Webtrit-Tenant-Id",
+              "type": "string"
+            },
+            "name": "X-WebTrit-Tenant-ID",
+            "in": "header"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response"
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UserVoicemailMessageAttachmentUnauthorizedErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UserVoicemailMessageAttachmentNotFoundErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Unprocessable Entity",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UserVoicemailMessageAttachmentUnprocessableEntityErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UserVoicemailMessageAttachmentInternalServerErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
     "/api/v1/custom/public/{method_name}/{extra_path_params}": {
       "post": {
         "tags": [
@@ -1073,12 +1500,42 @@
               }
             }
           },
-          "422": {
-            "description": "Validation Error",
+          "403": {
+            "description": "Forbidden",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
+                  "$ref": "#/components/schemas/CustomForbiddenErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CustomNotFoundErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Unprocessable Entity",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CustomUnprocessableEntityErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CustomInternalServerErrorResponse"
                 }
               }
             }
@@ -1361,10 +1818,19 @@
       "Contact": {
         "title": "Contact",
         "required": [
+          "user_id",
           "numbers"
         ],
         "type": "object",
         "properties": {
+          "user_id": {
+            "$ref": "#/components/schemas/UserId"
+          },
+          "is_current_user": {
+            "title": "Is Current User",
+            "type": "boolean",
+            "description": "Indicates whether the contact is associated with the same user who making the request."
+          },
           "alias_name": {
             "title": "Alias Name",
             "type": "string",
@@ -2733,15 +3199,13 @@
       "SessionCreateRequest": {
         "title": "SessionCreateRequest",
         "required": [
-          "login",
+          "user_ref",
           "password"
         ],
         "type": "object",
         "properties": {
-          "login": {
-            "title": "Login",
-            "type": "string",
-            "description": "User's `login` on the **Adaptee**."
+          "user_ref": {
+            "$ref": "#/components/schemas/UserRef"
           },
           "password": {
             "title": "Password",
@@ -2961,6 +3425,7 @@
           "recordings",
           "callHistory",
           "extensions",
+          "voicemail",
           "cta_list"
         ],
         "description": "An enumeration."
@@ -3212,6 +3677,536 @@
         "description": "A reference identifier of the user on the **Adaptee**\n\nThis identifier is entered by the user in client applications and passed\nvia **WebTrit Core** to the **Adaptee** for sign-in purposes.\n\nThe identifier can be a phone number or any other attribute associated\nwith the user. When the same user is accessed using different references,\nit is crucial to ensure that the same `UserId` is assigned to this user.\n",
         "example": "1234567890"
       },
+      "UserVoicemailDetailsInternalServerErrorResponse": {
+        "title": "UserVoicemailDetailsInternalServerErrorResponse",
+        "type": "object",
+        "properties": {
+          "code": {
+            "title": "Code",
+            "type": "string",
+            "description": "`code` field values that are defined (but can be expanded) are:\n- `external_api_issue`"
+          },
+          "details": {
+            "title": "Details",
+            "type": "array",
+            "items": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/Detail"
+                },
+                {
+                  "type": "object"
+                }
+              ]
+            },
+            "description": "Additional details related to the error code, which depend on the specific error.\n"
+          },
+          "message": {
+            "title": "Message",
+            "type": "string",
+            "description": "Description of the error."
+          }
+        }
+      },
+      "UserVoicemailDetailsNotFoundErrorResponse": {
+        "title": "UserVoicemailDetailsNotFoundErrorResponse",
+        "type": "object",
+        "properties": {
+          "code": {
+            "title": "Code",
+            "type": "string",
+            "description": "`code` field values that are defined (but can be expanded) are:\n- `session_not_found`\n- `user_not_found` \n- `message_not_found`"
+          },
+          "details": {
+            "title": "Details",
+            "type": "array",
+            "items": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/Detail"
+                },
+                {
+                  "type": "object"
+                }
+              ]
+            },
+            "description": "Additional details related to the error code, which depend on the specific error.\n"
+          },
+          "message": {
+            "title": "Message",
+            "type": "string",
+            "description": "Description of the error."
+          }
+        }
+      },
+      "UserVoicemailDetailsUnauthorizedErrorResponse": {
+        "title": "UserVoicemailDetailsUnauthorizedErrorResponse",
+        "type": "object",
+        "properties": {
+          "code": {
+            "title": "Code",
+            "type": "string",
+            "description": "`code` field values that are defined (but can be expanded) are:\n- `authorization_header_missing`\n- `bearer_credentials_missing`\n- `access_token_invalid`\n- `access_token_expired`\n- `unknown`"
+          },
+          "details": {
+            "title": "Details",
+            "type": "array",
+            "items": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/Detail"
+                },
+                {
+                  "type": "object"
+                }
+              ]
+            },
+            "description": "Additional details related to the error code, which depend on the specific error.\n"
+          },
+          "message": {
+            "title": "Message",
+            "type": "string",
+            "description": "Description of the error."
+          }
+        }
+      },
+      "UserVoicemailInternalServerErrorResponse": {
+        "title": "UserVoicemailInternalServerErrorResponse",
+        "type": "object",
+        "properties": {
+          "code": {
+            "title": "Code",
+            "type": "string",
+            "description": "`code` field values that are defined (but can be expanded) are:\n- `external_api_issue`"
+          },
+          "details": {
+            "title": "Details",
+            "type": "array",
+            "items": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/Detail"
+                },
+                {
+                  "type": "object"
+                }
+              ]
+            },
+            "description": "Additional details related to the error code, which depend on the specific error.\n"
+          },
+          "message": {
+            "title": "Message",
+            "type": "string",
+            "description": "Description of the error."
+          }
+        }
+      },
+      "UserVoicemailMessageAttachmentInternalServerErrorResponse": {
+        "title": "UserVoicemailMessageAttachmentInternalServerErrorResponse",
+        "type": "object",
+        "properties": {
+          "code": {
+            "title": "Code",
+            "type": "string",
+            "description": "`code` field values that are defined (but can be expanded) are:\n- `external_api_issue`"
+          },
+          "details": {
+            "title": "Details",
+            "type": "array",
+            "items": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/Detail"
+                },
+                {
+                  "type": "object"
+                }
+              ]
+            },
+            "description": "Additional details related to the error code, which depend on the specific error.\n"
+          },
+          "message": {
+            "title": "Message",
+            "type": "string",
+            "description": "Description of the error."
+          }
+        }
+      },
+      "UserVoicemailMessageAttachmentNotFoundErrorResponse": {
+        "title": "UserVoicemailMessageAttachmentNotFoundErrorResponse",
+        "type": "object",
+        "properties": {
+          "code": {
+            "title": "Code",
+            "type": "string",
+            "description": "`code` field values that are defined (but can be expanded) are:\n- `session_not_found`\n- `user_not_found` \n- `message_not_found`"
+          },
+          "details": {
+            "title": "Details",
+            "type": "array",
+            "items": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/Detail"
+                },
+                {
+                  "type": "object"
+                }
+              ]
+            },
+            "description": "Additional details related to the error code, which depend on the specific error.\n"
+          },
+          "message": {
+            "title": "Message",
+            "type": "string",
+            "description": "Description of the error."
+          }
+        }
+      },
+      "UserVoicemailMessageAttachmentUnauthorizedErrorResponse": {
+        "title": "UserVoicemailMessageAttachmentUnauthorizedErrorResponse",
+        "type": "object",
+        "properties": {
+          "code": {
+            "title": "Code",
+            "type": "string",
+            "description": "`code` field values that are defined (but can be expanded) are:\n- `authorization_header_missing`\n- `bearer_credentials_missing`\n- `access_token_invalid`\n- `access_token_expired`\n- `unknown`"
+          },
+          "details": {
+            "title": "Details",
+            "type": "array",
+            "items": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/Detail"
+                },
+                {
+                  "type": "object"
+                }
+              ]
+            },
+            "description": "Additional details related to the error code, which depend on the specific error.\n"
+          },
+          "message": {
+            "title": "Message",
+            "type": "string",
+            "description": "Description of the error."
+          }
+        }
+      },
+      "UserVoicemailMessageAttachmentUnprocessableEntityErrorResponse": {
+        "title": "UserVoicemailMessageAttachmentUnprocessableEntityErrorResponse",
+        "type": "object",
+        "properties": {
+          "code": {
+            "title": "Code",
+            "type": "string",
+            "description": "`code` field values that are defined (but can be expanded) are:\n- `unsupported_file_format`"
+          },
+          "details": {
+            "title": "Details",
+            "type": "array",
+            "items": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/Detail"
+                },
+                {
+                  "type": "object"
+                }
+              ]
+            },
+            "description": "Additional details related to the error code, which depend on the specific error.\n"
+          },
+          "message": {
+            "title": "Message",
+            "type": "string",
+            "description": "Description of the error."
+          }
+        }
+      },
+      "UserVoicemailMessageDeleteInternalServerErrorResponse": {
+        "title": "UserVoicemailMessageDeleteInternalServerErrorResponse",
+        "type": "object",
+        "properties": {
+          "code": {
+            "title": "Code",
+            "type": "string",
+            "description": "`code` field values that are defined (but can be expanded) are:\n- `external_api_issue`"
+          },
+          "details": {
+            "title": "Details",
+            "type": "array",
+            "items": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/Detail"
+                },
+                {
+                  "type": "object"
+                }
+              ]
+            },
+            "description": "Additional details related to the error code, which depend on the specific error.\n"
+          },
+          "message": {
+            "title": "Message",
+            "type": "string",
+            "description": "Description of the error."
+          }
+        }
+      },
+      "UserVoicemailMessageDeleteNotFoundErrorResponse": {
+        "title": "UserVoicemailMessageDeleteNotFoundErrorResponse",
+        "type": "object",
+        "properties": {
+          "code": {
+            "title": "Code",
+            "type": "string",
+            "description": "`code` field values that are defined (but can be expanded) are:\n- `session_not_found`\n- `user_not_found` \n- `message_not_found`"
+          },
+          "details": {
+            "title": "Details",
+            "type": "array",
+            "items": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/Detail"
+                },
+                {
+                  "type": "object"
+                }
+              ]
+            },
+            "description": "Additional details related to the error code, which depend on the specific error.\n"
+          },
+          "message": {
+            "title": "Message",
+            "type": "string",
+            "description": "Description of the error."
+          }
+        }
+      },
+      "UserVoicemailMessageDeleteUnauthorizedErrorResponse": {
+        "title": "UserVoicemailMessageDeleteUnauthorizedErrorResponse",
+        "type": "object",
+        "properties": {
+          "code": {
+            "title": "Code",
+            "type": "string",
+            "description": "`code` field values that are defined (but can be expanded) are:\n- `authorization_header_missing`\n- `bearer_credentials_missing`\n- `access_token_invalid`\n- `access_token_expired`\n- `unknown`"
+          },
+          "details": {
+            "title": "Details",
+            "type": "array",
+            "items": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/Detail"
+                },
+                {
+                  "type": "object"
+                }
+              ]
+            },
+            "description": "Additional details related to the error code, which depend on the specific error.\n"
+          },
+          "message": {
+            "title": "Message",
+            "type": "string",
+            "description": "Description of the error."
+          }
+        }
+      },
+      "UserVoicemailMessagePatch": {
+        "title": "UserVoicemailMessagePatch",
+        "required": [
+          "seen"
+        ],
+        "type": "object",
+        "properties": {
+          "seen": {
+            "title": "Seen",
+            "type": "boolean"
+          }
+        }
+      },
+      "UserVoicemailMessagePatchInternalServerErrorResponse": {
+        "title": "UserVoicemailMessagePatchInternalServerErrorResponse",
+        "type": "object",
+        "properties": {
+          "code": {
+            "title": "Code",
+            "type": "string",
+            "description": "`code` field values that are defined (but can be expanded) are:\n- `external_api_issue`"
+          },
+          "details": {
+            "title": "Details",
+            "type": "array",
+            "items": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/Detail"
+                },
+                {
+                  "type": "object"
+                }
+              ]
+            },
+            "description": "Additional details related to the error code, which depend on the specific error.\n"
+          },
+          "message": {
+            "title": "Message",
+            "type": "string",
+            "description": "Description of the error."
+          }
+        }
+      },
+      "UserVoicemailMessagePatchNotFoundErrorResponse": {
+        "title": "UserVoicemailMessagePatchNotFoundErrorResponse",
+        "type": "object",
+        "properties": {
+          "code": {
+            "title": "Code",
+            "type": "string",
+            "description": "`code` field values that are defined (but can be expanded) are:\n- `session_not_found`\n- `user_not_found` \n- `message_not_found`"
+          },
+          "details": {
+            "title": "Details",
+            "type": "array",
+            "items": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/Detail"
+                },
+                {
+                  "type": "object"
+                }
+              ]
+            },
+            "description": "Additional details related to the error code, which depend on the specific error.\n"
+          },
+          "message": {
+            "title": "Message",
+            "type": "string",
+            "description": "Description of the error."
+          }
+        }
+      },
+      "UserVoicemailMessagePatchUnauthorizedErrorResponse": {
+        "title": "UserVoicemailMessagePatchUnauthorizedErrorResponse",
+        "type": "object",
+        "properties": {
+          "code": {
+            "title": "Code",
+            "type": "string",
+            "description": "`code` field values that are defined (but can be expanded) are:\n- `authorization_header_missing`\n- `bearer_credentials_missing`\n- `access_token_invalid`\n- `access_token_expired`\n- `unknown`"
+          },
+          "details": {
+            "title": "Details",
+            "type": "array",
+            "items": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/Detail"
+                },
+                {
+                  "type": "object"
+                }
+              ]
+            },
+            "description": "Additional details related to the error code, which depend on the specific error.\n"
+          },
+          "message": {
+            "title": "Message",
+            "type": "string",
+            "description": "Description of the error."
+          }
+        }
+      },
+      "UserVoicemailNotFoundErrorResponse": {
+        "title": "UserVoicemailNotFoundErrorResponse",
+        "type": "object",
+        "properties": {
+          "code": {
+            "title": "Code",
+            "type": "string",
+            "description": "`code` field values that are defined (but can be expanded) are:\n- `session_not_found`\n- `user_not_found`"
+          },
+          "details": {
+            "title": "Details",
+            "type": "array",
+            "items": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/Detail"
+                },
+                {
+                  "type": "object"
+                }
+              ]
+            },
+            "description": "Additional details related to the error code, which depend on the specific error.\n"
+          },
+          "message": {
+            "title": "Message",
+            "type": "string",
+            "description": "Description of the error."
+          }
+        }
+      },
+      "UserVoicemailUnauthorizedErrorResponse": {
+        "title": "UserVoicemailUnauthorizedErrorResponse",
+        "type": "object",
+        "properties": {
+          "code": {
+            "title": "Code",
+            "type": "string",
+            "description": "`code` field values that are defined (but can be expanded) are:\n- `authorization_header_missing`\n- `bearer_credentials_missing`\n- `access_token_invalid`\n- `access_token_expired`\n- `unknown`"
+          },
+          "details": {
+            "title": "Details",
+            "type": "array",
+            "items": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/Detail"
+                },
+                {
+                  "type": "object"
+                }
+              ]
+            },
+            "description": "Additional details related to the error code, which depend on the specific error.\n"
+          },
+          "message": {
+            "title": "Message",
+            "type": "string",
+            "description": "Description of the error."
+          }
+        }
+      },
+      "UserVoicemailsResponse": {
+        "title": "UserVoicemailsResponse",
+        "required": [
+          "messages",
+          "has_new_messages"
+        ],
+        "type": "object",
+        "properties": {
+          "messages": {
+            "title": "Messages",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/VoicemailMessage"
+            }
+          },
+          "has_new_messages": {
+            "title": "Has New Messages",
+            "type": "boolean"
+          }
+        }
+      },
       "ValidationError": {
         "title": "ValidationError",
         "required": [
@@ -3337,6 +4332,174 @@
             "description": "Description of the error."
           }
         }
+      },
+      "VoicemailMessage": {
+        "title": "VoicemailMessage",
+        "required": [
+          "id",
+          "type",
+          "size",
+          "date",
+          "seen"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "title": "Id",
+            "type": "string",
+            "description": "The unique ID of the message.",
+            "example": "1654"
+          },
+          "type": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/VoicemailMessageType"
+              }
+            ],
+            "description": "The type of the message."
+          },
+          "duration": {
+            "title": "Duration",
+            "type": "number",
+            "description": "The duration of the voice message in seconds.",
+            "example": 3.45
+          },
+          "size": {
+            "title": "Size",
+            "type": "integer",
+            "description": "The total size of all attachments in the message in KB.",
+            "example": 5
+          },
+          "date": {
+            "title": "Date",
+            "type": "string",
+            "description": "The delivery date of the message.",
+            "format": "date-time"
+          },
+          "seen": {
+            "title": "Seen",
+            "type": "boolean",
+            "description": "Indicates whether this message has been seen.",
+            "example": false
+          }
+        }
+      },
+      "VoicemailMessageAttachment": {
+        "title": "VoicemailMessageAttachment",
+        "required": [
+          "type",
+          "subtype",
+          "size",
+          "filename"
+        ],
+        "type": "object",
+        "properties": {
+          "type": {
+            "title": "Type",
+            "type": "string",
+            "description": "The MIME type of the body.",
+            "example": "audio"
+          },
+          "subtype": {
+            "title": "Subtype",
+            "type": "string",
+            "description": "The MIME subtype of the body.",
+            "example": "basic"
+          },
+          "size": {
+            "title": "Size",
+            "type": "integer",
+            "description": "The size of the body in KB.",
+            "example": 5
+          },
+          "filename": {
+            "title": "Filename",
+            "type": "string",
+            "description": "The name of the attached file.",
+            "example": "voice_message_2024-06-07_12-32-03.au"
+          }
+        }
+      },
+      "VoicemailMessageDetails": {
+        "title": "VoicemailMessageDetails",
+        "required": [
+          "id",
+          "type",
+          "size",
+          "date",
+          "seen",
+          "sender",
+          "receiver",
+          "attachments"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "title": "Id",
+            "type": "string",
+            "description": "The unique ID of the message.",
+            "example": "1654"
+          },
+          "type": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/VoicemailMessageType"
+              }
+            ],
+            "description": "The type of the message."
+          },
+          "duration": {
+            "title": "Duration",
+            "type": "number",
+            "description": "The duration of the voice message in seconds.",
+            "example": 3.45
+          },
+          "size": {
+            "title": "Size",
+            "type": "integer",
+            "description": "The total size of all attachments in the message in KB.",
+            "example": 5
+          },
+          "date": {
+            "title": "Date",
+            "type": "string",
+            "description": "The delivery date of the message.",
+            "format": "date-time"
+          },
+          "seen": {
+            "title": "Seen",
+            "type": "boolean",
+            "description": "Indicates whether this message has been seen.",
+            "example": false
+          },
+          "sender": {
+            "title": "Sender",
+            "type": "string",
+            "description": "The sender of the message.",
+            "example": "Caller #123010 <123010@sip.webtrit.com>"
+          },
+          "receiver": {
+            "title": "Receiver",
+            "type": "string",
+            "description": "The receiver of the message.",
+            "example": "123009 <123009@sip.webtrit.com>"
+          },
+          "attachments": {
+            "title": "Attachments",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/VoicemailMessageAttachment"
+            }
+          }
+        }
+      },
+      "VoicemailMessageType": {
+        "title": "VoicemailMessageType",
+        "enum": [
+          "voice",
+          "fax"
+        ],
+        "description": "An enumeration."
       }
     },
     "securitySchemes": {

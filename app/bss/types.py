@@ -109,6 +109,30 @@ from bss.models import (
     ProvisionSessionAutoNotImplementedErrorResponse as SessionAutoProvisionNotImplementedErrorResponse,
 
     Code as ErrorCode,
+
+    # voicemail
+    UserVoicemailsResponse as UserVoicemailsResponse,
+    UserVoicemailMessagePatch as UserVoicemailMessagePatch,
+    VoicemailMessage as VoicemailMessage,
+    VoicemailMessageDetails as VoicemailMessageDetails,
+    VoicemailMessageAttachment as VoicemailMessageAttachment,
+    VoicemailMessageType as VoicemailMessageType,
+    UserVoicemailUnauthorizedErrorResponse as UserVoicemailUnauthorizedErrorResponse,
+    UserVoicemailNotFoundErrorResponse as UserVoicemailNotFoundErrorResponse,
+    UserVoicemailInternalServerErrorResponse as UserVoicemailInternalServerErrorResponse,
+    UserVoicemailDetailsUnauthorizedErrorResponse as UserVoicemailDetailsUnauthorizedErrorResponse,
+    UserVoicemailDetailsNotFoundErrorResponse as UserVoicemailDetailsNotFoundErrorResponse,
+    UserVoicemailDetailsInternalServerErrorResponse as UserVoicemailDetailsInternalServerErrorResponse,
+    UserVoicemailMessageAttachmentUnauthorizedErrorResponse as UserVoicemailMessageAttachmentUnauthorizedErrorResponse,
+    UserVoicemailMessageAttachmentNotFoundErrorResponse as UserVoicemailMessageAttachmentNotFoundErrorResponse,
+    UserVoicemailMessageAttachmentInternalServerErrorResponse as UserVoicemailMessageAttachmentInternalServerErrorResponse,
+    UserVoicemailMessageAttachmentUnprocessableEntityErrorResponse as UserVoicemailMessageAttachmentUnprocessableEntityErrorResponse,
+    UserVoicemailMessagePatchUnauthorizedErrorResponse as UserVoicemailMessagePatchUnauthorizedErrorResponse,
+    UserVoicemailMessagePatchNotFoundErrorResponse as UserVoicemailMessagePatchNotFoundErrorResponse,
+    UserVoicemailMessagePatchInternalServerErrorResponse as UserVoicemailMessagePatchInternalServerErrorResponse,
+    UserVoicemailMessageDeleteUnauthorizedErrorResponse as UserVoicemailMessageDeleteUnauthorizedErrorResponse,
+    UserVoicemailMessageDeleteNotFoundErrorResponse as UserVoicemailMessageDeleteNotFoundErrorResponse,
+    UserVoicemailMessageDeleteInternalServerErrorResponse as UserVoicemailMessageDeleteInternalServerErrorResponse,
 )
 
 
