@@ -36,22 +36,22 @@ class Serializer:
         self.__sip_server_host = sip_server_host
         self.__sip_server_port = sip_server_port
 
-    def get_end_user(self, account_info: dict, aliases: list) -> EndUser:
+    def get_end_user(self, account_info: dict, aliases: list, hide_balance: bool) -> EndUser:
         """Forms EndUser based on the input account_info and its aliases.
 
         Parameters:
             account_info :dict: The information about the account to be added to EndUser.
             aliases :list: The information about aliases of the account to be added to EndUser.
+            hide_balance :bool: Ensures that the end user object hides balance
 
         Returns:
             Response :EndUser: The filled structure of EndUser.
         """
         return EndUser(
             alias_name=None,  # TODO: shall we fill it?
-            balance=Balance(
+            balance=None if hide_balance else Balance(
                 amount=account_info['balance'],
-                balance_type=BILLING_MODEL_MAP.get(account_info['billing_model'],
-                                                   BalanceType.unknown),
+                balance_type=BILLING_MODEL_MAP.get(account_info['billing_model'], BalanceType.unknown),
                 credit_limit=account_info.get('credit_limit'),
                 currency=account_info['iso_4217'],
             ),

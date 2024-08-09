@@ -71,6 +71,9 @@ ENV PORTASWITCH_CONTACTS_SKIP_WITHOUT_EXTENSION="True"
 # Defines list of the account's ids (i_account) which can use any OTP verification code for authentication - usually used for demo purposes (optional):
 ENV PORTASWITCH_OTP_IGNORE_ACCOUNTS="6088"
 
+# Ensures that the user info API hides the user balance (optional):
+ENV HIDE_BALANCE_IN_USER_INFO="True"
+
 EXPOSE $API_PORT
 
 ENTRYPOINT ["./entrypoint.sh"]

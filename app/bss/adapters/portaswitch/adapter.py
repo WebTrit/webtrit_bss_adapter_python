@@ -56,6 +56,8 @@ class Adapter(BSSAdapter):
 
         self._otp_ignore_accounts = config.get_conf_val_as_list('PortaSwitch', 'OTP', 'IGNORE', 'ACCOUNTS', default=[])
 
+        self._hide_user_balance = config.get_conf_val('HIDE_BALANCE_IN_USER_INFO', default='False') == 'True'
+
         # No need to store it in a DB.
         # The correct realization of PortaSwitch token validation depends on session.
         # If we need to verify the OTP token after this service restart - we also need to store
@@ -273,7 +275,7 @@ class Adapter(BSSAdapter):
             aliases: list = self.__account_api.get_alias_list(
                 access_token=safely_extract_scalar_value(session.access_token))['alias_list']
 
-            return self.__serializer.get_end_user(account_info, aliases)
+            return self.__serializer.get_end_user(account_info, aliases, self._hide_user_balance)
 
         except WebTritErrorException as error:
             faultcode = extract_fault_code(error)
