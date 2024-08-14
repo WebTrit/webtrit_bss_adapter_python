@@ -616,7 +616,7 @@ class SessionOtpVerifyRequest(BaseModel):
 
 
 class Contact(BaseModel):
-    user_id: UserId
+    user_id: Optional[UserId]
     is_current_user: Optional[bool] = Field(
         None,
         description='Indicates whether the contact is associated with the same user who making the request.'
