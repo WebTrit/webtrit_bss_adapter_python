@@ -598,6 +598,11 @@ class Numbers(BaseModel):
         description="The user's primary phone number. It is strongly suggested\nto use the full number, including the country code\n(also known as the E.164 format).\n",
         example='14155551234',
     )
+    sms: Optional[List[str]] = Field(
+        None,
+        description='A list of phone sms phone numbers associated with the user.\nThese numbers may be associated with third-party SMS services, such as Twilio,\nand can include mobile numbers capable of receiving text messages.',
+        example=['380441234567', '+1-212-456-7890'],
+    )
 
 
 class CreateSessionOtpNotFoundErrorResponse(ErrorResponse):
