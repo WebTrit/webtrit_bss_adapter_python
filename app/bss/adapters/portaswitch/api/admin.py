@@ -170,6 +170,7 @@ class AdminAPI(HTTPAPIConnectorWithLogin):
             params={
                 'i_customer': i_customer,
                 'with_aliases': 1,
+                'limit_alias_did_number_list': 100,
             })
 
     def get_extensions_list(self, i_customer: int) -> dict:
@@ -185,6 +186,7 @@ class AdminAPI(HTTPAPIConnectorWithLogin):
             params={
                 'i_customer': i_customer,
                 'detailed_info': 1,
+                'limit_alias_did_number_list': 100,
             })
 
     def create_otp(self, user_ref: str) -> dict:

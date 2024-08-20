@@ -198,6 +198,7 @@ class AccountAPI(HTTPAPIConnector):
             params={
                 'detailed_info': 1,  # to acquire the extension_id
                 'without_service_features': 1,
+                'limit_alias_did_number_list': 100,
             },
             access_token=access_token)
 
