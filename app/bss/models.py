@@ -200,7 +200,8 @@ class CustomResponse(Dict):
 
 
 class SessionCreateRequest(BaseModel):
-    user_ref: UserRef
+    user_ref: Optional[UserRef]
+    login: Optional[str] = Field(None, description="User's `login` on the **Adaptee**.")
     password: str = Field(..., description="User's `password` on the **Adaptee**.")
 
 
