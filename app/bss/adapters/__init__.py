@@ -52,7 +52,6 @@ class CustomMethodCall(ABC):
                              method_name: str,
                              data: CustomRequest,
                              headers: Optional[Dict] = {},
-                             extra_path_params: Optional[str] = None,
                              tenant_id: str = None,
                              lang: str = None) -> CustomResponse:
         """
@@ -82,7 +81,6 @@ class CustomMethodCall(ABC):
                               method_name: str,
                               data: CustomRequest,
                               headers: Optional[Dict] = {},
-                              extra_path_params: Optional[str] = None,
                               tenant_id: str = None,
                               lang: str = None) -> CustomResponse:
         """Same thing as custom_method_public but is only allowed

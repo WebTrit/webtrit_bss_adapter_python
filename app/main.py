@@ -838,7 +838,7 @@ def get_user_voicemail_message_attachment(
 
 
 @router.post(
-    "/custom/public/{method_name}/{extra_path_params:path}",
+    "/custom/public/{method_name}",
     response_model=CustomResponse,
     responses={
         '403': {'model': CustomForbiddenErrorResponse},
@@ -853,7 +853,6 @@ def custom_method_public(
         body: CustomRequest = Body(default=None),
         x_webtrit_tenant_id: Optional[str] = Header(None, alias=TENANT_ID_HTTP_HEADER),
         accept_language: Optional[str] = Header(None, alias=ACCEPT_LANGUAGE_HEADER),
-        extra_path_params: Optional[str] = None,
 ) -> Union[
     CustomResponse,
     CustomForbiddenErrorResponse,
@@ -874,14 +873,13 @@ def custom_method_public(
         method_name,
         data=body,
         headers=dict(request.headers),
-        extra_path_params=extra_path_params,
         tenant_id=x_webtrit_tenant_id,
         lang=accept_language,
     )
 
 
 @router.post(
-    "/custom/private/{method_name}/{extra_path_params:path}",
+    "/custom/private/{method_name}",
     response_model=CustomResponse,
     responses={
         '401': {'model': PrivateCustomUnauthorizedErrorResponse},
@@ -898,7 +896,6 @@ def custom_method_private(
         body: CustomRequest = Body(default=None),
         x_webtrit_tenant_id: Optional[str] = Header(None, alias=TENANT_ID_HTTP_HEADER),
         accept_language: Optional[str] = Header(None, alias=ACCEPT_LANGUAGE_HEADER),
-        extra_path_params: Optional[str] = None,
         auth_data: HTTPAuthorizationCredentials = Depends(security),
 ) -> Union[
     CustomResponse,
@@ -927,7 +924,6 @@ def custom_method_private(
         method_name=method_name,
         data=body,
         headers=dict(request.headers),
-        extra_path_params=extra_path_params,
         tenant_id=x_webtrit_tenant_id,
         lang=accept_language,
     )
