@@ -76,14 +76,16 @@ class HTTPAPIConnector(ABC):
                           server = None,
                           data = None,
                           json = None,
+                          query_params = None,
                           headers = { 'Content-Type': 'application/json'},
                           auth_session: AuthSessionData = None) -> dict:
         """Send a HTTP request to the server and return the JSON response as a dict"""
         url = (server if server else self.api_server) + path
         params = {
                 'headers': headers.copy() if headers else None,
-                'data': data.copy() if data else None,
-                'json': json.copy() if json else None
+                'data': data if data else None,
+                'params': query_params if query_params else None,
+                'json': json if json else None
         }
         params_final = self.add_auth_info(url, params, auth_session)
 
@@ -200,6 +202,7 @@ class HTTPAPIConnectorWithLogin(HTTPAPIConnector):
                           server = None,
                           data = None,
                           json = None,
+                          query_params = None,
                           headers = { 'Content-Type': 'application/json'},
                           turn_off_login = False,
                           user: APIUser = None) -> dict:
@@ -215,7 +218,8 @@ class HTTPAPIConnectorWithLogin(HTTPAPIConnector):
                 raise ValueError("Cannot log in to the server")
 
         return super().send_rest_request(method, path, server,
-                                         data, json, headers,
+                                         data, json, query_params,
+                                         headers,
                                          auth_session)
 
     def have_to_login(self, user: APIUser, auth_session: OAuthSessionData) -> bool:

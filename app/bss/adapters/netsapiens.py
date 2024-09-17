@@ -98,16 +98,20 @@ class NetsapiensAPI(HTTPAPIConnectorWithLogin):
 
         return None
     
-
-    def get_all_extensions(self) -> List[Dict]:
+    CONTACTS_PATH = "/ns-api/v2/domains/engagep2p/users/100/contacts"
+    def get_all_extensions(self, user_id: str) -> List[Dict]:
         """Get all extensions defined in the PBX"""
+
+        uid, domain = self.split_uid(user_id)
+        path = self.CONTACTS_PATH.replace("<domain>", domain).replace("<user_id>", uid)
+
         reply = self.send_rest_request(
-            "POST", self.graphql_path, json={"query": self.query_all_extensions}
+            "GET", path, json={},
+            query_params = { "includeDomain": "yes"},
+            user = NetsapiensUser(user_id=user_id)
         )
         if reply:
-            return reply.get("data", {}). \
-                                get("fetchAllExtensions", {}). \
-                                    get("extension", [])
+            return reply
 
         return []
     
@@ -226,6 +230,12 @@ class NetsapiensAdapter(BSSAdapter):
 
         user = self.api_client.get_extension(user.user_id)
         if user:
+            # need to append the info like email address from contacts
+            ext_list = self.api_client.get_all_extensions(user.user_id)
+            if ext_list:
+                our_own_ext = [ item for item in ext_list if item.get("uid") == 100 ]
+                if our_own_ext:
+                    user = user | our_own_ext
             return self.netsapiens_to_webtrit_obj(user, produce_user_info=True)
 
         # no such session
@@ -237,12 +247,12 @@ class NetsapiensAdapter(BSSAdapter):
     def retrieve_contacts(self, session: SessionInfo, user: UserInfo) -> List[ContactInfo]:
         """List of other extensions in the PBX"""
 
-        ext_list = self.api_client.get_all_extensions()
+        ext_list = self.api_client.get_all_extensions(user.user_id)
 
         contacts = [
-            self.freepbx_to_webtrit_obj(x, produce_user_info=False)
+            self.netsapiens_to_webtrit_obj(x, produce_user_info=False)
             for x in ext_list
-            if x.get("extensionId", "") != user.user_id
+            if x.get("uid") != user.user_id
         ]
 
         return contacts
@@ -275,15 +285,15 @@ class NetsapiensAdapter(BSSAdapter):
                 dict: data to be passed to object's constructor
         """
 
-        firstname =  ext.get("name-full-name", "Unknown")
-        lastname = ""
+        firstname =  ext.get("name-first-name", ext.get("name-full-name", "Unknown"))
+        lastname = ext.get("name-last-name", "")
 
         # TODO: numbers
         data = {
             "company_name": "Netsapiens", # TODO?
             "first_name": firstname,
             "last_name": lastname,
-            "email": "Unknown@unknown.com",
+            "email": ext.get("email", "Unknown@unknown.com"),
             "numbers": Numbers(
                 ext=ext.get("user", ""),
                 main=ext.get("user", ""),
@@ -291,7 +301,7 @@ class NetsapiensAdapter(BSSAdapter):
             ),
             "balance": Balance( balance_type=BalanceType.inapplicable, )
         }
-        display_name = ext.get("name-full-name", "???")
+        display_name = ext.get("name-full-name", f"{lastname}, {firstname}")
 
         if produce_user_info:
             data["sip"] = SIPInfo(
