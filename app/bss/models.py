@@ -338,7 +338,12 @@ class SipInfo(BaseModel):
         description='The identity (typically a phone number but can be some other alphanumeric ID)\nthat should be registered to SIP server to receive incoming calls.\nUsually it is also used as a username for SIP authorization of registrations (SIP REGISTER)\nand outgoing calls (SIP INVITE).\n',
         example='14155551234',
     )
-
+    # TODO: add this to OpenAPI definition
+    sip_domain: str = Field(
+        default = None,
+        description='SIP domain to be used in SIP URI. \nOnly needs to be populated when it differs from the actual IP address or hostname of the SIP server (as defined by sip_server.host).\n',
+        example='mysip.com',
+    )
 
 class ProvisionSessionAutoNotImplementedErrorResponse(ErrorResponse):
     code: Optional[str] = Field(
