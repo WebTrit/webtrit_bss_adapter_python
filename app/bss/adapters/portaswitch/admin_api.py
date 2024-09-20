@@ -3,7 +3,7 @@ import logging
 from datetime import datetime, timedelta
 
 from app_config import AppConfig
-from bss.http_api import HTTPAPIConnectorWithLogin
+from bss.http_api import HTTPAPIConnectorWithLogin, AuthSessionData
 
 
 class AdminAPI(HTTPAPIConnectorWithLogin):
@@ -128,7 +128,11 @@ class AdminAPI(HTTPAPIConnectorWithLogin):
             "refresh_token": self.refresh_token,
         })
 
-    def add_auth_info(self, url: str, request_params: dict) -> dict:
+    def add_auth_info(self,
+                      url: str,
+                      request_params: dict,
+                      auth_session: AuthSessionData
+                      ) -> dict:
         """Change the parameters of requests.request call to add
         there required authentication information (into headers,
         basic auth, etc.). The
@@ -138,6 +142,7 @@ class AdminAPI(HTTPAPIConnectorWithLogin):
             :url (str): The URL the request is being sent to (in case if auth info differs for
                 various paths).
             :request_params (dict): The current set of parameters for the requests.request call.
+            :auth_session (AuthSessionData): Current user's access token - not currently used.
 
         Returns:
             :(dict): The modified set of parameters for requests.request.
