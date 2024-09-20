@@ -1,5 +1,7 @@
 import logging
 from abc import ABC, abstractmethod
+from typing import Optional
+
 from pydantic import BaseModel, Field
 from datetime import datetime, timedelta
 
@@ -197,7 +199,7 @@ class HTTPAPIConnectorWithLogin(HTTPAPIConnector):
             self.SHARED_TOKENS[self.user_id(user)] = session
         return session
 
-    def delete_auth_session(self, user: APIUser = None) -> OAuthSessionData:
+    def delete_auth_session(self, user: APIUser = None) -> Optional[OAuthSessionData]:
         """Remove the session for this user"""
 
         with self.lock:
@@ -209,6 +211,7 @@ class HTTPAPIConnectorWithLogin(HTTPAPIConnector):
                           server=None,
                           data=None,
                           json=None,
+                          query_params=None,
                           headers={'Content-Type': 'application/json'},
                           turn_off_login=False,
                           user: APIUser = None) -> dict:
@@ -225,8 +228,8 @@ class HTTPAPIConnectorWithLogin(HTTPAPIConnector):
 
         return super().send_rest_request(method, path, server,
                                          data, json, query_params,
-                                         headers,
-                                         auth_session)
+                                         headers=headers,
+                                         auth_session=auth_session)
 
     def have_to_login(self, user: APIUser, auth_session: OAuthSessionData) -> bool:
         """Return True if we need to log in to the server
@@ -248,7 +251,7 @@ class HTTPAPIConnectorWithLogin(HTTPAPIConnector):
             elif auth_session.access_token_expires_at - datetime.now() < \
                     timedelta(minutes=self.REFRESH_TOKEN_IN_ADVANCE) \
                     and auth_session.refresh_token:
-                # proactiveluy refresh the token a bit before the expiration time
+                # proactively refresh the token a bit before the expiration time
                 logging.debug("The access token will expire soon " +
                               f"{auth_session.access_token_expires_at.isoformat()}, refreshing it")
                 auth_session = self.refresh(auth_session)
