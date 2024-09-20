@@ -75,7 +75,7 @@ def test_user_info_attr(api_url, login_path, attr):
     [
         Attr(name="display_name", type=str),
         Attr(name="username", type=str, mandatory=True),
-        Attr(name="auth_username", type=str, mandatory=True),
+        Attr(name="auth_username", type=str, mandatory=False),
         Attr(name="password", type=str, mandatory=True),
         Attr(name="sip_server", type=dict, mandatory=True),
         Attr(name="registration_server", type=dict)

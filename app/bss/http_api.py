@@ -1,11 +1,16 @@
 import logging
-import requests
-from datetime import datetime, timedelta
 from abc import ABC, abstractmethod
 from pydantic import BaseModel, Field
+from datetime import datetime, timedelta
+
+import requests
+
 from report_error import raise_webtrit_error
 import threading
-#from bss.types import SignupExtAPIErrorCode as ExtAPIErrorCode
+
+
+# from bss.types import SignupExtAPIErrorCode as ExtAPIErrorCode
+
 
 class APIUser(BaseModel):
     """User, accessing the API"""
@@ -24,6 +29,7 @@ class OAuthSessionData(AuthSessionData):
     access_token: str
     access_token_expires_at: datetime = Field(default=None)
     refresh_token: str = Field(default=None)
+
 
 class HTTPAPIConnector(ABC):
     """Extract data from a remote server via REST/GRAPHQL or other HTTP-based API"""
@@ -69,23 +75,24 @@ class HTTPAPIConnector(ABC):
 
         return request_params
 
-
     def send_rest_request(self,
                           method: str,
                           path: str,
-                          server = None,
-                          data = None,
-                          json = None,
-                          query_params = None,
-                          headers = { 'Content-Type': 'application/json'},
+                          server=None,
+                          data=None,
+                          json=None,
+                          query_params=None,
+                          stream=None,
+                          headers={'Content-Type': 'application/json'},
                           auth_session: AuthSessionData = None) -> dict:
         """Send a HTTP request to the server and return the JSON response as a dict"""
         url = (server if server else self.api_server) + path
         params = {
-                'headers': headers.copy() if headers else None,
-                'data': data if data else None,
-                'params': query_params if query_params else None,
-                'json': json if json else None
+            'headers': headers.copy() if headers else None,
+            'data': data if data else None,
+            'params': query_params if query_params else None,
+            'json': json if json else None,
+            'stream': stream,
         }
         params_final = self.add_auth_info(url, params, auth_session)
 
@@ -99,18 +106,18 @@ class HTTPAPIConnector(ABC):
         except requests.exceptions.Timeout:
             logging.debug(f"Connection to {self.api_server} timed out")
             raise_webtrit_error(500,
-                    error_message="Request execution error on the other side",
-                    bss_request_trace = {
-                        'method': method,
-                        'url': url,
-                        **params
-                        },
-                    bss_response_trace = {
-                        'status_code': 408,
-                        'text': 'Timed out',
-                        'response_content': {}
-                    }
-                )
+                                error_message="Request execution error on the other side",
+                                bss_request_trace={
+                                    'method': method,
+                                    'url': url,
+                                    **params
+                                },
+                                bss_response_trace={
+                                    'status_code': 408,
+                                    'text': 'Timed out',
+                                    'response_content': {}
+                                }
+                                )
         except requests.exceptions.RequestException as e:
             logging.debug(f"Request error: {e}")
 
@@ -122,17 +129,17 @@ class HTTPAPIConnector(ABC):
                 pass
 
             raise_webtrit_error(500,
-                    error_message="Request execution error on the BSS/VoIP system side",
-                    bss_request_trace = {
-                        'method': method,
-                        'url': url,
-                        } | params,
-                    bss_response_trace = {
-                        'status_code': 500,
-                        'text': f"{e}",
-                        'response_content': response_content
-                    }
-                )
+                                error_message="Request execution error on the BSS/VoIP system side",
+                                bss_request_trace={
+                                                      'method': method,
+                                                      'url': url,
+                                                  } | params,
+                                bss_response_trace={
+                                    'status_code': 500,
+                                    'text': f"{e}",
+                                    'response_content': response_content
+                                }
+                                )
 
     def decode_response(self, response) -> dict:
         """Decode the JSON response from the server into a dict.
@@ -146,7 +153,7 @@ class HTTPAPIConnectorWithLogin(HTTPAPIConnector):
     """Use HTTP-based API that requires to login as admin first
     to obtain an access token for this session, to be used when
     retrieving data for ANY user."""
-    REFRESH_TOKEN_IN_ADVANCE = 15 # minutes
+    REFRESH_TOKEN_IN_ADVANCE = 15  # minutes
     SHARED_TOKENS = {}
 
     #: str: The login of the API user.
@@ -156,7 +163,7 @@ class HTTPAPIConnectorWithLogin(HTTPAPIConnector):
 
     def __init__(self,
                  api_server: str,
-                 api_user: str = None, # when using a single admin API account
+                 api_user: str = None,  # when using a single admin API account
                  api_password: str = None,
                  api_token: str = None,
                  api_token_expires_at: datetime = None):
@@ -171,12 +178,12 @@ class HTTPAPIConnectorWithLogin(HTTPAPIConnector):
         if api_token:
             # store for default user
             self.store_auth_session(OAuthSessionData(
-                            access_token = api_token,
-                            access_token_expires_at = api_token_expires_at))
+                access_token=api_token,
+                access_token_expires_at=api_token_expires_at))
 
     def user_id(self, user: APIUser) -> str:
         return str(user) if user else None
-    
+
     def get_auth_session(self, user: APIUser = None) -> OAuthSessionData:
         """Return the session data for the given user or a global one
         if there are no logis per user"""
@@ -199,12 +206,11 @@ class HTTPAPIConnectorWithLogin(HTTPAPIConnector):
     def send_rest_request(self,
                           method: str,
                           path: str,
-                          server = None,
-                          data = None,
-                          json = None,
-                          query_params = None,
-                          headers = { 'Content-Type': 'application/json'},
-                          turn_off_login = False,
+                          server=None,
+                          data=None,
+                          json=None,
+                          headers={'Content-Type': 'application/json'},
+                          turn_off_login=False,
                           user: APIUser = None) -> dict:
         """Send a HTTP request to the server and return the JSON response as a dict"""
         auth_session = self.get_auth_session(user)
@@ -240,11 +246,11 @@ class HTTPAPIConnectorWithLogin(HTTPAPIConnector):
                     logging.debug("The access token expired, logging in again")
                     auth_session = self.login(user)
             elif auth_session.access_token_expires_at - datetime.now() < \
-                timedelta(minutes=self.REFRESH_TOKEN_IN_ADVANCE) \
+                    timedelta(minutes=self.REFRESH_TOKEN_IN_ADVANCE) \
                     and auth_session.refresh_token:
                 # proactiveluy refresh the token a bit before the expiration time
                 logging.debug("The access token will expire soon " +
-                    f"{auth_session.access_token_expires_at.isoformat()}, refreshing it")
+                              f"{auth_session.access_token_expires_at.isoformat()}, refreshing it")
                 auth_session = self.refresh(auth_session)
 
         return False if auth_session.access_token else True
@@ -253,7 +259,7 @@ class HTTPAPIConnectorWithLogin(HTTPAPIConnector):
     def extract_access_token(self, response: dict) -> OAuthSessionData:
         """Extract the Oauth2 access token and other data (expiration time,
         refresh token, etc.) from the response and store in the object.
-        
+
         Returns:
         OAuthSessionData"""
 
@@ -262,9 +268,9 @@ class HTTPAPIConnectorWithLogin(HTTPAPIConnector):
             access_token_expires_at = datetime.now() + timedelta(seconds=expires_in)
         else:
             access_token_expires_at = None
-        session = OAuthSessionData( access_token = response.get("access_token", None),
-                                   access_token_expires_at = access_token_expires_at,
-                                   refresh_token = response.get("refresh_token", None))
+        session = OAuthSessionData(access_token=response.get("access_token", None),
+                                   access_token_expires_at=access_token_expires_at,
+                                   refresh_token=response.get("refresh_token", None))
         logging.debug(f"Got access token {session.access_token} expires at " + \
                       f"{session.access_token_expires_at} refresh token {session.refresh_token}")
         return session
@@ -273,7 +279,7 @@ class HTTPAPIConnectorWithLogin(HTTPAPIConnector):
     def login(self, user: APIUser = None) -> OAuthSessionData:
         """Override this method in your sub-class to provide the ability
         to get a session access token from the remote server.
-        
+
         Returns: OAuthSessionData (session info) """
         pass
 
@@ -281,9 +287,6 @@ class HTTPAPIConnectorWithLogin(HTTPAPIConnector):
     def refresh(self, refresh_token: str) -> bool:
         """Override this method in your sub-class to provide the ability
         to exchange a refresh token for a new session access token.
-        
+
         Returns: OAuthSessionData (session info)"""
         pass
-
-
-

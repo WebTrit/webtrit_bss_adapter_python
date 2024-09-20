@@ -1,5 +1,5 @@
 from enum import Enum
-from typing import List, Dict, Any, Optional, Union
+from typing import List, Dict, Any, Optional, Type, Union
 from pydantic import BaseModel, Field
 from datetime import datetime
 import orjson
@@ -32,6 +32,7 @@ from bss.models import (
     Contact as ContactInfo,
     UserHistoryIndexResponse as Calls,
     ErrorResponse as ErrorMsg,
+
     SupportedEnum as Capabilities,
 
     CDRInfo as CDRInfo,
@@ -92,6 +93,10 @@ from bss.models import (
     CustomRequest as CustomRequest,
     CustomResponse as CustomResponse,
     PrivateCustomUnauthorizedErrorResponse as PrivateCustomUnauthorizedErrorResponse,
+    CustomForbiddenErrorResponse as CustomForbiddenErrorResponse,
+    CustomNotFoundErrorResponse as CustomNotFoundErrorResponse,
+    CustomUnprocessableEntityErrorResponse as CustomUnprocessableEntityErrorResponse,
+    CustomInternalServerErrorResponse as CustomInternalServerErrorResponse,
 
     # signup
     UserCreateRequest as UserCreateRequest,
@@ -104,7 +109,32 @@ from bss.models import (
     ProvisionSessionAutoNotImplementedErrorResponse as SessionAutoProvisionNotImplementedErrorResponse,
 
     Code as ErrorCode,
+
+    # voicemail
+    UserVoicemailsResponse as UserVoicemailsResponse,
+    UserVoicemailMessagePatch as UserVoicemailMessagePatch,
+    VoicemailMessage as VoicemailMessage,
+    VoicemailMessageDetails as VoicemailMessageDetails,
+    VoicemailMessageAttachment as VoicemailMessageAttachment,
+    VoicemailMessageType as VoicemailMessageType,
+    UserVoicemailUnauthorizedErrorResponse as UserVoicemailUnauthorizedErrorResponse,
+    UserVoicemailNotFoundErrorResponse as UserVoicemailNotFoundErrorResponse,
+    UserVoicemailInternalServerErrorResponse as UserVoicemailInternalServerErrorResponse,
+    UserVoicemailDetailsUnauthorizedErrorResponse as UserVoicemailDetailsUnauthorizedErrorResponse,
+    UserVoicemailDetailsNotFoundErrorResponse as UserVoicemailDetailsNotFoundErrorResponse,
+    UserVoicemailDetailsInternalServerErrorResponse as UserVoicemailDetailsInternalServerErrorResponse,
+    UserVoicemailMessageAttachmentUnauthorizedErrorResponse as UserVoicemailMessageAttachmentUnauthorizedErrorResponse,
+    UserVoicemailMessageAttachmentNotFoundErrorResponse as UserVoicemailMessageAttachmentNotFoundErrorResponse,
+    UserVoicemailMessageAttachmentInternalServerErrorResponse as UserVoicemailMessageAttachmentInternalServerErrorResponse,
+    UserVoicemailMessageAttachmentUnprocessableEntityErrorResponse as UserVoicemailMessageAttachmentUnprocessableEntityErrorResponse,
+    UserVoicemailMessagePatchUnauthorizedErrorResponse as UserVoicemailMessagePatchUnauthorizedErrorResponse,
+    UserVoicemailMessagePatchNotFoundErrorResponse as UserVoicemailMessagePatchNotFoundErrorResponse,
+    UserVoicemailMessagePatchInternalServerErrorResponse as UserVoicemailMessagePatchInternalServerErrorResponse,
+    UserVoicemailMessageDeleteUnauthorizedErrorResponse as UserVoicemailMessageDeleteUnauthorizedErrorResponse,
+    UserVoicemailMessageDeleteNotFoundErrorResponse as UserVoicemailMessageDeleteNotFoundErrorResponse,
+    UserVoicemailMessageDeleteInternalServerErrorResponse as UserVoicemailMessageDeleteInternalServerErrorResponse,
 )
+
 
 class UserInfo(BaseModel):
     """Data about the user, on whose behalf the operation is requested"""
@@ -127,7 +157,7 @@ class ExtendedUserInfo(UserInfo):
 
 
 class OTPCreateResponse(SessionOtpCreateResponse):
-    tenant_id: Optional[str] = None # unique ID of tenant's environment   
+    tenant_id: Optional[str] = None # unique ID of tenant's environment
 
 
 class OTP(BaseModel):
@@ -161,7 +191,7 @@ class Health(BaseModel):
 
 def orjson_dumps(v, *, default):
     return orjson.dumps(v, default=default).decode('utf-8')
- 
+
 class Serialiazable(BaseModel):
     """Object that can be converted into JSON structure"""
 
@@ -169,7 +199,7 @@ class Serialiazable(BaseModel):
         json_loads = orjson.loads
         json_dumps = orjson_dumps
 
-    
+
 class SuccessResponse(BaseModel):
     """The success response"""
     message: Optional[str] = None
@@ -203,16 +233,18 @@ class CallToAction(BaseModel):
     description: Optional[str] = Field(description='Extended info about the action (to be shown in the tool-tip, etc.)',
                                    example='Invite your colleagues or friends to use webTrit, so you can call each other for free',
                                    default = None)
-    
+
 class CallToActionLink(CallToAction):
     type: CallToActionType = Field(description='How this CTA should be rendered',
                                    example='Link', default=CallToActionType.LINK)
     url: str = Field(description='URL that the user should be taken to',
                                    example='https://signup.webtrit.com/?email=abc@test.com')
 
-class CallToActionResponse(BaseModel):
+class CallToActionMenu(BaseModel):
     """Set of links to be shown in the app"""
-    actions: List[CallToAction] = []
+#   cannot figure out why it does not work
+#    actions: List[Type[CallToAction]] = []
+    actions: List[Union[CallToAction, CallToActionLink]]
 
 def is_scalar(obj) -> bool:
     """Return True if the object is a scalar"""

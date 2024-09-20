@@ -107,14 +107,20 @@ class FirestoreKeyValue(TiedKeyValue):
         """Iterate over the keys"""
         return iter(self)
 
-    def search(self, *args) -> list:
-        """Search for an object based on criteria.
+    def search(self, *args, **kwargs) -> list:
+        """Search for an object based on criteria. Parameters:
+        - args: list of QueryFilter objects
+        - kwargs: dict of field_name = value pairs
         
         Returns a list of objects which match the criteria or an empty list"""
         query = self.db.collection(self.collection)
         filters = ', '.join([
                  f"{x.field}{'==' if not x.op else x.op}'{x.value}'"
                  for x in args if isinstance(x, QueryFilter)
+                ])
+        filters += ', '.join([
+                 f"{x}=='{kwargs[x]}'"
+                 for x in kwargs
                 ])
         logging.debug(f"Searching in {self.collection} with filters {filters}")
         for f in args:
@@ -125,7 +131,12 @@ class FirestoreKeyValue(TiedKeyValue):
                                         value = f.value)
             # logging.debug(f"Adding filter {f}")
             query = query.where(filter=filter)
-    
+
+        for name, value in kwargs.items():
+            filter = FieldFilter(field_path = name,
+                                        op_string = u"==",
+                                        value = value)
+            query = query.where(filter=filter)
         # Get the first matching document
         docs = query.get()
         if isinstance(docs, list):

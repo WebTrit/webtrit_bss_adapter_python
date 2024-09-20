@@ -2,60 +2,35 @@ import requests
 
 
 class TestRetrieveCalls:
-
-    #: str: The token used to perform API requests.
-    access_token: str = ''
-
-    def test_login(self, api_url: str, login_path: str, username: str, password: str) -> None:
-        response: requests.models.Response = requests.post(
-            api_url + login_path,
-            json = {"login": username, "password": password},
-        )
-        assert response.status_code == 200
-
-        body: dict = response.json()
-        TestRetrieveCalls.access_token = body.get('access_token')
-        assert self.access_token
-
     def test_absent_token(self, api_url: str, history_path: str) -> None:
         response: requests.models.Response = requests.get(
             api_url + history_path,
-            headers = {},
+            headers={},
         )
-        body: dict = response.json()
 
         assert response.status_code == 403
-        assert body.get('detail') == 'Not authenticated'
+        assert response.json()['message'] == 'Server error: Not authenticated'
 
-    def test_invalid_token(self, api_url: str, history_path: str) -> None:
-        access_token: str = 'qq'
-
+    def test_invalid_token(self, invalid_access_token: str, api_url: str, history_path: str) -> None:
         response: requests.models.Response = requests.get(
             api_url + history_path,
-            headers = {
-                'Authorization': f"Bearer {access_token}"
+            headers={
+                'Authorization': f"Bearer {invalid_access_token}"
             },
         )
 
         assert response.status_code == 401
+        assert response.json()['message'] == f'Invalid access token {invalid_access_token}'
 
-        body: dict = response.json()
-
-        assert body.get('code') == 'authorization_header_missing'
-        assert body.get('details').get('reason') == f'Invalid access token {access_token}'
-
-    def test_contacts_retrieved(self, api_url: str, history_path: str) -> None:
-        access_token: str = self.access_token
-
+    def test_contacts_retrieved(self, valid_access_token: str, api_url: str, history_path: str) -> None:
         response: requests.models.Response = requests.get(
             api_url + history_path,
-            headers = {
-                'Authorization': f"Bearer {access_token}"
+            headers={
+                'Authorization': f"Bearer {valid_access_token}"
             },
         )
 
         assert response.status_code == 200
-
 
         body: dict = response.json()
         pagination: dict = body.get('pagination')
@@ -66,7 +41,7 @@ class TestRetrieveCalls:
 
         items: list = body.get('items')
         assert items is not None
-        assert len(items) is not None
+        assert len(items)
 
         item: dict = items[0]
 
