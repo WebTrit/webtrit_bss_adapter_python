@@ -227,11 +227,6 @@ class CreateUserInternalServerErrorErrorResponse(ErrorResponse):
 
 
 class SipServer(BaseModel):
-    force_tcp: Optional[bool] = Field(
-        None,
-        description='If set to true, forces the use of TCP for SIP messaging.',
-        example=False,
-    )
     host: str = Field(
         ...,
         description='The SIP server address, which can be either a hostname or an IP address.',
@@ -319,6 +314,12 @@ class CreateSessionOtpInternalServerErrorErrorResponse(ErrorResponse):
     )
 
 
+class SIPTransport(Enum):
+    UDP = 'UDP'
+    TCP = 'TCP'
+    TLS = 'TLS'
+
+
 class SipInfo(BaseModel):
     auth_username: Optional[str] = Field(
         None,
@@ -333,19 +334,16 @@ class SipInfo(BaseModel):
     password: str = Field(
         ..., description='The password for the SIP account.', example='strong_password'
     )
-    registration_server: Optional[SipServer] = None
+    transport: Optional[SIPTransport] = Field(..., description='The transport protocol for SIP communication.')
     sip_server: SipServer
+    registrar_server: Optional[SipServer] = None
+    outbound_proxy_server: Optional[SipServer] = None
     username: str = Field(
         ...,
         description='The identity (typically a phone number but can be some other alphanumeric ID)\nthat should be registered to SIP server to receive incoming calls.\nUsually it is also used as a username for SIP authorization of registrations (SIP REGISTER)\nand outgoing calls (SIP INVITE).\n',
         example='14155551234',
     )
-    # TODO: add this to OpenAPI definition
-    sip_domain: str = Field(
-        default = None,
-        description='SIP domain to be used in SIP URI. \nOnly needs to be populated when it differs from the actual IP address or hostname of the SIP server (as defined by sip_server.host).\n',
-        example='mysip.com',
-    )
+
 
 class ProvisionSessionAutoNotImplementedErrorResponse(ErrorResponse):
     code: Optional[str] = Field(
