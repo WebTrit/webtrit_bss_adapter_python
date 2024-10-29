@@ -6,6 +6,7 @@ from bss.types import (Capabilities, UserInfo, EndUser, Contacts, ContactInfo,
                        CreateSessionUnauthorizedErrorResponse,  )
 
 from bss.dbs import TiedKeyValue
+from json import JSONDecodeError, loads as load_json
 from bss.sessions import configure_session_storage
 from report_error import WebTritErrorException
 from app_config import AppConfig
@@ -17,36 +18,111 @@ import logging
 
 import re
 
-VERSION = "0.0.1"
+VERSION = "0.1.1"
 
 # Interface to Netsapiens cloud PBX https://docs.ns-api.com/reference/
+
+# class NetsapiensSession(OAuthSessionData):
+#     api_server: str = Field(default=None,
+#                             description="URL of API, on which the session resides")
+
+class NetsapiensClient(BaseModel):
+    client_id: str = Field(default=None,
+                           description="Client ID to be sent to API request for login")
+    client_secret: str = Field(default=None,
+                               description="Client secret to be sent to API request for login")
+    api_server: str = Field(default=None,
+                            description="API server URL")
+    domain: str = Field(default=None,
+                               description="SIP domain (returned after the login)")
+
+class NetsapiensDeviceFilter:
+    """Logic of finding the device entry for WebTrit in the list of devices"""
+
+    def __init__(self, pattern: str = "WebTrit"):
+        self.pattern = pattern
+
+    def find_device_entry(self, devices: List[Dict]) -> Dict:
+        """Find the device entry that matches the pattern"""
+        for dev in devices:
+            if self.pattern in dev.get("name-full-name", ""):
+                return dev
+        return None
 
 class NetsapiensUser(APIUser):
     user_id: str
     password: str = Field(default=None)
-    client_id: str = Field(default=None)
-    client_secret: str = Field(default=None)
+    ns_client: NetsapiensClient = Field(default=None,
+                                        description="Info about NS tenant")
 
 class NetsapiensAPI(HTTPAPIConnectorWithLogin):
     def __init__(self, api_server: str, **kwargs):
-        # api user/password are not used, since they are individual for each user
+        # api server is not used, since it is individual for each client (tenant)
+        self.clients = {}
+        if "netsapiens_clients" in kwargs:
+            self.clients = kwargs.pop("netsapiens_clients")
+
         super().__init__(api_server, **kwargs)
 
+    def split_uid(self, uid: str) -> Tuple[str, str]:
+        """Split the user ID like abc@xyz.com into domain xyz.com and user name abc"""
+        parts = uid.split('@')
+        if len(parts) >= 2:
+            return (parts[0], parts[1])
+        return (None, None)
 
+    def get_api_server(self, user_id: str, default: str = None) -> str:
+        """Obtain server API URL for the given user"""
+        uid, domain = self.split_uid(user_id)
+        if domain and (client := self.clients.get(domain)):
+            return client.api_server
+        
+        if default:
+            return default
+        
+        # raise KeyError(f"Could not find a client entry for {user_id}")
+
+        # last resort
+        return self.api_server
+        
+        
     def access_token_path(self) -> str:
         return "/ns-api/v2/tokens"
 
+    def send_rest_request(self,
+                          method: str,
+                          path: str,
+                          server=None,
+                          data=None,
+                          json=None,
+                          query_params=None,
+                          headers={'Content-Type': 'application/json'},
+                          turn_off_login=False,
+                          user: NetsapiensUser = None) -> dict:
+        """Override the parent method to place there the correct API_URL"""
+        if user:
+            # set the API server for this user
+            if user.ns_client and user.ns_client.api_server:
+                self.api_server = user.ns_client.api_server
+            else:
+                self.api_server = self.get_api_server(user_id=user.user_id)
+
+        return super().send_rest_request(
+            method, path, server, data, json, query_params, headers, turn_off_login, user
+        )
+    
     def login(self, user: NetsapiensUser) -> OAuthSessionData:
         # populate the data properly
-        req_data = {
-                "client_id": user.client_id,
-                "client_secret": user.client_secret,
-                "username": user.user_id,
-                "password": user.password,
+        req_data = dict(
+                client_id = user.ns_client.client_id,
+                client_secret =  user.ns_client.client_secret,
+                username = user.user_id,
+                password =  user.password,
                 # "scope": "",
-                "grant_type": "password",
-            }
-
+                grant_type =  "password",
+        )
+        self.api_server = self.get_api_server( user_id = user.user_id,
+                                              default=user.ns_client.api_server)
         res = self.send_rest_request(
             "POST",
             self.access_token_path(),
@@ -67,34 +143,39 @@ class NetsapiensAPI(HTTPAPIConnectorWithLogin):
     def refresh(self):
         """Rerfresh access token"""
         return self.login(data={
-                "client_id": self.api_user,
+                "client_id": self.api_user, # TODO: fill correct values
                 "client_secret": self.api_password,
                 "scope": "",
                 "refresh_token": self.refresh_token,
                 "grant_type": "refresh_token",
             })
     
-    def split_uid(self, uid: str) -> Tuple[str, str]:
-        """Split the user ID into domain and user ID"""
-        parts = uid.split('@')
-        if len(parts) == 2:
-            return parts
-        return (None, None)
+
 
     DEVICE_PATH = "/ns-api/v2/domains/<domain>/users/<user_id>/devices"
-    def get_extension(self, user_id: str) -> Dict:
+    def get_extension(self, user_id: str,
+                      ns_filter: NetsapiensDeviceFilter = NetsapiensDeviceFilter()) -> Dict:
         """Get the extension info"""
 
         uid, domain = self.split_uid(user_id)
         path = self.DEVICE_PATH.replace("<domain>", domain).replace("<user_id>", uid)
 
-        user_info = self.send_rest_request("GET", path, json={},
+        device_list = self.send_rest_request("GET", path, json={},
                                            user=NetsapiensUser(user_id=user_id))
-        if user_info:
-            if isinstance(user_info, list):
+        if device_list:
+            if isinstance(device_list, list):
                 # need to figure out which one is the right one
-                return user_info[0]
-            return user_info
+                correct_device = ns_filter.find_device_entry(device_list)
+
+                if correct_device is None:
+                    # TODO: ensure it is visible in the app
+                    raise WebTritErrorException(
+                        status_code=422,
+                        error_message=f"Cannot find a proper device entry on Netsapiens side",
+                    )
+                return correct_device
+
+            return device_list
 
         return None
     
@@ -117,7 +198,6 @@ class NetsapiensAPI(HTTPAPIConnectorWithLogin):
     
 
 
-# class FreePBXAdapter(BSSAdapter, SampleOTPHandler):
 class NetsapiensAdapter(BSSAdapter):
     """Connect WebTrit and Netsapiens. Authenticate a user using the API, 
     retrieve user's SIP credentials to be used by
@@ -127,12 +207,32 @@ class NetsapiensAdapter(BSSAdapter):
     
     def __init__(self, config: AppConfig):
         super().__init__(config)
-        api_server = config.get_conf_val(
-            "Netsapiens", "API_Server", default="http://127.0.0.1"
+
+        default_api_server = config.get_conf_val(
+            "Netsapiens", "Clients", default=None
         )
+        self.clients = {}
+        if client_list := config.get_conf_val(
+            "Netsapiens", "Clients", default=""
+        ):
+            try:
+                self.clients = {
+                    c.get("domain"): NetsapiensClient(**c)
+                    for c in load_json(client_list)
+                }
+            except JSONDecodeError as e:
+                logging.error(f"Could not parse the client list {client_list}: {e}")
 
         self.api_client = NetsapiensAPI(
-            api_server=api_server
+            api_server= default_api_server, # does not really matter
+            netsapiens_clients=self.clients
+        )
+
+        # which text should we look for to find "our" device entry
+        self.device_pattern = NetsapiensDeviceFilter(
+                                pattern = config.get_conf_val(
+                                            "Netsapiens", "Device", "Pattern", default="WebTrit"
+                                )
         )
         self.sessions = configure_session_storage(config)
         # for debugging only
@@ -179,41 +279,52 @@ class NetsapiensAdapter(BSSAdapter):
         # extension number is more convenient
         return user_data.get("uid", None)
 
-    def parse_semicolon_list(self, semicolon_list: str) -> Dict[str, str]:
-        """Parse parameters in the form of key1=value1;key2=value2;..."""
-        pairs = semicolon_list.split(';')
+    # def parse_semicolon_list(self, semicolon_list: str) -> Dict[str, str]:
+    #     """Parse parameters in the form of key1=value1;key2=value2;..."""
+    #     pairs = semicolon_list.split(';')
 
-        # Initialize an empty dictionary to store keys and values
-        key_value_dict = {}
+    #     # Initialize an empty dictionary to store keys and values
+    #     key_value_dict = {}
 
-        # Loop through each pair and split by '=' only at the first occurrence
-        for pair in pairs:
-            if '=' in pair:
-                key, value = pair.split('=', 1)  # Split by '=' only at the first occurrence
-                key_value_dict[key] = value
-        return key_value_dict
+    #     # Loop through each pair and split by '=' only at the first occurrence
+    #     for pair in pairs:
+    #         if '=' in pair:
+    #             key, value = pair.split('=', 1)  # Split by '=' only at the first occurrence
+    #             key_value_dict[key] = value
+    #     return key_value_dict
     
     def authenticate(self, user: UserInfo, password: str = None) -> SessionInfo:
         """Authenticate user with username and password and obtain an API token for
         further requests."""
 
-        extra_data = self.parse_semicolon_list(user.login)
-        if not extra_data.get("user_id") or not extra_data.get("client_id") or not extra_data.get("client_secret"):
+        def split_uid(uid: str) -> Tuple[str, str]:
+            """Split the user ID like abc@xyz.com into domain xyz.com and user name abc"""
+            parts = uid.split('@')
+            if len(parts) >= 2:
+                return (parts[0], parts[1])
+            return (None, None)
+        
+        username, domain = split_uid(user.login)
+
+        if not username or not domain:
             raise WebTritErrorException(
                 status_code=422,
-                error_message="Not enough data to authenticate the user",
+                error_message=f"Invalid login {user.login}, it should contain both username and client id, e.g. 100@abc",
+            )
+        client = self.clients.get(domain)
+        if client is None:
+            raise WebTritErrorException(
+                status_code=422,
+                error_message=f"Unknown Netsapiense domain {domain}",
             )
         token_data = self.api_client.login(NetsapiensUser(
-            user_id=extra_data.get("user_id"),
+            user_id=user.login,
             password=password,
-            client_id=extra_data.get("client_id"),
-            client_secret=extra_data.get("client_secret")
+            ns_client=client
         ))
         if token_data:
             # everything is in order, create a session
-
-            # proper user ID - override the one that has client_id and client_secret
-            user.user_id = extra_data.get("user_id")
+            user.user_id = user.login
             session = self.sessions.create_session(user)
             self.sessions.store_session(session)
             return session
@@ -228,20 +339,23 @@ class NetsapiensAdapter(BSSAdapter):
     def retrieve_user(self, session: SessionInfo, user: UserInfo) -> EndUser:
         """Obtain user's information - most importantly, his/her SIP credentials."""
 
-        user = self.api_client.get_extension(user.user_id)
-        if user:
+        device = self.api_client.get_extension(user.user_id,
+                                               ns_filter=self.device_pattern)
+        if device:
             # need to append the info like email address from contacts
             ext_list = self.api_client.get_all_extensions(user.user_id)
             if ext_list:
-                our_own_ext = [ item for item in ext_list if item.get("uid") == 100 ]
-                if our_own_ext:
-                    user = user | our_own_ext
-            return self.netsapiens_to_webtrit_obj(user, produce_user_info=True)
+                # we need to find the correct "device" entry in the list
+                for ext in ext_list:
+                    if ext.get("uid") == user.user_id:
+                        device.update(ext)
+                        break
+            return self.netsapiens_to_webtrit_obj(device, produce_user_info=True)
 
         # no such session
         raise WebTritErrorException(
             status_code=404, 
-            error_message="User not found"
+            error_message=f"User  with ID {user.user_id} not found"
         )
 
     def retrieve_contacts(self, session: SessionInfo, user: UserInfo) -> List[ContactInfo]:
@@ -319,6 +433,6 @@ class NetsapiensAdapter(BSSAdapter):
 
             return ContactInfo(**data)
 
-    def create_new_user(self, user_data, tenant_id: str = None):
+    def signup(self, user_data, tenant_id: str = None):
         """Create a new user as a part of the sign-up process - not supported yet"""
         pass

@@ -233,8 +233,8 @@ class SipServer(BaseModel):
         example='sip.webtrit.com',
     )
     port: Optional[int] = Field(
-        None,
-        description='The port on which the SIP server listens for incoming requests.',
+        5060,
+        description='The port on which the SIP server listens for incoming requests. 5060 by default.',
         example=5060,
     )
 
@@ -334,7 +334,9 @@ class SipInfo(BaseModel):
     password: str = Field(
         ..., description='The password for the SIP account.', example='strong_password'
     )
-    transport: Optional[SIPTransport] = Field(..., description='The transport protocol for SIP communication.')
+    transport: Optional[SIPTransport] = Field(
+        default_factory=lambda : SIPTransport.UDP,
+        description='The transport protocol for SIP communication. UDP by default.',)
     sip_server: SipServer
     registrar_server: Optional[SipServer] = None
     outbound_proxy_server: Optional[SipServer] = None
