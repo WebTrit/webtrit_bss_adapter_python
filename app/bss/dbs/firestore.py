@@ -107,6 +107,12 @@ class FirestoreKeyValue(TiedKeyValue):
         """Iterate over the keys"""
         return iter(self)
 
+    def items(self):
+        """Iterate over all items"""
+        docs = self.db.collection(self.collection).stream()
+        for doc in docs:
+            yield (doc.id, self.__unpack_from_store__(doc.to_dict()))        
+    
     def search(self, *args, **kwargs) -> list:
         """Search for an object based on criteria. Parameters:
         - args: list of QueryFilter objects
