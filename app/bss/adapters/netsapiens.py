@@ -3,7 +3,7 @@ from bss.types import (Capabilities, UserInfo, EndUser, Contacts, ContactInfo,
                        Calls, CDRInfo, ConnectStatus, SessionInfo, SIPRegistrationStatus,
                        Balance, BalanceType, Numbers, SIPServer, SIPInfo,
                        OTPCreateResponse, OTPVerifyRequest,
-                       CreateSessionUnauthorizedErrorResponse,  )
+                       )
 
 from bss.dbs import TiedKeyValue
 from json import JSONDecodeError, loads as load_json
@@ -12,13 +12,12 @@ from report_error import WebTritErrorException
 from app_config import AppConfig
 from bss.http_api import HTTPAPIConnectorWithLogin, OAuthSessionData, APIUser
 from typing import Union, List, Dict, Tuple
-from datetime import datetime, timedelta
+#from datetime import datetime, timedelta
 from pydantic import BaseModel, Field
 import logging
 
-import re
 
-VERSION = "0.1.1"
+VERSION = "0.1.2"
 
 # Interface to Netsapiens cloud PBX https://docs.ns-api.com/reference/
 
@@ -26,6 +25,20 @@ VERSION = "0.1.1"
 #     api_server: str = Field(default=None,
 #                             description="URL of API, on which the session resides")
 
+class NetsapiensDeviceFilter:
+    """Logic of finding the device entry for WebTrit in the list of devices"""
+
+    def __init__(self, pattern: str = "WebTrit"):
+        # Marker of the correct device entry in the list of devices
+        self.pattern = pattern
+
+    def find_device_entry(self, devices: List[Dict]) -> Dict:
+        """Find the device entry that matches the pattern"""
+        for dev in devices:
+            if self.pattern in dev.get("name-full-name", ""):
+                return dev
+        return None
+    
 class NetsapiensClient(BaseModel):
     client_id: str = Field(default=None,
                            description="Client ID to be sent to API request for login")
@@ -35,19 +48,9 @@ class NetsapiensClient(BaseModel):
                             description="API server URL")
     domain: str = Field(default=None,
                                description="SIP domain (returned after the login)")
+    device_filter: str = Field(default="WebTrit",
+                        description="Pattern to search for the correct device entry")
 
-class NetsapiensDeviceFilter:
-    """Logic of finding the device entry for WebTrit in the list of devices"""
-
-    def __init__(self, pattern: str = "WebTrit"):
-        self.pattern = pattern
-
-    def find_device_entry(self, devices: List[Dict]) -> Dict:
-        """Find the device entry that matches the pattern"""
-        for dev in devices:
-            if self.pattern in dev.get("name-full-name", ""):
-                return dev
-        return None
 
 class NetsapiensUser(APIUser):
     user_id: str
@@ -71,20 +74,18 @@ class NetsapiensAPI(HTTPAPIConnectorWithLogin):
             return (parts[0], parts[1])
         return (None, None)
 
+    def get_client(self, user_id: str) -> NetsapiensClient:
+        """Obtain the NS client object for the given user"""
+        uid, domain = self.split_uid(user_id)
+        if domain:
+            return self.clients.get(domain)
+     
+        raise KeyError(f"Could not find a client entry for {user_id}")
+    
     def get_api_server(self, user_id: str, default: str = None) -> str:
         """Obtain server API URL for the given user"""
-        uid, domain = self.split_uid(user_id)
-        if domain and (client := self.clients.get(domain)):
-            return client.api_server
-        
-        if default:
-            return default
-        
-        # raise KeyError(f"Could not find a client entry for {user_id}")
-
-        # last resort
-        return self.api_server
-        
+        client = self.get_client(user_id)
+        return client.api_server
         
     def access_token_path(self) -> str:
         return "/ns-api/v2/tokens"
@@ -153,8 +154,7 @@ class NetsapiensAPI(HTTPAPIConnectorWithLogin):
 
 
     DEVICE_PATH = "/ns-api/v2/domains/<domain>/users/<user_id>/devices"
-    def get_extension(self, user_id: str,
-                      ns_filter: NetsapiensDeviceFilter = NetsapiensDeviceFilter()) -> Dict:
+    def get_extension(self, user_id: str) -> Dict:
         """Get the extension info"""
 
         uid, domain = self.split_uid(user_id)
@@ -163,6 +163,7 @@ class NetsapiensAPI(HTTPAPIConnectorWithLogin):
         device_list = self.send_rest_request("GET", path, json={},
                                            user=NetsapiensUser(user_id=user_id))
         if device_list:
+            ns_filter = NetsapiensDeviceFilter(pattern = self.get_client(user_id).device_filter)
             if isinstance(device_list, list):
                 # need to figure out which one is the right one
                 correct_device = ns_filter.find_device_entry(device_list)
@@ -203,14 +204,28 @@ class NetsapiensAdapter(BSSAdapter):
     retrieve user's SIP credentials to be used by
     WebTrit and return a list of other configured extenstions (to
     be provided as 'Cloud PBX' contacts).
-    Currently does not support OTP login."""
+    Currently does not support OTP login.
+    
+    
+    Config variables:
+    
+    NETSAPIENS_CLIENTS = JSON string with a list of dicts, each containing:
+        - client_id
+            For API access
+        - client_secret
+            For API access
+        - api_server
+        - domain
+            Domain visible to the end-user; users are expected to login as
+            username@domain
+        - device_filter  
+            used to find the correct entry in the list of devices (searches for
+            the given string in the name-full-name field). Default: "WebTrit"
+           """
     
     def __init__(self, config: AppConfig):
         super().__init__(config)
 
-        default_api_server = config.get_conf_val(
-            "Netsapiens", "Clients", default=None
-        )
         self.clients = {}
         if client_list := config.get_conf_val(
             "Netsapiens", "Clients", default=""
@@ -224,19 +239,11 @@ class NetsapiensAdapter(BSSAdapter):
                 logging.error(f"Could not parse the client list {client_list}: {e}")
 
         self.api_client = NetsapiensAPI(
-            api_server= default_api_server, # does not really matter
+            api_server= "http://localhost", # does not really matter
             netsapiens_clients=self.clients
         )
 
-        # which text should we look for to find "our" device entry
-        self.device_pattern = NetsapiensDeviceFilter(
-                                pattern = config.get_conf_val(
-                                            "Netsapiens", "Device", "Pattern", default="WebTrit"
-                                )
-        )
         self.sessions = configure_session_storage(config)
-        # for debugging only
-        self.otp_db = TiedKeyValue()
 
     @classmethod
     def name(cls) -> str:
@@ -339,8 +346,7 @@ class NetsapiensAdapter(BSSAdapter):
     def retrieve_user(self, session: SessionInfo, user: UserInfo) -> EndUser:
         """Obtain user's information - most importantly, his/her SIP credentials."""
 
-        device = self.api_client.get_extension(user.user_id,
-                                               ns_filter=self.device_pattern)
+        device = self.api_client.get_extension(user.user_id)
         if device:
             # need to append the info like email address from contacts
             ext_list = self.api_client.get_all_extensions(user.user_id)
