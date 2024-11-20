@@ -5,7 +5,6 @@ from bss.types import (Capabilities, UserInfo, EndUser, Contacts, ContactInfo,
                        OTPCreateResponse, OTPVerifyRequest,
                        )
 
-from bss.dbs import TiedKeyValue
 from json import JSONDecodeError, loads as load_json
 from bss.sessions import configure_session_storage
 from report_error import WebTritErrorException
@@ -18,7 +17,7 @@ import logging
 import re
 
 
-VERSION = "0.1.2"
+VERSION = "0.1.3"
 
 # Interface to Netsapiens cloud PBX https://docs.ns-api.com/reference/
 
@@ -377,7 +376,7 @@ class NetsapiensAdapter(BSSAdapter):
 
         return contacts
 
-    def retrieve_calls(self, session: SessionInfo, user: UserInfo, **kwargs) -> List[CDRInfo]:
+    def retrieve_calls(self, session: SessionInfo, user: UserInfo, **kwargs) -> Calls:
         pass
 
     # call recording is not supported in this example
@@ -456,7 +455,8 @@ class NetsapiensAdapter(BSSAdapter):
                         port=5060, # TODO: figure out where to get it dynamically
             )
             data["sip"] = SIPInfo(
-                username=ext.get("login-username", ""),
+                username=ext.get("user"),
+                # username=ext.get("login-username", ""),
                 display_name=display_name,
                 password=ext.get("device-sip-registration-password", ""),
                 sip_server=SIPServer(
