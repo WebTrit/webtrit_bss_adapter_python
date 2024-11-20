@@ -15,6 +15,7 @@ from typing import Union, List, Dict, Tuple
 #from datetime import datetime, timedelta
 from pydantic import BaseModel, Field
 import logging
+import re
 
 
 VERSION = "0.1.2"
@@ -404,6 +405,32 @@ class NetsapiensAdapter(BSSAdapter):
                 dict: data to be passed to object's constructor
         """
 
+
+        def parse_sip_uri(sip_uri: str):
+            """
+            Parses a SIP URI into protocol, username, hostname, and optional port
+                (default port = 5060).
+            
+            Args:
+                sip_uri (str): The SIP URI to parse (e.g., "sip:100@engagep2p:5061").
+            
+            Returns:
+                dict: A dictionary containing protocol, username, hostname, and port.
+            """
+            pattern = r'(?P<protocol>\w+):(?P<username>[\w]+)@(?P<hostname>[\w.]+)(?::(?P<port>\d+))?'
+            match = re.match(pattern, sip_uri)
+            
+            if not match:
+                raise ValueError(f"Invalid SIP URI format: {sip_uri}")
+            
+            components = match.groupdict()
+            return {
+                "protocol": components["protocol"],
+                "username": components["username"],
+                "hostname": components["hostname"],
+                "port": int(components["port"]) if components["port"] else 5060,
+            }
+
         firstname =  ext.get("name-first-name", ext.get("name-full-name", "Unknown"))
         lastname = ext.get("name-last-name", "")
 
@@ -423,11 +450,20 @@ class NetsapiensAdapter(BSSAdapter):
         display_name = ext.get("name-full-name", f"{lastname}, {firstname}")
 
         if produce_user_info:
+            sip_info = parse_sip_uri(ext.get("device-sip-registration-uri", ""))
+            outbound_proxy = SIPServer(
+                        host=ext.get("core-server"),
+                        port=5060, # TODO: figure out where to get it dynamically
+            )
             data["sip"] = SIPInfo(
                 username=ext.get("login-username", ""),
                 display_name=display_name,
                 password=ext.get("device-sip-registration-password", ""),
-                sip_server=SIPServer(host=ext.get("core-server", ""), port=5060),
+                sip_server=SIPServer(
+                        host=sip_info.get("hostname"),
+                        port=sip_info.get("port")),
+                outbound_proxy_server=outbound_proxy,
+                registrar_server=outbound_proxy,
             )
             return EndUser(**data)
         else:
