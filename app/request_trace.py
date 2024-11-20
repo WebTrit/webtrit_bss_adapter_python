@@ -71,12 +71,39 @@ def log_req_and_reply(req_body: str, res_body: str):
 
 class RouteWithLogging(APIRoute):
     """Custom route class that logs request and response bodies """
-    HEADER_LIST = [ element.strip() for element in
-                        os.environ.get("LOG_HEADERS", "X-WebTrit-Tenant-ID").split(",") ] 
+    HEADER_LIST = [ element.strip().lower() for element in
+                        os.environ.get("LOG_HEADERS", "X-WebTrit-Tenant-ID").split(",") ]
+    LOG_ALL_HEADERS = os.environ.get("LOG_HEADERS_FULL", "False").lower() == "true"
+    SENSETIVE_HEADERS = [ 'authorization' ]
+    FULLY_LOG_SENSETIVE_HEADERS = os.environ.get("LOG_HEADERS_SENSETIVE", "False").lower() == "true"
     def add_headers_to_log(self, request: Request):
-        return "Headers: " + ", ".join(
-            [ f"{header}: '{request.headers.get(header)}'" for header in self.HEADER_LIST ]
-        )
+        def obfuscate_string(s: str) -> str:
+            """
+            Obfuscates the conents of sensetive headers, specifically
+            'Authorization' - but leaves a few characters so one can understand
+            whether it is a correct one or not. 
+            Keeps the first 8 characters and the last 3, replaces the middle
+            characters with a single '*'.
+
+            Args:
+                s (str): The input string.
+
+            Returns:
+                str: The obfuscated string.
+            """
+            if s is None or len(s) <= 13:  # If the string is too short to obfuscate
+                return s
+            
+            return s[:10] + '***' + s[-3:]
+
+        headers = []
+        for header in (request.headers.keys() if self.LOG_ALL_HEADERS else self.HEADER_LIST):
+            value = request.headers.get(header)
+            if header in self.SENSETIVE_HEADERS and not self.FULLY_LOG_SENSETIVE_HEADERS:
+                value = obfuscate_string(value)
+            headers.append(f"{header}: '{value}'")
+        return "Headers: " + ", ".join(headers)
+    
     def get_route_handler(self) -> Callable:
         original_route_handler = super().get_route_handler()
 
@@ -84,6 +111,8 @@ class RouteWithLogging(APIRoute):
             request_id.set(get_request_id(request))
             req_body = await request.body()
             req_body = req_body.decode("utf-8")
+            if len(req_body) == 0:
+                req_body = "<empty>"
             log_with_label(f"{request.method} request to {request.url.path} " + \
                             self.add_headers_to_log(request),
                             f"body: {req_body}"
