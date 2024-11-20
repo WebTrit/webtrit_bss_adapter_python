@@ -151,8 +151,6 @@ class NetsapiensAPI(HTTPAPIConnectorWithLogin):
                 "grant_type": "refresh_token",
             })
     
-
-
     DEVICE_PATH = "/ns-api/v2/domains/<domain>/users/<user_id>/devices"
     def get_extension(self, user_id: str) -> Dict:
         """Get the extension info"""
@@ -180,7 +178,7 @@ class NetsapiensAPI(HTTPAPIConnectorWithLogin):
 
         return None
     
-    CONTACTS_PATH = "/ns-api/v2/domains/engagep2p/users/100/contacts"
+    CONTACTS_PATH = "/ns-api/v2/domains/<domain>/users/<user_id>/contacts"
     def get_all_extensions(self, user_id: str) -> List[Dict]:
         """Get all extensions defined in the PBX"""
 
@@ -230,6 +228,7 @@ class NetsapiensAdapter(BSSAdapter):
         if client_list := config.get_conf_val(
             "Netsapiens", "Clients", default=""
         ):
+            logging.debug(f"Loading the client list from {client_list}")
             try:
                 self.clients = {
                     c.get("domain"): NetsapiensClient(**c)
@@ -322,7 +321,7 @@ class NetsapiensAdapter(BSSAdapter):
         if client is None:
             raise WebTritErrorException(
                 status_code=422,
-                error_message=f"Unknown Netsapiense domain {domain}",
+                error_message=f"Unknown Netsapiens domain {domain}",
             )
         token_data = self.api_client.login(NetsapiensUser(
             user_id=user.login,
