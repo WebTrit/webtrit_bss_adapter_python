@@ -4,11 +4,60 @@ import uuid
 from module_loader import ModuleLoader
 import bss.dbs
 from bss.dbs import FileStoredKeyValue, TiedKeyValue
+from bss.dbs.firestore import FirestoreKeyValue
 from bss.types import SessionInfo, UserInfo, safely_extract_scalar_value
+from abc import ABC, abstractmethod
 from app_config import AppConfig
 
 config = AppConfig()
 
+class SessionDBInit(ABC):
+    """Create a proper storage object by extract the required config
+        options (e.g. filename or Firestore collection name) and passing
+        them to the constructor."""
+    def __init__(self, config: AppConfig):
+        self.config = config
+
+    @abstractmethod
+    def extract_config_values(self) -> dict:
+        """Process the config and return the values to be passed to
+        the constructor of a class derived from bss.dbs.TiedKeyValue"""
+        pass
+
+    @abstractmethod
+    def instantiate_storage(self) -> TiedKeyValue:
+        """Create an object for storing the session data"""
+        pass
+    
+class SessionsInFile(SessionDBInit):
+    """Store session data in a file - for debugging purposes only"""
+    def extract_config_values(self) -> dict:
+        """Process the config and return the values to be passed to
+        the constructor of a class derived from bss.dbs.TiedKeyValue"""
+        file_name = config.get_conf_val(
+            "Sessions", "Storage", "FileName", default="/var/db/sessions.db"
+        )
+        return dict( file_name = file_name)
+
+    def instantiate_storage(self) -> TiedKeyValue:
+        """Create an object for storing the session data"""
+        params = self.extract_config_values()
+        return FileStoredKeyValue(**params)
+   
+class SessionsInFirestore(SessionDBInit):
+    """Store session data in a Firestore collection - suitable for production"""
+    def extract_config_values(self) -> dict:
+        """Process the config and return the values to be passed to
+        the constructor of a class derived from bss.dbs.TiedKeyValue"""
+        collection_name = config.get_conf_val(
+            "Sessions", "Storage", "Firestore", default="Sessions"
+        )
+        return dict( collection_name = collection_name)
+
+    def instantiate_storage(self) -> FirestoreKeyValue:
+        """Create an object for storing the session data"""
+        params = self.extract_config_values()
+        return FirestoreKeyValue(**params)
 
 class SessionStorage:
     """A class that provides access to stored session data (which can
@@ -99,33 +148,27 @@ class SessionStorage:
         logging.debug(f"Removing session with token {access_token}")
         return self.__delete_session(access_token)
 
-
-
 def configure_session_storage(config):
     """Create a proper session storage object based on the configuration"""
 
-    # TODO: allow dynamic selection of the storage module
     module_name = config.get_conf_val(
-        "Sessions", "Storage", "Module", default="bss.dbs"
+        "Sessions", "Storage", "Module", default="bss.sessions"
     )
     class_name = config.get_conf_val(
-        "Sessions", "Storage", "Class", default="FileStoredKeyValue"
-    )
-    # storage_module = config.get_conf_val('Sessions', 'StorageModule', default = 'FileStoredKeyValue')
-    # store sessions in a local file, to make the sessions survive
-    # a restart of a container - ensure that /var/db/ (or whichever
-    # location you choose) is mounted as a volume to the container
-    # TODO: the parameters for the session storage should be defined in config
-    file_name = config.get_conf_val(
-        "Sessions", "Storage", "FileName", default="/var/db/sessions.db"
+        "Sessions", "Storage", "Class", default="SessionsInFile"
     )
 
-    logging.debug(f"Using file {file_name} for session storage")
+    logging.debug(f"Using file {class_name} for session storage")
     storage_creator = ModuleLoader.load_module_and_class(
         module_path=None,
         module_name=module_name,
         class_name=class_name,
-        root_package=bss.dbs.__name__,
+        root_package=bss.sessions.__name__,
     )
-    storage = storage_creator(file_name=file_name)
-    return SessionStorage(session_db=storage)
+    try:
+        storage = storage_creator(config=config)
+        session_db = storage.instantiate_storage()
+    except Exception as e:
+        logging.error(f"Failed to create the session storage object {e}")
+        raise e
+    return SessionStorage(session_db=session_db)

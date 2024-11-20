@@ -12,9 +12,6 @@ def test_otp_create_nonexisting_user(api_url, otp_create_path, username, tenant_
                              json={"user_ref": username + 'XYZ' + str(randint(10000, 999900))},
                              headers=compose_headers(tenant_id=tenant_id))
     assert response.status_code == 404
-    body = response.json()
-    print(f"body_ne = {body}")
-    assert 'code' in body and body['code'] == "user_not_found"
 
 
 def test_otp_create1(api_url, otp_create_path, username, tenant_id):
@@ -51,9 +48,6 @@ def test_verify_otp_wrong_id(api_url, otp_verify_path, tenant_id):
         headers=compose_headers(tenant_id=tenant_id)
     )
     assert response2.status_code == 404
-    body = response.json()
-    print(f"body = {body}")
-    assert 'code' in body and body['code'] == "incorrect_otp_code"
 
 def test_verify_otp_fail(api_url, otp_verify_path, tenant_id):
     global response

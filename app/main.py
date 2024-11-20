@@ -198,7 +198,7 @@ def create_session(
     CreateSessionInternalServerErrorErrorResponse,
 ]:
     """
-    Login user using user_ref and password
+    Login user using username and password
     """
     global bss
 

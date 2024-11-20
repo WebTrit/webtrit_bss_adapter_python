@@ -2,7 +2,6 @@ import threading
 import shelve
 import logging
 
-
 class TiedKeyValue:
     """Dict-like access to external database, similar to
     Perl's tied hash. This class works as a dictionary, but with

@@ -2,13 +2,11 @@ from bss.dbs import TiedKeyValue
 from google.cloud import firestore
 from google.cloud.firestore_v1.base_query import FieldFilter
 #from google.oauth2 import service_account
-import json
 import logging
-import os
 # from firebase_admin import credentials, firestore
 from bss.dbs.serializer import Serializer
 from pydantic import BaseModel, Field
-from typing import List, Dict, Any, Optional, Union
+from typing import Optional
 
 class QueryFilter(BaseModel):
     field: str = Field( description="Field name", example="tenant_id")
@@ -20,7 +18,7 @@ class QueryFilter(BaseModel):
 class FirestoreKeyValue(TiedKeyValue):
     """Access user data stored in Firestore"""
 
-    def __init__(self, collection_name: str):
+    def __init__(self, **kwargs):
         """Initialize the database connection"""
 
         # default mode - it will use GOOGLE_APPLICATION_CREDENTIALS env
@@ -31,6 +29,10 @@ class FirestoreKeyValue(TiedKeyValue):
         #     self.db = firestore.Client(credentials=cred)
         # else:
         #     self.db = firestore.Client()
+        collection_name = kwargs.get("collection_name")
+        if not collection_name:
+
+            raise ValueError("Collection name must be provided")
         self.db = firestore.Client()
         self.collection = collection_name
 

@@ -19,7 +19,7 @@ import faker
 
 import re
 
-VERSION = "0.0.2"
+VERSION = "0.0.3"
 
 # otherwise it produces annoying messages about locale
 # when the app log level is set to DEBUG
@@ -63,6 +63,14 @@ class ExampleBSSAdapter(BSSAdapterExternalDB):
             Capabilities.autoProvision
         ]
 
+    def calculate_capabilities(self) -> List:
+        """Override the method, which calculates the capabilities based on the
+            configuration - for the example we always want to have all the
+            available methods working. REMOVE THIS METHOD if you copy-paste
+            to create your own adapter"""
+
+        return list(set(self.CAPABILITIES))
+    
     def __init__(self, config: AppConfig, *args, **kwargs):
         super().__init__(config, *args, **kwargs)
         self.config = config
@@ -146,7 +154,8 @@ class ExampleBSSAdapter(BSSAdapterExternalDB):
 
     def retrieve_calls(self, session: SessionInfo,
                        user: UserInfo,
-                       page: int, items_per_page: int,
+                       page: int,
+                       items_per_page: int,
                        time_from: datetime = None,
                        time_to: datetime = None) -> tuple[list[CDRInfo], int]:
         """Obtain CDRs (call history) of the user"""
