@@ -109,7 +109,7 @@ def test_call_history_pagination(api_url, call_history_path, page):
         body = response2.json()
     except json.JSONDecodeError as e:
         body = None
-    logging.info("response:" + pp.pformat(body))
+    print(f"response: {pp.pformat(body)}")
     assert response2.status_code == 200
     assert isinstance(body, dict)
     assert 'items' in body and isinstance(body['items'], list)

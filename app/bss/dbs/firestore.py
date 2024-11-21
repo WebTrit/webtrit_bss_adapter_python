@@ -31,7 +31,6 @@ class FirestoreKeyValue(TiedKeyValue):
         #     self.db = firestore.Client()
         collection_name = kwargs.get("collection_name")
         if not collection_name:
-
             raise ValueError("Collection name must be provided")
         self.db = firestore.Client()
         self.collection = collection_name
