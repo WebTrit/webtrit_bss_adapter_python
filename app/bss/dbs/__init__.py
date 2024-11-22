@@ -22,16 +22,10 @@ class TiedKeyValue:
 
     def get(self, key, *args):
         """Override the standard dict.get() method"""
-        if args:
-            # called as x.get(key, default)
-            return self._data.get(key, args[0])
-        return self._data.get(key)
+        return self._data.get(key, args[0] if args else None)
 
     def pop(self, key, *args):
-        if args:
-            # called as x.get(key, default)
-            return self._data.pop(key, args[0])
-        return self._data.pop(key)
+        return self._data.pop(key, args[0] if args else None)
 
     def __setitem__(self, key, value):
         """Internal method, called when setting a value to a dict key,

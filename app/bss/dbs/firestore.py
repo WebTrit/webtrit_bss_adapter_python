@@ -54,6 +54,8 @@ class FirestoreKeyValue(TiedKeyValue):
         return doc
 
     def __getitem__(self, key):
+        if "/" in key:
+            raise ValueError(f"Invalid key: {key} - it cannot contain '/'")
         doc = self.__getitem_doc__(key)
         if doc.exists:
             return self.__unpack_from_store__(doc.to_dict())
@@ -65,10 +67,7 @@ class FirestoreKeyValue(TiedKeyValue):
         try:
             return self.__getitem__(key)
         except KeyError:
-            if args:
-                return args[0]
-            raise KeyError(key)
-
+            return args[0] if args else None
 
     def __contains__(self, key):
         doc = self.__getitem_doc__(key)
