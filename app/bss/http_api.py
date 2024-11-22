@@ -156,7 +156,8 @@ class HTTPAPIConnectorWithLogin(HTTPAPIConnector):
     to obtain an access token for this session, to be used when
     retrieving data for ANY user."""
     REFRESH_TOKEN_IN_ADVANCE = 15  # minutes
-    SHARED_TOKENS = {}
+    SHARED_TOKENS = None
+    lock = threading.Lock()
 
     #: str: The login of the API user.
     api_user = None
@@ -171,11 +172,11 @@ class HTTPAPIConnectorWithLogin(HTTPAPIConnector):
                  api_token_expires_at: datetime = None):
         super().__init__(api_server)
 
-        self.lock = threading.Lock()
         # only used when we have a single admin account
         self.api_user = api_user
         self.api_password = api_password
 
+        self.init_token_storage()
         # we have the token already, no need to do login
         if api_token:
             # store for default user
@@ -185,6 +186,14 @@ class HTTPAPIConnectorWithLogin(HTTPAPIConnector):
 
     def user_id(self, user: APIUser) -> str:
         return str(user) if user else None
+
+    def init_token_storage(self):
+        """Initialize the storage for the API sessions to the remote PBX or BSS"""
+        if self.SHARED_TOKENS is None:
+            # in-memory cache is only good for debugging / testing
+            # in production, use a persistent storage
+            self.SHARED_TOKENS = {}
+        return self.SHARED_TOKENS
 
     def get_auth_session(self, user: APIUser = None) -> OAuthSessionData:
         """Return the session data for the given user or a global one
@@ -218,8 +227,13 @@ class HTTPAPIConnectorWithLogin(HTTPAPIConnector):
         """Send a HTTP request to the server and return the JSON response as a dict"""
         auth_session = self.get_auth_session(user)
         if not turn_off_login and self.have_to_login(user,
-                                                     self.get_auth_session(user)):
+                                                     auth_session):
             # we do not have an access token, need to log in first
+            if user.password is None:
+                raise_webtrit_error(401,
+                                error_message="Authentication session is closed, need to re-login",
+                                extra_error_code="access_token_expired")
+
             auth_session = self.login(user)
             self.store_auth_session(auth_session, user)
             if auth_session is None or auth_session.access_token is None:

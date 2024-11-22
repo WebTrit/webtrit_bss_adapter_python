@@ -8,7 +8,7 @@ from pydantic import BaseModel
 from app_config import AppConfig
 from bss.adapters.otp import OTPHandler, SampleOTPHandler
 from bss.adapters.session_management import SessionManagement
-from bss.sessions import SessionInfo
+from bss.sessions import SessionInfo, configure_session_storage
 from bss.types import (UserInfo, EndUser, ContactInfo, CDRInfo,
                        Capabilities,
                        UserCreateResponse,
@@ -276,7 +276,6 @@ class BSSAdapter(SessionManagement, OTPHandler,
         """Provide a defaut value for tenant ID if none is supplied in HTTP headers"""
         return tenant_id if tenant_id else "default"
 
-
 class BSSAdapterExternalDB(BSSAdapter, SampleOTPHandler):
     """Supply to WebTrit core information about
     VoIP users (only their SIP credentials) and the list of
@@ -289,9 +288,10 @@ class BSSAdapterExternalDB(BSSAdapter, SampleOTPHandler):
     def __init__(self, config: AppConfig, *args, **kwargs):
         super().__init__(config, *args, **kwargs)
         self.config = config
+        self.sessions = configure_session_storage(config)
+
         # these have to be re-assigned in the sub-class constructor
         self.user_db = None
-        self.sessions = None
         self.otp_db = None
 
     def find_user_by_login(self, user: UserInfo):
