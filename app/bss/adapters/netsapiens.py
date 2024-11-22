@@ -6,10 +6,11 @@ from bss.types import (Capabilities, UserInfo, EndUser, Contacts, ContactInfo,
                        )
 
 from json import JSONDecodeError, loads as load_json
-from bss.sessions import configure_session_storage
 from report_error import WebTritErrorException
 from app_config import AppConfig
+from bss.sessions import configure_session_storage
 from bss.http_api import HTTPAPIConnectorWithLogin, OAuthSessionData, APIUser
+from bss.dbs.firestore import FirestoreKeyValue
 from typing import Union, List, Dict, Tuple
 #from datetime import datetime, timedelta
 from pydantic import BaseModel, Field
@@ -17,7 +18,7 @@ import logging
 import re
 
 
-VERSION = "0.1.3"
+VERSION = "0.2.1"
 
 # Interface to Netsapiens cloud PBX https://docs.ns-api.com/reference/
 
@@ -67,6 +68,15 @@ class NetsapiensAPI(HTTPAPIConnectorWithLogin):
 
         super().__init__(api_server, **kwargs)
 
+    def init_token_storage(self):
+        """Initialize the storage for the API sessions to the remote PBX or BSS
+        Use persistent storage in Firestore"""
+        if self.SHARED_TOKENS is None:
+            # in-memory cache is only good for debugging / testing
+            # in production, use a persistent storage
+            self.SHARED_TOKENS = FirestoreKeyValue(collection_name="NetsapiensTokens")
+        return self.SHARED_TOKENS
+
     def split_uid(self, uid: str) -> Tuple[str, str]:
         """Split the user ID like abc@xyz.com into domain xyz.com and user name abc"""
         parts = uid.split('@')
@@ -102,11 +112,15 @@ class NetsapiensAPI(HTTPAPIConnectorWithLogin):
                           user: NetsapiensUser = None) -> dict:
         """Override the parent method to place there the correct API_URL"""
         if user:
-            # set the API server for this user
-            if user.ns_client and user.ns_client.api_server:
+            if user.ns_client is None:
+                user.ns_client = self.get_client(user.user_id)
                 self.api_server = user.ns_client.api_server
             else:
-                self.api_server = self.get_api_server(user_id=user.user_id)
+                # set the API server for this user
+                if user.ns_client and user.ns_client.api_server:
+                    self.api_server = user.ns_client.api_server
+                else:
+                    self.api_server = self.get_api_server(user_id=user.user_id)
 
         return super().send_rest_request(
             method, path, server, data, json, query_params, headers, turn_off_login, user
@@ -241,7 +255,7 @@ class NetsapiensAdapter(BSSAdapter):
             api_server= "http://localhost", # does not really matter
             netsapiens_clients=self.clients
         )
-
+        # need to init the sessions since we are derived from BSSAdapter
         self.sessions = configure_session_storage(config)
 
     @classmethod
