@@ -155,15 +155,36 @@ class NetsapiensAPI(HTTPAPIConnectorWithLogin):
         logging.debug(f"Could not find an access token in the response {res}")
         raise ValueError("Could not find an access token in the response")
 
-    def refresh(self):
-        """Rerfresh access token"""
-        return self.login(data={
-                "client_id": self.api_user, # TODO: fill correct values
-                "client_secret": self.api_password,
-                "scope": "",
-                "refresh_token": self.refresh_token,
-                "grant_type": "refresh_token",
-            })
+    def refresh(self, user: NetsapiensUser, auth_session: OAuthSessionData):
+        """Refresh access token using refresh_token"""
+        endpoint = self.access_token_path()
+        
+        req_data = dict(
+            client_id=user.ns_client.client_id,
+            client_secret=user.ns_client.client_secret,
+            grant_type="refresh_token",
+            refresh_token=auth_session.refresh_token
+        )
+        
+        response = self.send_rest_request(
+            "POST",
+            endpoint,
+            headers={"Content-Type": "application/json"},
+            json=req_data,
+            turn_off_login=True,
+            user = user
+        )
+               
+        if response and (session := self.extract_access_token(response)):
+            # access token was extracted and stored - remember the session
+            # for this user
+            self.store_auth_session(session, user)
+            return session
+        
+        raise WebTritErrorException(
+            status_code=401, 
+            error_message=f"Unable to refresh API token, user has to re-login"
+        )
     
     DEVICE_PATH = "/ns-api/v2/domains/<domain>/users/<user_id>/devices"
     def get_extension(self, user_id: str) -> Dict:

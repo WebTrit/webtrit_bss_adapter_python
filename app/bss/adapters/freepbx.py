@@ -9,7 +9,7 @@ from bss.dbs import TiedKeyValue
 from bss.sessions import configure_session_storage
 from report_error import WebTritErrorException
 from app_config import AppConfig
-from bss.http_api import HTTPAPIConnectorWithLogin
+from bss.http_api import HTTPAPIConnectorWithLogin, OAuthSessionData
 from typing import Union, List, Dict
 from datetime import datetime, timedelta
 import logging
@@ -72,7 +72,7 @@ class FreePBXAPI(HTTPAPIConnectorWithLogin):
         logging.debug(f"Could not find an access token in the response {res}")
         raise ValueError("Could not find an access token in the response")
 
-    def refresh(self):
+    def refresh(self, user: str, auth_session: OAuthSessionData):
         """Rerfresh access token"""
         return self.login(data={
                 "client_id": self.api_user,

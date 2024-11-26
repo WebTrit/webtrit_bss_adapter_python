@@ -101,7 +101,8 @@ class HTTPAPIConnector(ABC):
         try:
             logging.debug(f"Sending {method} request to {url} with parameters {params_final}")
             response = requests.request(method, url, **params_final)
-            logging.debug(f"Received {response.status_code} {response.text}")
+            clean_text = response.text.replace("\n", " ")
+            logging.debug(f"Received {response.status_code} {clean_text}")
             response.raise_for_status()
             return self.decode_response(response)
 
@@ -226,30 +227,33 @@ class HTTPAPIConnectorWithLogin(HTTPAPIConnector):
                           user: APIUser = None) -> dict:
         """Send a HTTP request to the server and return the JSON response as a dict"""
         auth_session = self.get_auth_session(user)
-        if not turn_off_login and self.have_to_login(user,
-                                                     auth_session):
-            # we do not have an access token, need to log in first
-            if user.password is None:
-                raise_webtrit_error(401,
-                                error_message="Authentication session is closed, need to re-login",
-                                extra_error_code="access_token_expired")
+        if not turn_off_login:
+            current_session = self.session_in_progress(user, auth_session)
+            if not current_session:
+                # we do not have an access token, need to log in first
+                if user.password is None:
+                    raise_webtrit_error(401,
+                                    error_message="Authentication session is closed, need to re-login",
+                                    extra_error_code="access_token_expired")
 
-            auth_session = self.login(user)
-            self.store_auth_session(auth_session, user)
-            if auth_session is None or auth_session.access_token is None:
-                # cannot proceed
-                raise ValueError("Cannot log in to the server")
+                auth_session = self.login(user)
+                self.store_auth_session(auth_session, user)
+                if auth_session is None or auth_session.access_token is None:
+                    # cannot proceed
+                    raise ValueError("Cannot log in to the server")
+            else:
+                auth_session = current_session
 
         return super().send_rest_request(method, path, server,
                                          data, json, query_params,
                                          headers=headers,
                                          auth_session=auth_session)
 
-    def have_to_login(self, user: APIUser, auth_session: OAuthSessionData) -> bool:
-        """Return True if we need to log in to the server
-        before running actual API requests."""
+    def session_in_progress(self, user: APIUser, auth_session: OAuthSessionData) -> OAuthSessionData:
+        """Returns None if we need to log in to the server
+        before running actual API requests, otherwise retursn the session to be used"""
         if auth_session is None:
-            return True
+            return None
         if auth_session.access_token and auth_session.access_token_expires_at:
             # token has an expiration date
             if datetime.now() > auth_session.access_token_expires_at:
@@ -258,7 +262,7 @@ class HTTPAPIConnectorWithLogin(HTTPAPIConnector):
                 if auth_session.refresh_token:
                     # try to refresh the token
                     logging.debug("The access token expired, attempting to re-fresh it")
-                    auth_session = self.refresh(auth_session.refresh_token)
+                    auth_session = self.refresh(user, auth_session)
                 else:
                     logging.debug("The access token expired, logging in again")
                     auth_session = self.login(user)
@@ -268,9 +272,9 @@ class HTTPAPIConnectorWithLogin(HTTPAPIConnector):
                 # proactively refresh the token a bit before the expiration time
                 logging.debug("The access token will expire soon " +
                               f"{auth_session.access_token_expires_at.isoformat()}, refreshing it")
-                auth_session = self.refresh(auth_session)
+                auth_session = self.refresh(user, auth_session)
 
-        return False if auth_session.access_token else True
+        return auth_session if auth_session.access_token else None
 
     # redefine these in your sub-class if you something else that OAuth2
     def extract_access_token(self, response: dict) -> OAuthSessionData:
@@ -301,7 +305,7 @@ class HTTPAPIConnectorWithLogin(HTTPAPIConnector):
         pass
 
     @abstractmethod
-    def refresh(self, refresh_token: str) -> bool:
+    def refresh(self, user: APIUser, auth_session: OAuthSessionData) -> bool:
         """Override this method in your sub-class to provide the ability
         to exchange a refresh token for a new session access token.
 
