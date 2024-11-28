@@ -145,75 +145,73 @@ class RouteWithLogging(APIRoute):
             request_id = extract_request_id(request)
             set_request_id(request_id)
             
+
+            req_body = await request.body()
+            req_body = req_body.decode("utf-8").replace("\n", " ")
+
+            if len(req_body) == 0:
+                    req_body = "<empty>"
+            log_with_label(f"{request.method} request to {request.url.path} " + \
+                                self.add_headers_to_log(request) + \
+                                f" client IP: {self.get_ip(request)}",
+                                f"body: {req_body}"
+                            )
             try:
-                req_body = await request.body()
-                req_body = req_body.decode("utf-8").replace("\n", " ")
-
-                if len(req_body) == 0:
-                        req_body = "<empty>"
-                log_with_label(f"{request.method} request to {request.url.path} " + \
-                                    self.add_headers_to_log(request) + \
-                                    f" client IP: {self.get_ip(request)}",
-                                    f"body: {req_body}"
-                                )
-                try:
-                    response = await original_route_handler(request)
-                except RequestValidationError as validation_exc:
-                    # errors when invalid input data is provided
-                    err_response = JSONResponse(status_code=422,
-                                                content=dict(
-                                                         error_message = "Input data validation error: " + 
-                                                                str(validation_exc.errors()),
-                                                         path = request.url.path,
-                                                         )
-                    )
-
-                    logging.error(f"Validation exception {validation_exc.errors()}")
-                    return err_response
-                except HTTPException as http_exc:
-                    if hasattr(http_exc, 'response'):
-                        err_response = http_exc.response()
-                    else:
-                        err_response = JSONResponse(
-                                            status_code=http_exc.status_code,
+                response = await original_route_handler(request)
+            except RequestValidationError as validation_exc:
+                # errors when invalid input data is provided
+                err_response = JSONResponse(status_code=422,
                                             content=dict(
-                                                message = "Server error: " +
-                                                    http_exc.detail if hasattr(http_exc, 'detail') else "Unknown error"
-                                                    )
-                        )
-                    logging.error(f"HTTP exception {http_exc.status_code} {http_exc.detail}")
-                    err_response.background = BackgroundTask(log_with_label,
-                                "Reply", err_response.body.decode("utf-8").replace("\n", " "))
-                    return err_response
-                except Exception as e:
-                    logging.error(f"Application error: {e} {traceback.format_exc()}")
-                    return JSONResponse(
-                                            status_code=500,
-                                            content=dict(
-                                                message = f"Server error: {e}",
-                                                trace = traceback.format_exc()
-                                            )
-                    )
-                
-                if isinstance(response, StreamingResponse):
-                    res_body = b""
-                    async for item in response.body_iterator:
-                        res_body += item
+                                                        error_message = "Input data validation error: " + 
+                                                            str(validation_exc.errors()),
+                                                        path = request.url.path,
+                                                        )
+                )
 
-                    task = BackgroundTask(log_info, req_body, b"<streaming content>")
-                    return Response(
-                        content=res_body,
-                        status_code=response.status_code,
-                        headers=dict(response.headers),
-                        media_type=response.media_type,
-                        background=task,
-                    )
+                logging.error(f"Validation exception {validation_exc.errors()}")
+                return err_response
+            except HTTPException as http_exc:
+                if hasattr(http_exc, 'response'):
+                    err_response = http_exc.response()
                 else:
-                    res_body = response.body
-                    response.background = BackgroundTask(log_with_label,
-                                "Reply", res_body.decode("utf-8").replace("\n", " "))
-                    return response
-            finally:
-                clear_request_id()
+                    err_response = JSONResponse(
+                                        status_code=http_exc.status_code,
+                                        content=dict(
+                                            message = "Server error: " +
+                                                http_exc.detail if hasattr(http_exc, 'detail') else "Unknown error"
+                                                )
+                    )
+                logging.error(f"HTTP exception {http_exc.status_code} {http_exc.detail}")
+                err_response.background = BackgroundTask(log_with_label,
+                            "Reply", err_response.body.decode("utf-8").replace("\n", " "))
+                return err_response
+            except Exception as e:
+                logging.error(f"Application error: {e} {traceback.format_exc()}")
+                return JSONResponse(
+                                        status_code=500,
+                                        content=dict(
+                                            message = f"Server error: {e}",
+                                            trace = traceback.format_exc()
+                                        )
+                )
+            
+            if isinstance(response, StreamingResponse):
+                res_body = b""
+                async for item in response.body_iterator:
+                    res_body += item
+
+                task = BackgroundTask(log_info, req_body, b"<streaming content>")
+                return Response(
+                    content=res_body,
+                    status_code=response.status_code,
+                    headers=dict(response.headers),
+                    media_type=response.media_type,
+                    background=task,
+                )
+            else:
+                res_body = response.body
+                response.background = BackgroundTask(log_with_label,
+                            "Reply", res_body.decode("utf-8").replace("\n", " "))
+                return response
 
         return custom_route_handler
