@@ -1,73 +1,97 @@
-from fastapi import Response, Request, HTTPException
+import logging
+import os
+import contextvars
+import uuid
+from typing import Callable, Optional
+
+from fastapi import HTTPException, Request, Response
+from fastapi.routing import APIRoute
+from fastapi.responses import JSONResponse
 from fastapi.exceptions import RequestValidationError
 from starlette.background import BackgroundTask
 from starlette.responses import StreamingResponse
-from fastapi.routing import APIRoute
-from report_error import WebTritErrorException
-
-# from starlette.types import Message
-from typing import Callable
-import logging
-# import pprint
-# import json
-import uuid
-import os
-from contextvars import ContextVar
 import traceback
 
-# pp = pprint.PrettyPrinter(indent=4)
+# Add context variable for request ID
+current_request_id = contextvars.ContextVar('current_request_id', default="STARTUP")
 
-request_id: ContextVar[str] = ContextVar('request_id', default='')
-request_id.set('STARTUP')
+class AddRequestID(logging.Filter):
+    """Logging filter that adds request_id to log records"""
+    def filter(self, record):
+        record.request_id = get_request_id()
+        return True
 
-class CustomFormatter(logging.Formatter):
-    def format(self, record):
-        record.request_id = request_id.get()  # Add your custom field here
-        return super().format(record)
+def setup_logging(debug: bool = False):
+    """Configure logging with request ID support"""
+    if debug:
+        log_level = logging.DEBUG
+    else:
+        log_level = logging.INFO
 
+    # Create log format based on environment
+    log_format = ""
+    if not os.environ.get("PORT"):
+        # Add timestamps when running locally
+        log_format += "[%(asctime)s] "
+    log_format += "%(levelname)s [Req-ID: %(request_id)s]: %(message)s"
 
-# Create a custom formatter instance
-if not os.environ.get('PORT'):
-    # we are running locally so it is useful to add timestamps
-    # since when running in GCP, logs already have timestamps
-    log_prefix='[%(asctime)s] %(levelname)s '
-else:
-    # cloud debug
-    log_prefix='%(levelname)s '
+    # Configure handler with formatter and filter
+    handler = logging.StreamHandler()
+    handler.setFormatter(logging.Formatter(log_format))
+    handler.addFilter(AddRequestID())
 
-log_formatter = CustomFormatter(fmt = log_prefix +'RQ-ID:%(request_id)s %(message)s')
+    # Get root logger and configure it
+    root_logger = logging.getLogger()
+    root_logger.setLevel(log_level)
+    
+    # Remove existing handlers to avoid duplicates
+    for existing_handler in root_logger.handlers[:]:
+        root_logger.removeHandler(existing_handler)
+    
+    root_logger.addHandler(handler)
 
-def get_request_id(request: Request):
+def set_request_id(request_id: Optional[str]):
+    """Set the current request ID in context"""
+    if request_id:
+        current_request_id.set(request_id)
+
+def get_request_id() -> str:
+    """Get the current request ID from context"""
+    return current_request_id.get()
+
+def clear_request_id():
+    """Clear the current request ID from context"""
+    current_request_id.set("STARTUP")
+
+def extract_request_id(request: Request):
+    """Extract request ID from request headers"""
     for id in [
         request.headers.get('X-Request-ID', None),
         request.headers.get('X-Cloud-Trace-Context', None),
     ]:
         if id is not None:
             return id
-    return 'WEBTRIT'+str(uuid.uuid4())
+    return 'WT-'+str(uuid.uuid4())
 
-# def log_formatted_json(label: str, text):
-#     """Take JSON (as byte-string) and pretty-print it to the log"""
-#     # not very efficient, skip for now
-#     try:
-#         json_data = text.decode("utf-8")
-#         data = json.loads(json_data)
-#     except json.JSONDecodeError as e:
-#         logging.info(f"{label}: Invalid JSON structure {e}")
-#         return
-#     formatted = pp.pformat(data) if False else str(data)
-#     logging.info(f"{label}: {formatted}")
-
-def log_with_label(label: str, text):
+def log_formatted_json(label: str, text):
+    """Take JSON (as byte-string) and pretty-print it to the log"""
     if len(text) == 0:
         logging.info(f"{label}: Empty")
         return
     logging.info(f"{label}: {text}")
     return
 
-def log_req_and_reply(req_body: str, res_body: str):
-    log_with_label('Request', req_body)
-    log_with_label('Reply', res_body)
+def log_info(req_body, res_body):
+    log_formatted_json("Request body", req_body)
+    log_formatted_json("Reply body", res_body)
+
+def log_with_label(label: str, data):
+    log_formatted_json(label, data)
+
+debug = True if os.getenv("DEBUG", "False").lower() == "true" else False
+
+# Initialize logging when module is imported
+setup_logging(debug)
 
 class RouteWithLogging(APIRoute):
     """Custom route class that logs request and response bodies """
@@ -103,74 +127,93 @@ class RouteWithLogging(APIRoute):
                 value = obfuscate_string(value)
             headers.append(f"{header}: '{value}'")
         return "Headers: " + ", ".join(headers)
-    
+
+    def get_ip(self, request: Request):
+        client_ip = None
+        gcp_ip = request.headers.get("x-forwarded-for")
+        if gcp_ip:
+            client_ip = gcp_ip.split(",")[0].strip()
+        if not client_ip:
+            client_ip = request.client.host
+        return client_ip
+
     def get_route_handler(self) -> Callable:
         original_route_handler = super().get_route_handler()
 
         async def custom_route_handler(request: Request) -> Response:
-            request_id.set(get_request_id(request))
-            req_body = await request.body()
-            req_body = req_body.decode("utf-8")
-            if len(req_body) == 0:
-                req_body = "<empty>"
-            log_with_label(f"{request.method} request to {request.url.path} " + \
-                            self.add_headers_to_log(request),
-                            f"body: {req_body}"
-                        )
+            # Set request ID from header
+            request_id = extract_request_id(request)
+            set_request_id(request_id)
+            
             try:
-                response = await original_route_handler(request)
-            except RequestValidationError as validation_exc:
-                # errors when invalid input data is provided
-                err_response = WebTritErrorException(status_code=422,
-                                                     error_message = "Input data validation error: " + 
-                                                            str(validation_exc.errors()),
-                                                     path = request.url.path,
-                                                     ).response()
+                req_body = await request.body()
+                req_body = req_body.decode("utf-8").replace("\n", " ")
 
-                logging.error(f"Validation exception {validation_exc.errors()}")
-                return err_response
-            except WebTritErrorException as e:
-                # an error produced by our own code 
-                logging.error(f"App-generated exception {e.status_code} {e.error_message}")
-                err_response = e.response()
-                err_response.background = BackgroundTask(log_with_label,
-                                                    f"Reply to {request.method} {request.url.path} " + \
-                                                    f"http code {e.status_code}",
-                                                    err_response.body.decode("utf-8"))
-                return err_response
-            except HTTPException as http_exc:
-                if hasattr(http_exc, 'response'):
-                    err_response = http_exc.response()
+                if len(req_body) == 0:
+                        req_body = "<empty>"
+                log_with_label(f"{request.method} request to {request.url.path} " + \
+                                    self.add_headers_to_log(request) + \
+                                    f" client IP: {self.get_ip(request)}",
+                                    f"body: {req_body}"
+                                )
+                try:
+                    response = await original_route_handler(request)
+                except RequestValidationError as validation_exc:
+                    # errors when invalid input data is provided
+                    err_response = JSONResponse(status_code=422,
+                                                content=dict(
+                                                         error_message = "Input data validation error: " + 
+                                                                str(validation_exc.errors()),
+                                                         path = request.url.path,
+                                                         )
+                    )
+
+                    logging.error(f"Validation exception {validation_exc.errors()}")
+                    return err_response
+                except HTTPException as http_exc:
+                    if hasattr(http_exc, 'response'):
+                        err_response = http_exc.response()
+                    else:
+                        err_response = JSONResponse(
+                                            status_code=http_exc.status_code,
+                                            content=dict(
+                                                message = "Server error: " +
+                                                    http_exc.detail if hasattr(http_exc, 'detail') else "Unknown error"
+                                                    )
+                        )
+                    logging.error(f"HTTP exception {http_exc.status_code} {http_exc.detail}")
+                    err_response.background = BackgroundTask(log_with_label,
+                                "Reply", err_response.body.decode("utf-8").replace("\n", " "))
+                    return err_response
+                except Exception as e:
+                    logging.error(f"Application error: {e} {traceback.format_exc()}")
+                    return JSONResponse(
+                                            status_code=500,
+                                            content=dict(
+                                                message = f"Server error: {e}",
+                                                trace = traceback.format_exc()
+                                            )
+                    )
+                
+                if isinstance(response, StreamingResponse):
+                    res_body = b""
+                    async for item in response.body_iterator:
+                        res_body += item
+
+                    task = BackgroundTask(log_info, req_body, b"<streaming content>")
+                    return Response(
+                        content=res_body,
+                        status_code=response.status_code,
+                        headers=dict(response.headers),
+                        media_type=response.media_type,
+                        background=task,
+                    )
                 else:
-                    err_response = WebTritErrorException(
-                                        status_code=http_exc.status_code,
-                                        error_message = "Server error: " +
-                                            http_exc.detail if hasattr(http_exc, 'detail') else "Unknown error",
-                                            path=request.url.path,
-                    ).response()
-                logging.error(f"HTTP exception {http_exc.status_code} {http_exc.detail}")
-                err_response.background = BackgroundTask(log_with_label,
-                                                    f"Reply to {request.method} {request.url.path} " + \
-                                                    f"http code {http_exc.status_code}",
-                                                    err_response.body.decode("utf-8"))
-                return err_response
-            except Exception as e:
-                logging.error(f"Application error: {e} {traceback.format_exc()}")
-                # we assume the error was already logged by the original_route_handler
-                raise HTTPException(
-                    status_code=500, 
-                    detail=f"An error {e} occurred")
-
-
-            if isinstance(response, StreamingResponse):
-                task = BackgroundTask(log_req_and_reply, req_body,
-                                      "<binary/streaming content>")
-                return response
-            else:
-                res_body = response.body
-                response.background = BackgroundTask(log_with_label,
-                                                    f"Reply to {request.method} {request.url.path}",
-                                                    res_body.decode("utf-8"))
-                return response
+                    res_body = response.body
+                    response.background = BackgroundTask(log_with_label,
+                                "Reply", res_body.decode("utf-8").replace("\n", " "))
+                    return response
+            finally:
+                clear_request_id()
 
         return custom_route_handler

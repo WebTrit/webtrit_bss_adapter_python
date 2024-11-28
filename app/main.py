@@ -110,7 +110,7 @@ from bss.types import (
 from bss.types import Capabilities, ExtendedUserInfo, Health, safely_extract_scalar_value
 from report_error import WebTritErrorException
 from report_error import raise_webtrit_error
-from request_trace import RouteWithLogging, log_formatter
+from request_trace import RouteWithLogging
 
 VERSION = "0.1.0"
 API_VERSION_PREFIX = "/api/v1"
@@ -119,24 +119,6 @@ my_project_path = os.path.dirname(__file__)
 sys.path.append(my_project_path)
 
 config = AppConfig()
-
-# set logging
-if config.get_conf_val("Debug", default="False").upper() == "TRUE":
-    log_level = logging.DEBUG
-else:
-    log_level = logging.INFO
-
-# Create a handler and add the formatter to it
-handler = logging.StreamHandler()
-handler.setFormatter(log_formatter)
-
-# Add the handler to the logger
-logger = logging.getLogger()
-logger.addHandler(handler)
-# Propagate the root logger configuration to all child loggers
-logger.setLevel(log_level)
-logger.handlers = logging.getLogger().handlers
-logger.propagate = True
 
 app = FastAPI(
     description="""Adapter that translates API requests from WebTrit core
