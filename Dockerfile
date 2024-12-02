@@ -17,6 +17,11 @@ RUN chmod 777 /var/db
 # add required Python modules
 COPY app/requirements.txt /app/
 
+ENV PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1 \
+    PIP_NO_CACHE_DIR=1 \
+    PIP_DISABLE_PIP_VERSION_CHECK=1
+
 RUN pip install --no-cache-dir --upgrade -r requirements.txt
 
 COPY app /app/

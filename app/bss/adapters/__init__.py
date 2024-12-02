@@ -1,7 +1,7 @@
 import logging
 from abc import ABC, abstractmethod
 from datetime import datetime
-from typing import List, Dict, Optional, Callable, Union, Iterator
+from typing import List, Dict, Optional, Callable, Union, Iterator, Tuple
 
 from pydantic import BaseModel
 
@@ -238,9 +238,11 @@ class BSSAdapter(SessionManagement, OTPHandler,
             self,
             session: SessionInfo,
             user: UserInfo,
-            date_from: datetime = None,
-            date_to: datetime = None,
-    ) -> List[CDRInfo]:
+            page: Optional[int] = 1,
+            items_per_page: Optional[int] = 100,
+            time_from: Optional[datetime] = None,
+            time_to: Optional[datetime] = None,
+    ) -> Tuple[List[CDRInfo], int]:
         """Obtain CDRs (call history) of the user"""
         raise NotImplementedError("Override this method in your sub-class")
 
@@ -387,9 +389,11 @@ class BSSAdapterExternalDB(BSSAdapter, SampleOTPHandler):
             self,
             session: SessionInfo,
             user: UserInfo,
-            date_from: datetime = None,
-            date_to: datetime = None,
-    ) -> List[CDRInfo]:
+            page: Optional[int] = 1,
+            items_per_page: Optional[int] = 100,
+            time_from: Optional[datetime] = None,
+            time_to: Optional[datetime] = None,
+    ) -> Tuple[List[CDRInfo], int]:
         """Obtain CDRs (call history) of the user"""
         raise NotImplementedError("Override this method in your sub-class")
 

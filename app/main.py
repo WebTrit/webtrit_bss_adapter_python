@@ -170,7 +170,7 @@ def health_check() -> Health:
 )
 def create_session(
         body: SessionCreateRequest,
-        # to retrieve user agent and tenant id from the request
+        # to retrieve user agent from the request
         request: Request,
         x_webtrit_tenant_id: Optional[str] = Header(None, alias=TENANT_ID_HTTP_HEADER),
 ) -> Union[

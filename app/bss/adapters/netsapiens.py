@@ -1,6 +1,7 @@
 from bss.adapters import BSSAdapter
 from bss.types import (Capabilities, UserInfo, EndUser, Contacts, ContactInfo,
-                       Calls, CDRInfo, ConnectStatus, SessionInfo, SIPRegistrationStatus,
+                       Calls, CDRInfo, ConnectStatus, SessionInfo,
+                       SIPRegistrationStatus, Direction,
                        Balance, BalanceType, Numbers, SIPServer, SIPInfo,
                        OTPCreateResponse, OTPVerifyRequest,
                        )
@@ -11,8 +12,8 @@ from app_config import AppConfig
 from bss.sessions import configure_session_storage
 from bss.http_api import HTTPAPIConnectorWithLogin, OAuthSessionData, APIUser
 from bss.dbs.firestore import FirestoreKeyValue
-from typing import Union, List, Dict, Tuple
-#from datetime import datetime, timedelta
+from typing import Union, List, Dict, Tuple, Optional
+from datetime import datetime, timedelta, UTC
 from pydantic import BaseModel, Field
 import logging
 import re
@@ -229,7 +230,30 @@ class NetsapiensAPI(HTTPAPIConnectorWithLogin):
             return reply
 
         return []
-    
+
+    CDR_PATH = "/ns-api/v2/domains/<domain>/users/<user_id>/cdrs"
+    def get_cdrs(self, user_id: str,
+                 start_time: datetime = None,
+                 end_time: datetime = None) -> Dict:
+        """Get user's CDRs"""
+
+        uid, domain = self.split_uid(user_id)
+        path = self.CDR_PATH.replace("<domain>", domain).replace("<user_id>", uid)
+
+        q_params = {}
+        # these seem to have no effect :-(
+        if start_time:
+            q_params["datetime-start"] = start_time.isoformat()
+        if end_time:
+            q_params["datetime-end"] = end_time.isoformat()
+
+        cdr_list = self.send_rest_request("GET", path, json={},
+                                            query_params = q_params,
+                                           user=NetsapiensUser(user_id=user_id))
+        return cdr_list
+
+
+
 
 
 class NetsapiensAdapter(BSSAdapter):
@@ -296,7 +320,7 @@ class NetsapiensAdapter(BSSAdapter):
             # log in user using one-time-password generated on the BSS side
             # Capabilities.otpSignin,
             # obtain user's call history
-            # Capabilities.callHistory,
+            Capabilities.callHistory,
             # obtain the list of other extensions in the PBX
             Capabilities.extensions,
             # download call recordings - currently not supported
@@ -411,8 +435,29 @@ class NetsapiensAdapter(BSSAdapter):
 
         return contacts
 
-    def retrieve_calls(self, session: SessionInfo, user: UserInfo, **kwargs) -> Calls:
-        pass
+    def retrieve_calls(self,
+                        session: SessionInfo,
+                        user: UserInfo,
+                        page: Optional[int] = 1,
+                        items_per_page: Optional[int] = 100,
+                        time_from: Optional[datetime] = None,
+                        time_to: Optional[datetime] = None,
+            ) -> Tuple[List[CDRInfo], int]:
+        # Get all CDRs first
+        cdrs = self.api_client.get_cdrs(user.user_id,
+                                      start_time=time_from,
+                                      end_time=time_to)
+        
+        # Calculate pagination indices
+        start_idx = (page - 1) * items_per_page
+        end_idx = start_idx + items_per_page
+        
+        # Return only the requested page of results
+        paginated_cdrs = [ self.netsapiens_to_webtrit_cdr(x)
+                            for x in cdrs[start_idx:end_idx]]
+        
+        
+        return paginated_cdrs, len(paginated_cdrs)
 
     # call recording is not supported in this example
     def retrieve_call_recording(
@@ -508,6 +553,45 @@ class NetsapiensAdapter(BSSAdapter):
             data["sip_status"] = SIPRegistrationStatus.registered
 
             return ContactInfo(**data)
+
+    def map_disconnect_status(self, duration: int, status: str) -> ConnectStatus:
+        """Map Netsapiens disconnect status to WebTrit CDR status"""
+        if "Bye" in status:
+            # disconnect by user
+            return ConnectStatus.accepted if duration > 0 else ConnectStatus.missed
+        
+        if "Cancel" in status:
+            return ConnectStatus.declined
+        
+        return ConnectStatus.error
+
+    def netsapiens_to_webtrit_cdr(self, cdr: dict) -> CDRInfo:
+        """Convert the JSON data returned by Netsapiens API into an dictionary
+        that can be used to crate a WebTrit object (either EndUser or ContactInfo)):
+        """
+        try:
+            x = cdr.get("call-answer-datetime")
+            start = datetime.fromisoformat(x) if x else None
+        except (ValueError, TypeError) as e:
+            logging.error(f"Invalid datetime format for call-answer-datetime: {cdr.get('call-answer-datetime')} {e}")
+            start = None
+        duration = cdr.get("call-total-duration-seconds", 0)
+        if start:
+            end = start + timedelta(seconds=duration)
+        else:
+            end = None
+
+        return CDRInfo(call_id=cdr.get("call-orig-call-id"),
+                       direction=Direction.outgoing if cdr.get("call-direction") == 1 else Direction.incoming,
+                       caller=cdr.get("call-orig-caller-id"),
+                       callee=cdr.get("call-term-caller-id"),
+                       connect_time=start,
+                       disconnect_time=end,
+                       duration=duration,
+                       status=self.map_disconnect_status(duration,
+                                                         cdr.get("call-disconnect-reason-text")),
+                       # TODO: find out how to get the recording ID
+                       recording_id=None)
 
     def signup(self, user_data, tenant_id: str = None):
         """Create a new user as a part of the sign-up process - not supported yet"""
