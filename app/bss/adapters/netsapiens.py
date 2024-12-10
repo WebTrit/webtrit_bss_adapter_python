@@ -522,7 +522,6 @@ class NetsapiensAdapter(BSSAdapter):
             "numbers": Numbers(
                 ext=ext.get("user", ""),
                 main=ext.get("user", ""),
-                additional=[]
             ),
             "balance": Balance( balance_type=BalanceType.inapplicable, )
         }
@@ -570,7 +569,7 @@ class NetsapiensAdapter(BSSAdapter):
         that can be used to crate a WebTrit object (either EndUser or ContactInfo)):
         """
         try:
-            x = cdr.get("call-answer-datetime")
+            x = cdr.get("call-start-datetime")
             start = datetime.fromisoformat(x) if x else None
         except (ValueError, TypeError) as e:
             logging.error(f"Invalid datetime format for call-answer-datetime: {cdr.get('call-answer-datetime')} {e}")
