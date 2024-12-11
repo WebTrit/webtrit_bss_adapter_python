@@ -137,6 +137,8 @@ class BSSAdapter(SessionManagement, OTPHandler,
         CDRS=dict(default=False, option=Capabilities.callHistory),
         RECORDINGS=dict(default=False, option=Capabilities.recordings),
         VOICEMAIL=dict(default=False, option=Capabilities.voicemail),
+        INTERNAL_MESSAGING=dict(default=True, option=Capabilities.internal_messaging),
+        SMS_MESSAGING=dict(default=False, option=Capabilities.sms_messaging),
     )
     # what our adapter can do in general (what is coded)
     # should be overridden in the sub-class
