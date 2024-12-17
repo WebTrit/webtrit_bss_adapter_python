@@ -559,6 +559,8 @@ class SupportedEnum(Enum):
     voicemail = 'voicemail'
     # adding this manually
     cta_list = 'cta_list'
+    internal_messaging = 'internalMessaging'
+    sms_messaging = 'smsMessaging'
 
 
 class SystemInfoShowResponse(BaseModel):
