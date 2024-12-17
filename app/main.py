@@ -186,7 +186,7 @@ def create_session(
     global bss
 
     if eval_as_bool(config.get_conf_val("Capabilities",
-                                        "PASSWORD", "Force",
+                                        "Password", "Force",
                             default="False")):
         # forcefully allow this method to be called even if the
         # adapter declares it as not implemented. This is useful
