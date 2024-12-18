@@ -15,12 +15,11 @@ class AdminAPI(HTTPAPIConnectorWithLogin):
         Parameters:
             :config (app_config.AppConfig): The instance with all the service config options.
         """
-        api_server: str = portaswitch_settings.ADMIN_API_SERVER
-        api_user: str = portaswitch_settings.ADMIN_API_USER
-        api_token: str = portaswitch_settings.ADMIN_API_TOKEN
-        self._api_user = PortaSwitchAdminUser(user_id=api_user, token=api_token)
+        super().__init__(portaswitch_settings.ADMIN_API_URL)
 
-        super().__init__(api_server)
+        self._api_user = PortaSwitchAdminUser(
+            user_id=portaswitch_settings.ADMIN_API_LOGIN, token=portaswitch_settings.ADMIN_API_TOKEN
+        )
 
     def login(self, user: PortaSwitchAdminUser = None):
         """Performs a PortaBilling API user login.

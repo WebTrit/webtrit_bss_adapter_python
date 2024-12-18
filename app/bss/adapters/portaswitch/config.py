@@ -12,17 +12,16 @@ from .types import (
 class PortaSwitchSettings(BaseSettings):
     SIP_SERVER_HOST: str = "127.0.0.1"
     SIP_SERVER_PORT: int = 5060
+    ADMIN_API_URL: str
+    ADMIN_API_LOGIN: str
+    ADMIN_API_TOKEN: str
+    ACCOUNT_API_URL: str
     SIGNIN_CREDENTIALS: PortaSwitchSignInCredentialsType = PortaSwitchSignInCredentialsType.SELF_CARE
     CONTACTS_SELECTING: PortaSwitchContactsSelectingMode = PortaSwitchContactsSelectingMode.ACCOUNTS
-    CONTACTS_SKIP_WITHOUT_EXTENSION: bool = False
-    OTP_IGNORE_ACCOUNTS: list[str] = []
-    HIDE_BALANCE_IN_USER_INFO: Optional[bool] = False
-    ADMIN_API_SERVER: str
-    ADMIN_API_USER: str
-    ADMIN_API_TOKEN: str
-    ACCOUNT_API_SERVER: str
-    VERIFY_HTTPS: Optional[bool] = True
     CONTACTS_SELECTING_EXTENSION_TYPES: list[PortaSwitchExtensionType] = list(PortaSwitchExtensionType)
+    CONTACTS_SKIP_WITHOUT_EXTENSION: bool = False
+    HIDE_BALANCE_IN_USER_INFO: Optional[bool] = False
+    VERIFY_HTTPS: Optional[bool] = True
 
     class Config:
         env_prefix = "PORTASWITCH_"

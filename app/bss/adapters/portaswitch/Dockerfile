@@ -37,10 +37,10 @@ ENV BSS_ADAPTER_MODULE="bss.adapters.portaswitch"
 ENV BSS_ADAPTER_CLASS="PortaSwitchAdapter"
 ENV DEBUG="True"
 
-ENV PORTASWITCH_ADMIN_API_SERVER="https://<admin-ip>:<admin-port>"
-ENV PORTASWITCH_ADMIN_API_USER="<admin-login>"
+ENV PORTASWITCH_ADMIN_API_URL="https://<admin-ip>:<admin-port>"
+ENV PORTASWITCH_ADMIN_API_LOGIN="<admin-login>"
 ENV PORTASWITCH_ADMIN_API_PASSWORD="<admin-password>"
-ENV PORTASWITCH_ACCOUNT_API_SERVER="https://<account-ip>:<account-port>"
+ENV PORTASWITCH_ACCOUNT_API_URL="https://<account-ip>:<account-port>"
 
 ENV PORTASWITCH_SIP_SERVER_HOST="<sip-server-ip>"
 ENV PORTASWITCH_SIP_SERVER_PORT="<sip-server-port>"

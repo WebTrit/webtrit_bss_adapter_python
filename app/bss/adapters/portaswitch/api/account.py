@@ -21,11 +21,9 @@ class AccountAPI(HTTPAPIConnector):
             :config (app_config.AppConfig): The instance with all the service config options.
 
         """
-        api_server: str = portaswitch_settings.ACCOUNT_API_SERVER
+        super().__init__(portaswitch_settings.ACCOUNT_API_URL)
 
         self._verify_https = portaswitch_settings.VERIFY_HTTPS
-
-        super().__init__(api_server)
 
     def __send_request(
         self, module: str, method: str, params: dict, stream: bool | None = None, access_token: str | None = None
