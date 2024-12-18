@@ -18,7 +18,8 @@ def test_do_login(api_url, login_path, username, password, tenant_id):
     response = requests.post(
         api_url + login_path,
         json={"login": username, "password": password},
-        headers=compose_headers(tenant_id=tenant_id)
+        headers=compose_headers(tenant_id=tenant_id,
+                                other={"X-Request-ID": "Test"})
     )
 
     assert response.status_code == 200

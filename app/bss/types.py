@@ -248,7 +248,7 @@ class CallToActionMenu(BaseModel):
 
 def is_scalar(obj) -> bool:
     """Return True if the object is a scalar"""
-    return isinstance(obj, (str, int, float, bool))
+    return (isinstance(obj, (str, int, float, bool)) or obj is None)
 
 def eval_as_bool(val):
     """Interpret value of a config toggle (Y, True, 1, etc.) as boolean."""

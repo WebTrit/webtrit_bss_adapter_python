@@ -106,6 +106,7 @@ from bss.types import (
     UserVoicemailMessageDeleteUnauthorizedErrorResponse,
     UserVoicemailMessageDeleteNotFoundErrorResponse,
     UserVoicemailMessageDeleteInternalServerErrorResponse,
+    eval_as_bool,
 )
 from bss.types import Capabilities, ExtendedUserInfo, Health, safely_extract_scalar_value
 from report_error import WebTritErrorException
@@ -184,14 +185,25 @@ def create_session(
     """
     global bss
 
-    is_method_allowed(Capabilities.passwordSignin)
+    if eval_as_bool(config.get_conf_val("Capabilities",
+                                        "Password", "Force",
+                            default="False")):
+        # forcefully allow this method to be called even if the
+        # adapter declares it as not implemented. This is useful
+        # in case when app UI should not display this type of login
+        # e.g. only OTP is allowed there - but it should be possible
+        # to login using password while debugging the app, since then
+        # credentials can be auto-populated
+        pass
+    else:
+        is_method_allowed(Capabilities.passwordSignin)
 
-    user_ref = body.user_ref or body.login
+    user_ref = safely_extract_scalar_value(body.user_ref) or \
+        safely_extract_scalar_value(body.login)
     if not (user_ref and body.password):
         # missing parameters
-        raise_webtrit_error(422, "Missing user_ref & password")
+        raise_webtrit_error(422, "Missing username & password")
 
-    user_ref = safely_extract_scalar_value(user_ref)
     user = ExtendedUserInfo(user_id='N/A',  # do not know it yet
                             client_agent=request.headers.get('User-Agent', 'Unknown'),
                             tenant_id=bss.default_id_if_none(x_webtrit_tenant_id),
