@@ -376,7 +376,7 @@ class PortaSwitchAdapter(BSSAdapter):
                     extensions = self._admin_api.get_extensions_list(i_customer)["extensions_list"]
 
                     return [
-                        self._serializer.get_contact_info_by_extension(
+                        Serializer.get_contact_info_by_extension(
                             ext, account_to_aliases.get(ext.get("i_account"), []), i_account
                         )
                         for ext in extensions
@@ -389,8 +389,10 @@ class PortaSwitchAdapter(BSSAdapter):
                     for account in accounts:
                         dual_version_system = PortaSwitchDualVersionSystem(account.get("dual_version_system"))
                         if dual_version_system != PortaSwitchDualVersionSystem.SOURCE:
-                            if not self._portaswitch_settings.CONTACTS_SKIP_WITHOUT_EXTENSION or account.get():
-                                contacts.append(self._serializer.get_contact_info_by_account(account, i_account))
+                            if not self._portaswitch_settings.CONTACTS_SKIP_WITHOUT_EXTENSION or account.get(
+                                "extension_id"
+                            ):
+                                contacts.append(Serializer.get_contact_info_by_account(account, i_account))
 
                     return contacts
 
@@ -442,7 +444,7 @@ class PortaSwitchAdapter(BSSAdapter):
                 time_to=time_to,
             )
 
-            return ([self._serializer.get_cdr_info(cdr) for cdr in result["xdr_list"]], result["total"])
+            return ([Serializer.get_cdr_info(cdr) for cdr in result["xdr_list"]], result["total"])
 
         except WebTritErrorException as error:
             faultcode = extract_fault_code(error)
@@ -499,7 +501,7 @@ class PortaSwitchAdapter(BSSAdapter):
             mailbox_messages = self._account_api.get_mailbox_messages(
                 safely_extract_scalar_value(session.access_token)
             )
-            voicemail_messages = [self._serializer.get_voicemail_message(message) for message in mailbox_messages]
+            voicemail_messages = [Serializer.get_voicemail_message(message) for message in mailbox_messages]
 
             return UserVoicemailsResponse(
                 messages=voicemail_messages, has_new_messages=any(not message.seen for message in voicemail_messages)
@@ -529,7 +531,7 @@ class PortaSwitchAdapter(BSSAdapter):
                 safely_extract_scalar_value(session.access_token), message_id
             )
 
-            return self._serializer.get_voicemail_message_details(message_details)
+            return Serializer.get_voicemail_message_details(message_details)
 
         except WebTritErrorException as error:
             fault_code = extract_fault_code(error)
