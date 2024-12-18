@@ -231,7 +231,7 @@ class HTTPAPIConnectorWithLogin(HTTPAPIConnector):
             current_session = self.session_in_progress(user, auth_session)
             if not current_session:
                 # we do not have an access token, need to log in first
-                if user.password is None:
+                if hasattr(user, 'password') and user.password is None:
                     raise_webtrit_error(401,
                                     error_message="Authentication session is closed, need to re-login",
                                     extra_error_code="access_token_expired")
