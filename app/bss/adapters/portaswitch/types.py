@@ -1,4 +1,11 @@
 from enum import Enum
+from typing import Optional
+
+from bss.http_api import APIUser
+
+
+class PortaSwitchAdminUser(APIUser):
+    token: Optional[str] = None
 
 
 class PortaSwitchSignInCredentialsType(Enum):
