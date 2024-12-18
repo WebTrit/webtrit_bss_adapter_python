@@ -1,36 +1,24 @@
 import logging
 
-from app_config import AppConfig
+from bss.adapters.portaswitch.config import PortaSwitchSettings
 from bss.adapters.portaswitch.types import PortaSwitchAdminUser
 from bss.http_api import HTTPAPIConnectorWithLogin
+from bss.models import DeliveryChannel
 
 
 class AdminAPI(HTTPAPIConnectorWithLogin):
     """Provides an access to Admin realm of the PortaSwitch API."""
-    #: bool: Shows whether this interface shall verify HTTPS certificates while accessing
-    #: the server.
-    __shall_verify_https: bool = True
-    #: str: The channel to deliver the OTP tokens to end-users. Possible values: sms, mail.
-    __otp_delivery_channel: str = 'mail'
 
-    def __init__(self, config: AppConfig) -> None:
+    def __init__(self, portaswitch_settings: PortaSwitchSettings) -> None:
         """The class constructor.
 
         Parameters:
             :config (app_config.AppConfig): The instance with all the service config options.
-
         """
-        api_server: str = config.get_conf_val('PortaSwitch', 'Admin', 'API', 'Server')
-        api_user: str = config.get_conf_val('PortaSwitch', 'Admin', 'API', 'User')
-        api_token: str = config.get_conf_val('PortaSwitch', 'Admin', 'API', 'Token')
+        api_server: str = portaswitch_settings.ADMIN_API_SERVER
+        api_user: str = portaswitch_settings.ADMIN_API_USER
+        api_token: str = portaswitch_settings.ADMIN_API_TOKEN
         self._api_user = PortaSwitchAdminUser(user_id=api_user, token=api_token)
-
-        self.__otp_delivery_channel: str = config.get_conf_val('PortaSwitch', 'OTP', 'delivery', 'channel',
-                                                               default='mail')
-        assert self.__otp_delivery_channel in ('sms', 'mail')
-
-        self.__shall_verify_https: bool = config.get_conf_val('PortaSwitch', 'Verify', 'HTTPS',
-                                                              default='True') == 'True'
 
         super().__init__(api_server)
 
@@ -48,10 +36,9 @@ class AdminAPI(HTTPAPIConnectorWithLogin):
         """
         user = user or self._api_user
 
-        response = self._send_request(module='Session',
-                                      method='login',
-                                      params=dict(login=user.user_id, token=user.token),
-                                      turn_off_login=True)
+        response = self._send_request(
+            module="Session", method="login", params=dict(login=user.user_id, token=user.token), turn_off_login=True
+        )
 
         if response and (session := self.extract_access_token(response)):
             return session
@@ -74,31 +61,33 @@ class AdminAPI(HTTPAPIConnectorWithLogin):
 
         """
         return self._send_request(
-            module='Account',
-            method='get_account_list',
+            module="Account",
+            method="get_account_list",
             params={
-                'i_customer': i_customer,
-                'with_aliases': 1,
-                'limit_alias_did_number_list': 100,
-            })
+                "i_customer": i_customer,
+                "with_aliases": 1,
+                "limit_alias_did_number_list": 100,
+            },
+        )
 
     def get_extensions_list(self, i_customer: int) -> dict:
         """Returns information about extensions related to the input i_customer.
-            Parameters:
-                i_customer: int: The identifier of a customer which accounts to be returned.
-            Returns:
-                extensions_list: dict: The API method execution result that contains info about accounts.
+        Parameters:
+            i_customer: int: The identifier of a customer which accounts to be returned.
+        Returns:
+            extensions_list: dict: The API method execution result that contains info about accounts.
         """
         return self._send_request(
-            module='Customer',
-            method='get_extensions_list',
+            module="Customer",
+            method="get_extensions_list",
             params={
-                'i_customer': i_customer,
-                'detailed_info': 1,
-                'limit_alias_did_number_list': 100,
-            })
+                "i_customer": i_customer,
+                "detailed_info": 1,
+                "limit_alias_did_number_list": 100,
+            },
+        )
 
-    def create_otp(self, user_ref: str) -> dict:
+    def create_otp(self, user_ref: str, delivery_channel: DeliveryChannel) -> dict:
         """Requests PortaSwitch to generate an OTP token.
 
         Parameters:
@@ -110,14 +99,15 @@ class AdminAPI(HTTPAPIConnectorWithLogin):
 
         """
         return self._send_request(
-            module='AccessControl',
-            method='create_otp',
+            module="AccessControl",
+            method="create_otp",
             params={
-                'send_to': 'account',
-                'id': user_ref,
-                'notification_type': self.__otp_delivery_channel,
-                'operation': 'General',
-            }, )
+                "send_to": "account",
+                "id": user_ref,
+                "notification_type": "mail" if delivery_channel == DeliveryChannel.email else delivery_channel,
+                "operation": "General",
+            },
+        )
 
     def verify_otp(self, otp_token: str) -> dict:
         """Requests PortaSwitch to verify the OTP token.
@@ -129,12 +119,13 @@ class AdminAPI(HTTPAPIConnectorWithLogin):
             dict: The API method execution result.
         """
         return self._send_request(
-            module='AccessControl',
-            method='verify_otp',
+            module="AccessControl",
+            method="verify_otp",
             params={
-                'one_time_password': otp_token,
-                'operation': 'General',
-            }, )
+                "one_time_password": otp_token,
+                "operation": "General",
+            },
+        )
 
     def get_account_info(self, **params) -> dict:
         """Returns the account_info by i_account.
@@ -146,21 +137,17 @@ class AdminAPI(HTTPAPIConnectorWithLogin):
             dict: The API method execution result that contains an account info.
         """
         return self._send_request(
-            module='Account',
-            method='get_account_info',
-            params={
-                'without_service_features': 1,
-                **params
-            })
+            module="Account", method="get_account_info", params={"without_service_features": 1, **params}
+        )
 
     def get_env_info(self) -> dict:
         """Returns PortaSwitch environment info.
         Returns:
             dict: The API method execution result that contains an env info.
         """
-        response = self._send_request(module='Env', method='get_env_info', params={})
+        response = self._send_request(module="Env", method="get_env_info", params={})
 
-        return response.get('env_info', dict())
+        return response.get("env_info", dict())
 
     def _send_request(self, module: str, method: str, params: dict, turn_off_login: bool = False):
         """Sends the Porta-Billing API method by means of HTTP POST request.
@@ -182,11 +169,9 @@ class AdminAPI(HTTPAPIConnectorWithLogin):
         result = self.send_rest_request(
             method="POST",
             path=f"/rest/{module}/{method}",
-            json={
-                "params": params
-            },
+            json={"params": params},
             turn_off_login=turn_off_login,
-            user=self._api_user
+            user=self._api_user,
         )
 
         logging.debug(f"Processing the Admin.API result: {module}/{method}/{params}: \n {result}")

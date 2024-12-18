@@ -4,9 +4,9 @@ from typing import Final, List, Union, Iterator
 
 import requests
 
-from app_config import AppConfig
 from bss.adapters.portaswitch.types import PortaSwitchMailboxMessageFlag, PortaSwitchMailboxMessageFlagAction
 from bss.http_api import HTTPAPIConnector, AuthSessionData
+from bss.adapters.portaswitch.config import PortaSwitchSettings
 
 DEFAULT_CHUNK_SIZE: Final[int] = 8192
 
@@ -14,25 +14,22 @@ DEFAULT_CHUNK_SIZE: Final[int] = 8192
 class AccountAPI(HTTPAPIConnector):
     """Provides access to Admin realm of the PortaSwitch API."""
 
-    #: Shows whether this interface shall verify HTTPS certificates while accessing the server
-    __shall_verify_https: Final[bool] = True
-
-    def __init__(self, config: AppConfig):
+    def __init__(self, portaswitch_settings: PortaSwitchSettings):
         """The class constructor.
 
         Parameters:
             :config (app_config.AppConfig): The instance with all the service config options.
 
         """
-        api_server: str = config.get_conf_val('PortaSwitch', 'Account', 'API', 'Server')
+        api_server: str = portaswitch_settings.ACCOUNT_API_SERVER
 
-        self.__shall_verify_https: bool = config.get_conf_val('PortaSwitch', 'Verify', 'HTTPS',
-                                                              default='True') == 'True'
+        self._verify_https = portaswitch_settings.VERIFY_HTTPS
 
         super().__init__(api_server)
 
-    def __send_request(self, module: str, method: str, params: dict, stream: bool | None = None,
-                       access_token: str | None = None) -> Union[dict, bytes, Iterator]:
+    def __send_request(
+        self, module: str, method: str, params: dict, stream: bool | None = None, access_token: str | None = None
+    ) -> Union[dict, bytes, Iterator]:
         """Sends the PortaBilling API method by means of HTTP POST request.
 
         Parameters:
@@ -49,16 +46,12 @@ class AccountAPI(HTTPAPIConnector):
 
         headers = None
         if access_token:
-            headers = {
-                'Authorization': f"Bearer {access_token}"
-            }
+            headers = {"Authorization": f"Bearer {access_token}"}
 
         result = self.send_rest_request(
             method="POST",
             path=f"/rest/{module}/{method}",
-            json={
-                "params": params
-            },
+            json={"params": params},
             headers=headers,
             stream=stream,
         )
@@ -66,10 +59,7 @@ class AccountAPI(HTTPAPIConnector):
         logging.debug(f"Processing the Account.API result: {module}/{method}/{params}: \n {result}")
         return result
 
-    def add_auth_info(self,
-                      url: str,
-                      request_params: dict,
-                      auth_session: AuthSessionData) -> dict:
+    def add_auth_info(self, url: str, request_params: dict, auth_session: AuthSessionData) -> dict:
         """Change the parameters of requests.request call to add
         there required authentication information (into headers,
         basic auth, etc.). The
@@ -85,7 +75,7 @@ class AccountAPI(HTTPAPIConnector):
             :(dict): The modified set of parameters for requests.request.
 
         """
-        request_params["verify"] = self.__shall_verify_https
+        request_params["verify"] = self._verify_https
 
         return request_params
 
@@ -102,16 +92,16 @@ class AccountAPI(HTTPAPIConnector):
         """
 
         headers = response.headers
-        if 'application/json' in headers.get('Content-Type', ''):
+        if "application/json" in headers.get("Content-Type", ""):
             return response.json()
 
-        if 'attachment' in headers.get('Content-Disposition', ''):
-            if 'chunked' in headers.get('Transfer-Encoding', ''):
+        if "attachment" in headers.get("Content-Disposition", ""):
+            if "chunked" in headers.get("Transfer-Encoding", ""):
                 return response.iter_content(DEFAULT_CHUNK_SIZE)
             else:
                 return response.content
 
-        raise ValueError('Not expected response')
+        raise ValueError("Not expected response")
 
     def login(self, login: str, password: str) -> dict:
         """Performs an account login by its login and password.
@@ -125,13 +115,8 @@ class AccountAPI(HTTPAPIConnector):
 
         """
         return self.__send_request(
-            module='Session',
-            method='login',
-            params={
-                'login': login,
-                'password': password,
-                'token': password
-            })
+            module="Session", method="login", params={"login": login, "password": password, "token": password}
+        )
 
     def logout(self, access_token: str) -> dict:
         """Performs an account logout.
@@ -144,11 +129,12 @@ class AccountAPI(HTTPAPIConnector):
 
         """
         return self.__send_request(
-            module='Session',
-            method='logout',
+            module="Session",
+            method="logout",
             params={
-                'access_token': access_token,
-            })
+                "access_token": access_token,
+            },
+        )
 
     def refresh(self, refresh_token: str) -> dict:
         """Performs an account login by its login and password.
@@ -161,11 +147,12 @@ class AccountAPI(HTTPAPIConnector):
 
         """
         return self.__send_request(
-            module='Session',
-            method='refresh_access_token',
+            module="Session",
+            method="refresh_access_token",
             params={
-                'refresh_token': refresh_token,
-            })
+                "refresh_token": refresh_token,
+            },
+        )
 
     def ping(self, access_token: str) -> dict:
         """Checks whether the access_token is valid.
@@ -178,11 +165,12 @@ class AccountAPI(HTTPAPIConnector):
 
         """
         return self.__send_request(
-            module='Session',
-            method='ping',
+            module="Session",
+            method="ping",
             params={
-                'access_token': access_token,
-            })
+                "access_token": access_token,
+            },
+        )
 
     def get_account_info(self, access_token: str) -> dict:
         """Returns the account_info of the account, which created a session related to
@@ -197,14 +185,15 @@ class AccountAPI(HTTPAPIConnector):
 
         """
         return self.__send_request(
-            module='Account',
-            method='get_account_info',
+            module="Account",
+            method="get_account_info",
             params={
-                'detailed_info': 1,  # to acquire the extension_id
-                'without_service_features': 1,
-                'limit_alias_did_number_list': 100,
+                "detailed_info": 1,  # to acquire the extension_id
+                "without_service_features": 1,
+                "limit_alias_did_number_list": 100,
             },
-            access_token=access_token)
+            access_token=access_token,
+        )
 
     def get_alias_list(self, access_token: str) -> dict:
         """Returns the alias list of the account, which created a session related to
@@ -219,14 +208,11 @@ class AccountAPI(HTTPAPIConnector):
             :(dict): The API method execution result that contains an account info.
 
         """
-        return self.__send_request(
-            module='Account',
-            method='get_alias_list',
-            params={},
-            access_token=access_token)
+        return self.__send_request(module="Account", method="get_alias_list", params={}, access_token=access_token)
 
-    def get_xdr_list(self, access_token: str, page: int, items_per_page: int,
-                     time_from: datetime, time_to: datetime) -> dict:
+    def get_xdr_list(
+        self, access_token: str, page: int, items_per_page: int, time_from: datetime, time_to: datetime
+    ) -> dict:
         """Returns the account_info of the account, which created a session related to
         the access_token.
 
@@ -243,17 +229,18 @@ class AccountAPI(HTTPAPIConnector):
 
         """
         return self.__send_request(
-            module='Account',
-            method='get_xdr_list',
+            module="Account",
+            method="get_xdr_list",
             params={
-                'get_total': 1,
-                'show_unsuccessful': 1,
-                'limit': items_per_page,
-                'offset': items_per_page * (page - 1),
-                'from_date': time_from.strftime('%Y-%m-%d %H:%M:%S'),
-                'to_date': time_to.strftime('%Y-%m-%d %H:%M:%S')
+                "get_total": 1,
+                "show_unsuccessful": 1,
+                "limit": items_per_page,
+                "offset": items_per_page * (page - 1),
+                "from_date": time_from.strftime("%Y-%m-%d %H:%M:%S"),
+                "to_date": time_to.strftime("%Y-%m-%d %H:%M:%S"),
             },
-            access_token=access_token)
+            access_token=access_token,
+        )
 
     def get_call_recording(self, recording_id: int, access_token: str) -> bytes:
         """Returns the bytes of the call recording file.
@@ -268,12 +255,13 @@ class AccountAPI(HTTPAPIConnector):
 
         """
         return self.__send_request(
-            module='CDR',
-            method='get_call_recording',
+            module="CDR",
+            method="get_call_recording",
             params={
-                'i_xdr': recording_id,
+                "i_xdr": recording_id,
             },
-            access_token=access_token)
+            access_token=access_token,
+        )
 
     def get_mailbox_messages(self, access_token: str) -> List[dict]:
         """
@@ -286,11 +274,11 @@ class AccountAPI(HTTPAPIConnector):
         """
 
         return self.__send_request(
-            module='Account',
-            method='get_mailbox_message_list',
+            module="Account",
+            method="get_mailbox_message_list",
             params={},
             access_token=access_token,
-        )['messages']
+        )["messages"]
 
     def get_mailbox_message_details(self, access_token: str, message_id: str) -> dict:
         """
@@ -304,8 +292,8 @@ class AccountAPI(HTTPAPIConnector):
         """
 
         return self.__send_request(
-            module='Account',
-            method='get_mailbox_message_details',
+            module="Account",
+            method="get_mailbox_message_details",
             params={
                 "message_uid": message_id,
             },
@@ -325,18 +313,20 @@ class AccountAPI(HTTPAPIConnector):
         """
 
         return self.__send_request(
-            module='Account',
-            method='get_mailbox_message_attachment',
-            params={
-                "message_uid": message_id,
-                "format": file_format
-            },
+            module="Account",
+            method="get_mailbox_message_attachment",
+            params={"message_uid": message_id, "format": file_format},
             stream=True,
             access_token=access_token,
         )
 
-    def set_mailbox_message_flag(self, access_token: str, message_id: str, flag: PortaSwitchMailboxMessageFlag,
-                                 action: PortaSwitchMailboxMessageFlagAction) -> dict:
+    def set_mailbox_message_flag(
+        self,
+        access_token: str,
+        message_id: str,
+        flag: PortaSwitchMailboxMessageFlag,
+        action: PortaSwitchMailboxMessageFlagAction,
+    ) -> dict:
         """
         Returns the mailbox message details of the account, which created a session related to the access_token.
             Parameters:
@@ -350,13 +340,9 @@ class AccountAPI(HTTPAPIConnector):
         """
 
         return self.__send_request(
-            module='Account',
-            method='set_mailbox_messages_flag',
-            params={
-                "action": action.value,
-                "flag": flag.value,
-                "message_uids": [message_id]
-            },
+            module="Account",
+            method="set_mailbox_messages_flag",
+            params={"action": action.value, "flag": flag.value, "message_uids": [message_id]},
             access_token=access_token,
         )
 
@@ -369,10 +355,8 @@ class AccountAPI(HTTPAPIConnector):
         """
 
         return self.__send_request(
-            module='Account',
-            method='delete_mailbox_messages',
-            params={
-                "message_uids": [message_id]
-            },
+            module="Account",
+            method="delete_mailbox_messages",
+            params={"message_uids": [message_id]},
             access_token=access_token,
         )

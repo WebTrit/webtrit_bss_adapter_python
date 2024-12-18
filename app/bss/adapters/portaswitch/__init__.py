@@ -1,2 +1,1 @@
-
-from .adapter import Adapter as PortaSwitchAdapter
+from .adapter import PortaSwitchAdapter

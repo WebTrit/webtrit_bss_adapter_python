@@ -9,8 +9,8 @@ class PortaSwitchAdminUser(APIUser):
 
 
 class PortaSwitchSignInCredentialsType(Enum):
-    SELF_CARE = 'self-care'
-    SIP = 'sip'
+    SELF_CARE = "self-care"
+    SIP = "sip"
 
     @classmethod
     def _missing_(cls, value):
@@ -18,8 +18,8 @@ class PortaSwitchSignInCredentialsType(Enum):
 
 
 class PortaSwitchContactsSelectingMode(Enum):
-    ACCOUNTS = 'accounts'
-    EXTENSIONS = 'extensions'
+    ACCOUNTS = "accounts"
+    EXTENSIONS = "extensions"
 
     @classmethod
     def _missing_(cls, value):
@@ -27,9 +27,9 @@ class PortaSwitchContactsSelectingMode(Enum):
 
 
 class PortaSwitchExtensionType(Enum):
-    UNASSIGNED = 'Unassigned'
-    ACCOUNT = 'Account'
-    GROUP = 'Group'
+    UNASSIGNED = "Unassigned"
+    ACCOUNT = "Account"
+    GROUP = "Group"
 
     @classmethod
     def _missing_(cls, value):
@@ -38,8 +38,8 @@ class PortaSwitchExtensionType(Enum):
 
 class PortaSwitchDualVersionSystem(Enum):
     UNSPECIFIED = None
-    SOURCE = 'source'
-    TARGET = 'target'
+    SOURCE = "source"
+    TARGET = "target"
 
     @classmethod
     def _missing_(cls, value):
@@ -47,20 +47,20 @@ class PortaSwitchDualVersionSystem(Enum):
 
 
 class PortaSwitchMailboxMessageFlag(Enum):
-    SEEN = 'Seen'
-    ANSWERED = 'Answered'
-    FLAGGED = 'Flagged'
+    SEEN = "Seen"
+    ANSWERED = "Answered"
+    FLAGGED = "Flagged"
 
 
 class PortaSwitchMailboxMessageFlagAction(Enum):
-    SET = 'set_flag'
-    UNSET = 'remove_flag'
+    SET = "set_flag"
+    UNSET = "remove_flag"
 
 
 class PortaSwitchMailboxMessageAttachmentFormat(Enum):
-    WAV = 'wav'
-    MP3 = 'mp3'
-    AU = 'au'
+    WAV = "wav"
+    MP3 = "mp3"
+    AU = "au"
 
     @classmethod
     def has_value(cls, value):
