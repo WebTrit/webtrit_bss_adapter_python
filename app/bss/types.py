@@ -133,6 +133,12 @@ from bss.models import (
     UserVoicemailMessageDeleteUnauthorizedErrorResponse as UserVoicemailMessageDeleteUnauthorizedErrorResponse,
     UserVoicemailMessageDeleteNotFoundErrorResponse as UserVoicemailMessageDeleteNotFoundErrorResponse,
     UserVoicemailMessageDeleteInternalServerErrorResponse as UserVoicemailMessageDeleteInternalServerErrorResponse,
+
+    # registration status
+    UserSIPRegistrationStatusSubmissionRequest as UserSIPRegistrationStatusSubmissionRequest,
+    UserSIPRegistrationStatusSubmissionsUnauthorizedErrorResponse as UserSIPRegistrationStatusSubmissionsUnauthorizedErrorResponse,
+    UserSIPRegistrationStatusSubmissionsUnprocessableEntityErrorResponse as UserSIPRegistrationStatusSubmissionsUnprocessableEntityErrorResponse,
+    UserSIPRegistrationStatusSubmissionsInternalServerErrorErrorResponse as UserSIPRegistrationStatusSubmissionsInternalServerErrorErrorResponse,
 )
 
 

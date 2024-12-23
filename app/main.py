@@ -107,6 +107,12 @@ from bss.types import (
     UserVoicemailMessageDeleteNotFoundErrorResponse,
     UserVoicemailMessageDeleteInternalServerErrorResponse,
     eval_as_bool,
+
+    # registration status
+    UserSIPRegistrationStatusSubmissionRequest,
+    UserSIPRegistrationStatusSubmissionsUnauthorizedErrorResponse,
+    UserSIPRegistrationStatusSubmissionsUnprocessableEntityErrorResponse,
+    UserSIPRegistrationStatusSubmissionsInternalServerErrorErrorResponse,
 )
 from bss.types import Capabilities, ExtendedUserInfo, Health, safely_extract_scalar_value
 from report_error import WebTritErrorException
@@ -921,6 +927,45 @@ def custom_method_private(
         tenant_id=x_webtrit_tenant_id,
         lang=accept_language,
     )
+
+
+@router.post(
+    '/user/sip-registration-status',
+    response_model=None,
+    responses={
+        '401': {'model': UserSIPRegistrationStatusSubmissionsUnauthorizedErrorResponse},
+        '422': {'model': UserSIPRegistrationStatusSubmissionsUnprocessableEntityErrorResponse},
+        '500': {'model': UserSIPRegistrationStatusSubmissionsInternalServerErrorErrorResponse},
+    },
+    tags=['user'],
+)
+def submit_user_sip_registration_status(
+        body: UserSIPRegistrationStatusSubmissionRequest,
+        auth_data: HTTPAuthorizationCredentials = Depends(security),
+        x_webtrit_tenant_id: Optional[str] = Header(None, alias=TENANT_ID_HTTP_HEADER),
+) -> Union[
+    UserSIPRegistrationStatusSubmissionsUnauthorizedErrorResponse,
+    UserSIPRegistrationStatusSubmissionsUnprocessableEntityErrorResponse, 
+    UserSIPRegistrationStatusSubmissionsInternalServerErrorErrorResponse,
+]:
+    """
+    Submit user's SIP registration status
+    """
+    global bss
+
+    is_method_allowed(Capabilities.sip_registration_status_submission)
+
+    access_token = auth_data.credentials
+    session = bss.validate_session(access_token)
+
+    user = ExtendedUserInfo(
+        user_id=safely_extract_scalar_value(session.user_id),
+        tenant_id=bss.default_id_if_none(x_webtrit_tenant_id)
+    )
+
+    bss.submit_user_sip_registration_status(user, body.status, body.timestamp, body.reason)
+
+    return Response(status_code=HTTP_204_NO_CONTENT, headers={'content-type': 'application/json'})
 
 
 app.include_router(router, prefix=API_VERSION_PREFIX)
