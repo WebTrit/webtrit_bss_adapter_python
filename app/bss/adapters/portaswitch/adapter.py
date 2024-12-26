@@ -20,7 +20,8 @@ from bss.types import (
     UserVoicemailsResponse,
     UserVoicemailMessagePatch,
     VoicemailMessageDetails,
-    SIPRegistrationStatus
+    UserEventGroup,
+    UserEventType,
 )
 from report_error import WebTritErrorException
 from .api import AccountAPI, AdminAPI
@@ -667,8 +668,8 @@ class PortaSwitchAdapter(BSSAdapter):
                 status_code=404, error_message=f"Method '{method_name}' not found", code="method_not_found"
             )
 
-    def submit_user_sip_registration_status(self, session: SessionInfo, user: UserInfo, status: SIPRegistrationStatus, timestamp: datetime, reason: Optional[str] = None) -> None:
-        """Submit user's SIP registration status"""
+    def create_user_event(self, session: SessionInfo, user: UserInfo, group: UserEventGroup, type: UserEventType, timestamp: datetime, data: Optional[dict] = None) -> None:
+        """Create user's event"""
         raise NotImplementedError()
 
     # region custom methods handlers

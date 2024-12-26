@@ -135,10 +135,12 @@ from bss.models import (
     UserVoicemailMessageDeleteInternalServerErrorResponse as UserVoicemailMessageDeleteInternalServerErrorResponse,
 
     # registration status
-    UserSIPRegistrationStatusSubmissionRequest as UserSIPRegistrationStatusSubmissionRequest,
-    UserSIPRegistrationStatusSubmissionsUnauthorizedErrorResponse as UserSIPRegistrationStatusSubmissionsUnauthorizedErrorResponse,
-    UserSIPRegistrationStatusSubmissionsUnprocessableEntityErrorResponse as UserSIPRegistrationStatusSubmissionsUnprocessableEntityErrorResponse,
-    UserSIPRegistrationStatusSubmissionsInternalServerErrorErrorResponse as UserSIPRegistrationStatusSubmissionsInternalServerErrorErrorResponse,
+    CreateUserEventRequest as CreateUserEventRequest,
+    CreateUserEventUnauthorizedErrorResponse as CreateUserEventUnauthorizedErrorResponse,
+    CreateUserEventInternalServerErrorErrorResponse as CreateUserEventInternalServerErrorErrorResponse,
+    CreateUserEventUnprocessableEntityErrorResponse as CreateUserEventUnprocessableEntityErrorResponse,
+    UserEventGroup as UserEventGroup,
+    UserEventType as UserEventType,
 )
 
 

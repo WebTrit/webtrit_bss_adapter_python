@@ -14,7 +14,8 @@ from bss.types import (UserInfo, EndUser, ContactInfo, CDRInfo,
                        UserCreateResponse,
                        CustomResponse, CustomRequest, UserVoicemailsResponse, UserVoicemailMessagePatch,
                        VoicemailMessageDetails,
-                       SIPRegistrationStatus,
+                       UserEventGroup,
+                       UserEventType,
                        eval_as_bool)
 from module_loader import ModuleLoader
 from report_error import raise_webtrit_error
@@ -140,7 +141,7 @@ class BSSAdapter(SessionManagement, OTPHandler,
         VOICEMAIL=dict(default=False, option=Capabilities.voicemail),
         INTERNAL_MESSAGING=dict(default=True, option=Capabilities.internal_messaging),
         SMS_MESSAGING=dict(default=False, option=Capabilities.sms_messaging),
-        SIP_REGISTRATION_STATUS_SUBMISSION=dict(default=False, option=Capabilities.sip_registration_status_submission),
+        USER_EVENTS=dict(default=False, option=Capabilities.user_events),
     )
     # what our adapter can do in general (what is coded)
     # should be overridden in the sub-class
@@ -232,8 +233,8 @@ class BSSAdapter(SessionManagement, OTPHandler,
         """Delete an existing user's voicemail message"""
         raise NotImplementedError("Override this method in your sub-class")
     
-    def submit_user_sip_registration_status(self, user: UserInfo, status: SIPRegistrationStatus, timestamp: datetime, reason: Optional[str] = None) -> None:
-        """Submit user's SIP registration status"""
+    def create_user_event(self, user: UserInfo, group: UserEventGroup, type: UserEventType, timestamp: datetime, data: Optional[dict] = None) -> None:
+        """Create user's event"""
         raise NotImplementedError("Override this method in your sub-class")
 
     @abstractmethod

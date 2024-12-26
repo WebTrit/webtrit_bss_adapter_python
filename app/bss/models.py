@@ -558,7 +558,8 @@ class SupportedEnum(Enum):
     cta_list = "cta_list"
     internal_messaging = "internalMessaging"
     sms_messaging = "smsMessaging"
-    sip_registration_status_submission = "sipRegistrationStatusSubmission"
+    user_events = "userEvents"
+
 
 class SystemInfoShowResponse(BaseModel):
     custom: Optional[Dict[str, str]] = Field(
@@ -922,27 +923,37 @@ class UserVoicemailMessageDeleteInternalServerErrorResponse(ErrorResponse):
     )
 
 
-class UserSIPRegistrationStatusSubmissionRequest(BaseModel):
-    status: SipStatus
-    timestamp: datetime = Field(None, description="The moment for which the status was submitted")
-    reason: Optional[str] = Field(None, description="The reason for the status change")
+class UserEventGroup(Enum):
+    SIP = "sip"
 
 
-class UserSIPRegistrationStatusSubmissionsUnauthorizedErrorResponse(ErrorResponse):
+class UserEventType(Enum):
+    REGISTERED = "registered"
+    UNREGISTERED = "unregistered"
+
+
+class CreateUserEventRequest(BaseModel):
+    group: UserEventGroup
+    type: UserEventType
+    data: Optional[dict] = Field(None, description="The data for the event")
+    timestamp: datetime = Field(None, description="The moment for which the event was submitted")
+
+
+class CreateUserEventUnauthorizedErrorResponse(ErrorResponse):
     code: Optional[str] = Field(
         None,
         description="`code` field values that are defined (but can be expanded) are:\n- `authorization_header_missing`\n- `bearer_credentials_missing`\n- `access_token_invalid`\n- `access_token_expired`\n- `unknown`",
     )
 
 
-class UserSIPRegistrationStatusSubmissionsInternalServerErrorErrorResponse(ErrorResponse):
+class CreateUserEventInternalServerErrorErrorResponse(ErrorResponse):
     code: Optional[str] = Field(
         None,
         description="`code` field values that are defined (but can be expanded) are:\n- `external_api_issue`",
     )
 
 
-class UserSIPRegistrationStatusSubmissionsUnprocessableEntityErrorResponse(ErrorResponse):
+class CreateUserEventUnprocessableEntityErrorResponse(ErrorResponse):
     code: Optional[str] = Field(
         None,
         description="`code` field values that are defined (but can be expanded) are:\n- `invalid_status`",

@@ -109,10 +109,10 @@ from bss.types import (
     eval_as_bool,
 
     # registration status
-    UserSIPRegistrationStatusSubmissionRequest,
-    UserSIPRegistrationStatusSubmissionsUnauthorizedErrorResponse,
-    UserSIPRegistrationStatusSubmissionsUnprocessableEntityErrorResponse,
-    UserSIPRegistrationStatusSubmissionsInternalServerErrorErrorResponse,
+    CreateUserEventRequest,
+    CreateUserEventUnauthorizedErrorResponse,
+    CreateUserEventInternalServerErrorErrorResponse,
+    CreateUserEventUnprocessableEntityErrorResponse,
 )
 from bss.types import Capabilities, ExtendedUserInfo, Health, safely_extract_scalar_value
 from report_error import WebTritErrorException
@@ -930,30 +930,30 @@ def custom_method_private(
 
 
 @router.post(
-    '/user/sip-registration-status',
+    '/user/core-events',
     response_model=None,
     responses={
-        '401': {'model': UserSIPRegistrationStatusSubmissionsUnauthorizedErrorResponse},
-        '422': {'model': UserSIPRegistrationStatusSubmissionsUnprocessableEntityErrorResponse},
-        '500': {'model': UserSIPRegistrationStatusSubmissionsInternalServerErrorErrorResponse},
+        '401': {'model': CreateUserEventUnauthorizedErrorResponse},
+        '422': {'model': CreateUserEventUnprocessableEntityErrorResponse},
+        '500': {'model': CreateUserEventInternalServerErrorErrorResponse},
     },
     tags=['user'],
 )
-def submit_user_sip_registration_status(
-        body: UserSIPRegistrationStatusSubmissionRequest,
+def create_user_core_event(
+        body: CreateUserEventRequest,
         auth_data: HTTPAuthorizationCredentials = Depends(security),
         x_webtrit_tenant_id: Optional[str] = Header(None, alias=TENANT_ID_HTTP_HEADER),
 ) -> Union[
-    UserSIPRegistrationStatusSubmissionsUnauthorizedErrorResponse,
-    UserSIPRegistrationStatusSubmissionsUnprocessableEntityErrorResponse, 
-    UserSIPRegistrationStatusSubmissionsInternalServerErrorErrorResponse,
+    CreateUserEventUnauthorizedErrorResponse,
+    CreateUserEventUnprocessableEntityErrorResponse, 
+    CreateUserEventInternalServerErrorErrorResponse,
 ]:
     """
-    Submit user's SIP registration status
+    Create user's event
     """
     global bss
 
-    is_method_allowed(Capabilities.sip_registration_status_submission)
+    is_method_allowed(Capabilities.user_events)
 
     access_token = auth_data.credentials
     session = bss.validate_session(access_token)
@@ -963,7 +963,7 @@ def submit_user_sip_registration_status(
         tenant_id=bss.default_id_if_none(x_webtrit_tenant_id)
     )
 
-    bss.submit_user_sip_registration_status(user, body.status, body.timestamp, body.reason)
+    bss.create_user_event(user, body.group, body.type, body.timestamp, body.data)
 
     return Response(status_code=HTTP_204_NO_CONTENT, headers={'content-type': 'application/json'})
 
