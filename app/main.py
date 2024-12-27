@@ -930,7 +930,7 @@ def custom_method_private(
 
 
 @router.post(
-    '/user/core-events',
+    '/user/events',
     response_model=None,
     responses={
         '401': {'model': CreateUserEventUnauthorizedErrorResponse},
