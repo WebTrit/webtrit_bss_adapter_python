@@ -944,6 +944,7 @@ def create_user_core_event(
         auth_data: HTTPAuthorizationCredentials = Depends(security),
         x_webtrit_tenant_id: Optional[str] = Header(None, alias=TENANT_ID_HTTP_HEADER),
 ) -> Union[
+    Response,
     CreateUserEventUnauthorizedErrorResponse,
     CreateUserEventUnprocessableEntityErrorResponse, 
     CreateUserEventInternalServerErrorErrorResponse,
@@ -963,7 +964,7 @@ def create_user_core_event(
         tenant_id=bss.default_id_if_none(x_webtrit_tenant_id)
     )
 
-    bss.create_user_event(user, body.group, body.type, body.timestamp, body.data)
+    bss.create_user_event(user, body.timestamp, body.group, body.type, body.data)
 
     return Response(status_code=HTTP_204_NO_CONTENT, headers={'content-type': 'application/json'})
 

@@ -233,7 +233,7 @@ class BSSAdapter(SessionManagement, OTPHandler,
         """Delete an existing user's voicemail message"""
         raise NotImplementedError("Override this method in your sub-class")
     
-    def create_user_event(self, user: UserInfo, group: UserEventGroup, type: UserEventType, timestamp: datetime, data: Optional[dict] = None) -> None:
+    def create_user_event(self, user: UserInfo, timestamp: datetime, group: UserEventGroup, type: UserEventType, data: Optional[dict] = None) -> None:
         """Create user's event"""
         raise NotImplementedError("Override this method in your sub-class")
 

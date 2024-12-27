@@ -622,6 +622,10 @@ class PortaSwitchAdapter(BSSAdapter):
 
             raise error
 
+    def create_user_event(self, user: UserInfo, timestamp: datetime, group: UserEventGroup, type: UserEventType, data: Optional[dict] = None) -> None:
+        """Create user's event"""
+        raise NotImplementedError()
+
     def create_new_user(self, user_data, tenant_id: str = None):
         """Create a new user as a part of the sign-up process - not supported yet"""
         raise NotImplementedError()
@@ -667,10 +671,6 @@ class PortaSwitchAdapter(BSSAdapter):
             raise WebTritErrorException(
                 status_code=404, error_message=f"Method '{method_name}' not found", code="method_not_found"
             )
-
-    def create_user_event(self, session: SessionInfo, user: UserInfo, group: UserEventGroup, type: UserEventType, timestamp: datetime, data: Optional[dict] = None) -> None:
-        """Create user's event"""
-        raise NotImplementedError()
 
     # region custom methods handlers
 
