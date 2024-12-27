@@ -201,6 +201,13 @@ class CustomResponse(Dict):
     pass
 
 
+class CustomPage(BaseModel):
+    title: Optional[str]
+    description: Optional[str]
+    url: str
+    extra_data: Dict[str, Any]
+
+
 class SessionCreateRequest(BaseModel):
     user_ref: Optional[UserRef]
     login: Optional[str] = Field(None, description="User's `login` on the **Adaptee**.")

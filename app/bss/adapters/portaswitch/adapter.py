@@ -5,7 +5,7 @@ from typing import Final, Iterator, Optional, Dict
 from app_config import AppConfig
 from bss.adapters import BSSAdapter
 from bss.dbs import TiedKeyValue
-from bss.models import DeliveryChannel, SipServer, UserCreateResponse, CustomRequest, CustomResponse
+from bss.models import DeliveryChannel, SipServer, UserCreateResponse, CustomRequest, CustomResponse, CustomPage
 from bss.types import (
     CallRecordingId,
     Capabilities,
@@ -23,6 +23,7 @@ from bss.types import (
     UserEventGroup,
     UserEventType,
 )
+from localization import get_translation_func
 from report_error import WebTritErrorException
 from .api import AccountAPI, AdminAPI
 from .config import Settings
@@ -122,9 +123,9 @@ class PortaSwitchAdapter(BSSAdapter):
         except WebTritErrorException as error:
             fault_code = extract_fault_code(error)
             if fault_code in (
-                "Server.Session.auth_failed",
-                "Server.Session.cannot_login_brute_force_activity",
-                "Client.Session.check_auth.failed_to_process_access_token",
+                    "Server.Session.auth_failed",
+                    "Server.Session.cannot_login_brute_force_activity",
+                    "Client.Session.check_auth.failed_to_process_access_token",
             ):
                 raise WebTritErrorException(
                     status_code=401,
@@ -218,7 +219,7 @@ class PortaSwitchAdapter(BSSAdapter):
                     status_code=422,
                     # code = OTPUserDataErrorCode.validation_error,
                     error_message="Failed to perform authentication using this account."
-                    "Try changing this account web-password.",
+                                  "Try changing this account web-password.",
                 )
 
             raise error
@@ -277,8 +278,8 @@ class PortaSwitchAdapter(BSSAdapter):
         except WebTritErrorException as error:
             faultcode = extract_fault_code(error)
             if faultcode in (
-                "Server.Session.refresh_access_token.refresh_failed",
-                "Client.Session.check_auth.failed_to_process_access_token",
+                    "Server.Session.refresh_access_token.refresh_failed",
+                    "Client.Session.check_auth.failed_to_process_access_token",
             ):
                 raise WebTritErrorException(
                     status_code=404,
@@ -392,7 +393,7 @@ class PortaSwitchAdapter(BSSAdapter):
                         dual_version_system = PortaSwitchDualVersionSystem(account.get("dual_version_system"))
                         if dual_version_system != PortaSwitchDualVersionSystem.SOURCE:
                             if not self._portaswitch_settings.CONTACTS_SKIP_WITHOUT_EXTENSION or account.get(
-                                "extension_id"
+                                    "extension_id"
                             ):
                                 contacts.append(Serializer.get_contact_info_by_account(account, i_account))
 
@@ -411,13 +412,13 @@ class PortaSwitchAdapter(BSSAdapter):
             raise error
 
     def retrieve_calls(
-        self,
-        session: SessionInfo,
-        user: UserInfo,
-        page: int,
-        items_per_page: int,
-        time_from: datetime | None = None,
-        time_to: datetime | None = None,
+            self,
+            session: SessionInfo,
+            user: UserInfo,
+            page: int,
+            items_per_page: int,
+            time_from: datetime | None = None,
+            time_to: datetime | None = None,
     ) -> tuple[list[CDRInfo], int]:
         """Returns the CDR history of the logged in PortaSwitch account.
 
@@ -517,7 +518,7 @@ class PortaSwitchAdapter(BSSAdapter):
             raise error
 
     def retrieve_voicemail_message_details(
-        self, session: SessionInfo, user: UserInfo, message_id: str
+            self, session: SessionInfo, user: UserInfo, message_id: str
     ) -> VoicemailMessageDetails:
         """Returns users voicemail message detail
         Parameters:
@@ -543,7 +544,7 @@ class PortaSwitchAdapter(BSSAdapter):
             raise error
 
     def retrieve_voicemail_message_attachment(
-        self, session: SessionInfo, message_id: str, file_format: str
+            self, session: SessionInfo, message_id: str, file_format: str
     ) -> Iterator:
         """Returns the binary representation for attachent of the voicemail message.
 
@@ -575,7 +576,7 @@ class PortaSwitchAdapter(BSSAdapter):
             raise error
 
     def patch_voicemail_message(
-        self, session: SessionInfo, message_id: str, body: UserVoicemailMessagePatch
+            self, session: SessionInfo, message_id: str, body: UserVoicemailMessagePatch
     ) -> UserVoicemailMessagePatch:
         """Update attributes for a user's voicebox message.
 
@@ -622,7 +623,8 @@ class PortaSwitchAdapter(BSSAdapter):
 
             raise error
 
-    def create_user_event(self, user: UserInfo, timestamp: datetime, group: UserEventGroup, type: UserEventType, data: Optional[dict] = None) -> None:
+    def create_user_event(self, user: UserInfo, timestamp: datetime, group: UserEventGroup, type: UserEventType,
+                          data: Optional[dict] = None) -> None:
         """Create user's event"""
         raise NotImplementedError()
 
@@ -635,38 +637,38 @@ class PortaSwitchAdapter(BSSAdapter):
         raise NotImplementedError()
 
     def custom_method_public(
-        self,
-        method_name: str,
-        data: CustomRequest,
-        headers: Optional[Dict] = None,
-        tenant_id: str = None,
-        lang: str = None,
+            self,
+            method_name: str,
+            data: CustomRequest,
+            headers: Optional[Dict] = None,
+            tenant_id: str = None,
+            lang: str = None,
     ) -> CustomResponse:
         attr_name = method_name.replace("-", "_")
         if method := getattr(self, attr_name, None):
             logging.debug(f"Processing custom public method {method_name} with {data} request")
 
-            return method(data=data)
+            return method(data=data, lang=lang)
         else:
             raise WebTritErrorException(
                 status_code=404, error_message=f"Method '{method_name}' not found", code="method_not_found"
             )
 
     def custom_method_private(
-        self,
-        session: SessionInfo,
-        user_id: str,
-        method_name: str,
-        data: CustomRequest,
-        headers: Optional[Dict] = None,
-        tenant_id: str = None,
-        lang: str = None,
+            self,
+            session: SessionInfo,
+            user_id: str,
+            method_name: str,
+            data: CustomRequest,
+            headers: Optional[Dict] = None,
+            tenant_id: str = None,
+            lang: str = None,
     ) -> CustomResponse:
         attr_name = f"_{method_name.replace('-', '_')}"
         if method := getattr(self, attr_name, None):
             logging.debug(f"Processing custom private method {method_name} from user {user_id} with {data} request")
 
-            return method(user_id=user_id, data=data)
+            return method(user_id=user_id, data=data, lang=lang)
         else:
             raise WebTritErrorException(
                 status_code=404, error_message=f"Method '{method_name}' not found", code="method_not_found"
@@ -674,13 +676,22 @@ class PortaSwitchAdapter(BSSAdapter):
 
     # region custom methods handlers
 
-    def _self_config_portal_url(self, user_id: str, data: CustomRequest) -> CustomResponse:
+    def _custom_pages(self, user_id: str, data: CustomRequest, lang: str = None) -> CustomResponse:
+        _ = get_translation_func(lang)
         account_info = self._admin_api.get_account_info(i_account=user_id).get("account_info")
         session_data = self._account_api.login(account_info["login"], account_info["password"])
 
-        return CustomResponse(
-            url=f"{self._settings.SELF_CONFIG_PORTAL_URL}?token={session_data['access_token']}",
-            expires_at=datetime.now(UTC) + timedelta(seconds=session_data["expires_in"]),
-        )
+        pages = []
+        if self._settings.SELF_CONFIG_PORTAL_URL:
+            token = session_data['access_token']
+            expires_at = datetime.now(UTC) + timedelta(seconds=session_data["expires_in"])
+
+            pages.append(CustomPage(
+                title=_("Self-config Portal"),
+                url=f"{self._settings.SELF_CONFIG_PORTAL_URL}?token={token}",
+                extra_data=dict(token=token, expires_at=expires_at)
+            ))
+
+        return CustomResponse(pages=pages)
 
     # endregion
