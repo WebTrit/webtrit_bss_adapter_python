@@ -72,7 +72,7 @@ ENV PORTASWITCH_CONTACTS_SKIP_WITHOUT_EXTENSION="True"
 ENV PORTASWITCH_OTP_IGNORE_ACCOUNTS="6088"
 
 # Ensures that the user info API hides the user balance (optional):
-ENV HIDE_BALANCE_IN_USER_INFO="True"
+ENV PORTASWITCH_HIDE_BALANCE_IN_USER_INFO="True"
 
 ENV PORTASWITCH_SELF_CONFIG_PORTAL_URL="https://portaone-self-config.onrender.com/"
 

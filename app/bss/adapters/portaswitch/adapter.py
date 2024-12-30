@@ -682,13 +682,13 @@ class PortaSwitchAdapter(BSSAdapter):
         session_data = self._account_api.login(account_info["login"], account_info["password"])
 
         pages = []
-        if self._settings.SELF_CONFIG_PORTAL_URL:
+        if self._portaswitch_settings.SELF_CONFIG_PORTAL_URL:
             token = session_data['access_token']
             expires_at = datetime.now(UTC) + timedelta(seconds=session_data["expires_in"])
 
             pages.append(CustomPage(
                 title=_("Self-config Portal"),
-                url=f"{self._settings.SELF_CONFIG_PORTAL_URL}?token={token}",
+                url=f"{self._portaswitch_settings.SELF_CONFIG_PORTAL_URL}?token={token}",
                 expires_at=expires_at,
                 extra_data=dict(token=token, expires_at=expires_at)
             ))
