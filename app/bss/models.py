@@ -205,6 +205,7 @@ class CustomPage(BaseModel):
     title: Optional[str]
     description: Optional[str]
     url: str
+    expires_at: Optional[datetime]
     extra_data: Dict[str, Any]
 
 

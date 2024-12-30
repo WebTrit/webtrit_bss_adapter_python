@@ -689,6 +689,7 @@ class PortaSwitchAdapter(BSSAdapter):
             pages.append(CustomPage(
                 title=_("Self-config Portal"),
                 url=f"{self._settings.SELF_CONFIG_PORTAL_URL}?token={token}",
+                expires_at=expires_at,
                 extra_data=dict(token=token, expires_at=expires_at)
             ))
 
