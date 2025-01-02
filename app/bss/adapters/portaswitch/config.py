@@ -1,6 +1,6 @@
-from typing import Optional
+from typing import Optional, List, Union
 
-from pydantic import BaseSettings
+from pydantic import BaseSettings, validator
 
 from .types import (
     PortaSwitchContactsSelectingMode,
@@ -19,10 +19,14 @@ class PortaSwitchSettings(BaseSettings):
     VERIFY_HTTPS: Optional[bool] = True
     SIGNIN_CREDENTIALS: PortaSwitchSignInCredentialsType = PortaSwitchSignInCredentialsType.SELF_CARE
     CONTACTS_SELECTING: PortaSwitchContactsSelectingMode = PortaSwitchContactsSelectingMode.ACCOUNTS
-    CONTACTS_SELECTING_EXTENSION_TYPES: list[PortaSwitchExtensionType] = list(PortaSwitchExtensionType)
+    CONTACTS_SELECTING_EXTENSION_TYPES: Union[List[PortaSwitchExtensionType], str] = list(PortaSwitchExtensionType)
     CONTACTS_SKIP_WITHOUT_EXTENSION: bool = False
     HIDE_BALANCE_IN_USER_INFO: Optional[bool] = False
     SELF_CONFIG_PORTAL_URL: Optional[str] = None
+
+    @validator("CONTACTS_SELECTING_EXTENSION_TYPES", pre=True)
+    def decode_contacts_selection_extension_types(cls, v: str) -> List[PortaSwitchExtensionType]:
+        return [PortaSwitchExtensionType(x) for x in v.split(';')]
 
     class Config:
         env_prefix = "PORTASWITCH_"
@@ -31,7 +35,11 @@ class PortaSwitchSettings(BaseSettings):
 
 
 class OTPSettings(BaseSettings):
-    IGNORE_ACCOUNTS: list[str] = []
+    IGNORE_ACCOUNTS: Union[List[str], str] = []
+
+    @validator("IGNORE_ACCOUNTS", pre=True)
+    def decode_ignore_accounts(cls, v: str) -> List[str]:
+        return [str(x) for x in v.split(';')]
 
     class Config:
         env_prefix = "OTP_"
