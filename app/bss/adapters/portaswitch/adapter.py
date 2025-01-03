@@ -47,7 +47,7 @@ class PortaSwitchAdapter(BSSAdapter):
 
     """
 
-    VERSION: Final[str] = "0.1.3"
+    VERSION: Final[str] = "0.1.4"
     OTP_DELIVERY_CHANNEL: Final[DeliveryChannel] = DeliveryChannel.email
     CAPABILITIES: Final[Capabilities] = [
         Capabilities.otpSignin,
