@@ -25,8 +25,8 @@ class PortaSwitchSettings(BaseSettings):
     SELF_CONFIG_PORTAL_URL: Optional[str] = None
 
     @validator("CONTACTS_SELECTING_EXTENSION_TYPES", pre=True)
-    def decode_contacts_selection_extension_types(cls, v: str) -> List[PortaSwitchExtensionType]:
-        return [PortaSwitchExtensionType(x) for x in v.split(';')]
+    def decode_contacts_selection_extension_types(cls, v: Union[List, str]) -> List[PortaSwitchExtensionType]:
+        return [PortaSwitchExtensionType(x) for x in v.split(';')] if isinstance(v, str) else v
 
     class Config:
         env_prefix = "PORTASWITCH_"
@@ -39,7 +39,7 @@ class OTPSettings(BaseSettings):
 
     @validator("IGNORE_ACCOUNTS", pre=True)
     def decode_ignore_accounts(cls, v: str) -> List[str]:
-        return [str(x) for x in v.split(';')]
+        return [str(x) for x in v.split(';')] if isinstance(v, str) else v
 
     class Config:
         env_prefix = "OTP_"
