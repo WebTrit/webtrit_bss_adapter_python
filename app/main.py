@@ -155,7 +155,7 @@ def is_method_allowed(method: Capabilities) -> Response:
 
 
 @app.get(
-    "/health-check",
+    "/api/health-check",
     response_model=Health,
 )
 def health_check() -> Health:
