@@ -12,14 +12,14 @@ from app_config import AppConfig
 from bss.sessions import configure_session_storage
 from bss.http_api import HTTPAPIConnectorWithLogin, OAuthSessionData, APIUser
 from bss.dbs.firestore import FirestoreKeyValue
-from typing import Union, List, Dict, Tuple, Optional
+from typing import List, Dict, Tuple, Optional
 from datetime import datetime, timedelta, UTC
 from pydantic import BaseModel, Field
 import logging
 import re
 
 
-VERSION = "0.2.1"
+VERSION = "0.3.1"
 
 # Interface to Netsapiens cloud PBX https://docs.ns-api.com/reference/
 
@@ -184,7 +184,7 @@ class NetsapiensAPI(HTTPAPIConnectorWithLogin):
         
         raise WebTritErrorException(
             status_code=401, 
-            error_message=f"Unable to refresh API token, user has to re-login"
+            error_message="Unable to refresh API token, user has to re-login"
         )
     
     DEVICE_PATH = "/ns-api/v2/domains/<domain>/users/<user_id>/devices"
@@ -206,7 +206,7 @@ class NetsapiensAPI(HTTPAPIConnectorWithLogin):
                     # TODO: ensure it is visible in the app
                     raise WebTritErrorException(
                         status_code=422,
-                        error_message=f"Cannot find a proper device entry on Netsapiens side",
+                        error_message=f"Cannot find a proper device entry on Netsapiens side in {device_list}",
                     )
                 return correct_device
 
@@ -253,9 +253,6 @@ class NetsapiensAPI(HTTPAPIConnectorWithLogin):
         return cdr_list
 
 
-
-
-
 class NetsapiensAdapter(BSSAdapter):
     """Connect WebTrit and Netsapiens. Authenticate a user using the API, 
     retrieve user's SIP credentials to be used by
@@ -263,9 +260,8 @@ class NetsapiensAdapter(BSSAdapter):
     be provided as 'Cloud PBX' contacts).
     Currently does not support OTP login.
     
-    
     Config variables:
-    
+           
     NETSAPIENS_CLIENTS = JSON string with a list of dicts, each containing:
         - client_id
             For API access
@@ -278,24 +274,46 @@ class NetsapiensAdapter(BSSAdapter):
         - device_filter  
             used to find the correct entry in the list of devices (searches for
             the given string in the name-full-name field). Default: "WebTrit"
-           """
-    
-    def __init__(self, config: AppConfig):
-        super().__init__(config)
+    NETSAPIENS_CLIENTS_FIRESTORE = "<name of the collection in Firestore>"
+        Alternative method for storing the list of client, more suitable for
+        production systems. The clients are stored in the Firestore
+        collection. 
 
-        self.clients = {}
-        if client_list := config.get_conf_val(
-            "Netsapiens", "Clients", default=""
-        ):
+    Either NETSAPIENS_CLIENTS or NETSAPIENS_CLIENTS_FIRESTORE env var should be defined.
+    """
+    
+    def get_client_list(self, config: AppConfig) -> List[NetsapiensClient]:
+        """Get the list of Netsapiens clients"""
+            
+        if collection := config.get_conf_val("Netsapiens", "Clients", "Firestore",
+                                        default=""):
+            cfg = FirestoreKeyValue(collection_name=collection)
+            clients = {
+                k: NetsapiensClient(**v)
+                for k, v in cfg.items()
+            }
+            return clients
+        elif client_list := config.get_conf_val(
+                "Netsapiens", "Clients", default=""
+            ):
             logging.debug(f"Loading the client list from {client_list}")
             try:
-                self.clients = {
+                clients = {
                     c.get("domain"): NetsapiensClient(**c)
                     for c in load_json(client_list)
                 }
             except JSONDecodeError as e:
                 logging.error(f"Could not parse the client list {client_list}: {e}")
+            return clients
+        
+        raise ValueError("Netsapiens client list is not defined in the config " +
+                             "specify either NETSAPIENS_CLIENTS or NETSAPIENS_CLIENTS_FIRESTORE")
 
+    def __init__(self, config: AppConfig):
+        super().__init__(config)
+
+        self.clients = self.get_client_list(config)
+   
         self.api_client = NetsapiensAPI(
             api_server= "http://localhost", # does not really matter
             netsapiens_clients=self.clients
@@ -305,7 +323,7 @@ class NetsapiensAdapter(BSSAdapter):
 
     @classmethod
     def name(cls) -> str:
-        return f"Netsapiens adapter"
+        return "Netsapiens adapter"
 
     @classmethod
     def version(cls) -> str:
