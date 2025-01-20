@@ -178,25 +178,6 @@ class OTP(BaseModel):
     expires_at: datetime
 
 
-class SessionInfo(SessionResponse):
-    """Info about a session, initiated by WebTrit core on behalf of user"""
-    # long_life_refresh: bool = False
-    expires_at: Optional[datetime] = None
-    tenant_id: Optional[str] = None
-    def still_active(self, timestamp=datetime.now()) -> bool:
-        """Check whether the session has not yet expired"""
-
-        return self.expires_at > timestamp
-
-class Health(BaseModel):
-    status: Optional[str] = Field(
-        None, description="A response from the server.", example="OK"
-    )
-
-
-
-
-
 def orjson_dumps(v, *, default):
     return orjson.dumps(v, default=default).decode('utf-8')
 
@@ -206,6 +187,24 @@ class Serialiazable(BaseModel):
     class Config:
         json_loads = orjson.loads
         json_dumps = orjson_dumps
+
+
+class SessionInfo(SessionResponse, Serialiazable):
+    """Info about a session, initiated by WebTrit core on behalf of user"""
+    # long_life_refresh: bool = False
+    expires_at: Optional[datetime] = None
+    tenant_id: Optional[str] = None
+    document_ttl: Optional[datetime] = None  # internal TTL used to automatically delete sessions from the Firestore
+
+    def still_active(self, timestamp=datetime.now()) -> bool:
+        """Check whether the session has not yet expired"""
+
+        return self.expires_at > timestamp
+
+class Health(BaseModel):
+    status: Optional[str] = Field(
+        None, description="A response from the server.", example="OK"
+    )
 
 
 class SuccessResponse(BaseModel):
