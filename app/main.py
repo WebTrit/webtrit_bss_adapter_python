@@ -939,7 +939,7 @@ def custom_method_private(
     },
     tags=['user'],
 )
-def create_user_core_event(
+def create_user_event(
         body: CreateUserEventRequest,
         auth_data: HTTPAuthorizationCredentials = Depends(security),
         x_webtrit_tenant_id: Optional[str] = Header(None, alias=TENANT_ID_HTTP_HEADER),
