@@ -103,7 +103,6 @@ class Serializer:
             is_current_user=account_info["i_account"] == current_user,
             alias_name="",  # TODO: shall we fill it?
             company_name=account_info.get("companyname", ""),  # TODO: PortaSwitch sometimes does
-            # not return it. Why?
             email=account_info.get("email", None),
             first_name=account_info.get("firstname", ""),
             last_name=account_info.get("lastname", ""),
@@ -143,6 +142,23 @@ class Serializer:
                 ext=extension_info.get("id"),
                 main=extension_info.get("id"),
                 sms=[number["did_number"] for number in extension_info["alias_did_number_list"]],
+            ),
+        )
+
+    @staticmethod
+    def get_contact_info_by_phonebook_record(phonebook_record_info: dict) -> ContactInfo:
+        """Forms ContactInfo based on the input phonebook_record.
+        Parameters:
+            phonebook_record_info: dict: The information about the phonebook record to be added to ContactInfo.
+
+        Returns:
+            ContactInfo: The filled structure of ContactInfo.
+        """
+
+        return ContactInfo(
+            alias_name=phonebook_record_info.get("name", ""),
+            numbers=Numbers(
+                main=phonebook_record_info.get("phone_number"),
             ),
         )
 

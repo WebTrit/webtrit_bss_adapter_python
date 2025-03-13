@@ -25,6 +25,7 @@ from bss.types import (
 )
 from localization import get_translation_func
 from report_error import WebTritErrorException
+
 from .api import AccountAPI, AdminAPI
 from .config import Settings
 from .serializer import Serializer
@@ -367,9 +368,8 @@ class PortaSwitchAdapter(BSSAdapter):
 
         """
         try:
-            account_info = self._account_api.get_account_info(safely_extract_scalar_value(session.access_token))[
-                "account_info"
-            ]
+            access_token = safely_extract_scalar_value(session.access_token)
+            account_info = self._account_api.get_account_info(access_token)["account_info"]
             i_customer = int(account_info["i_customer"])
             i_account = int(account_info["i_account"])
 
@@ -397,6 +397,30 @@ class PortaSwitchAdapter(BSSAdapter):
                                     "extension_id"
                             ):
                                 contacts.append(Serializer.get_contact_info_by_account(account, i_account))
+
+                    return contacts
+
+                case PortaSwitchContactsSelectingMode.PHONEBOOK:
+                    accounts = self._admin_api.get_account_list(i_customer)["account_list"]
+                    phonebook = self._account_api.get_phonebook_list(access_token, 1, 100)['phonebook_rec_list']
+                    number_to_accounts = {account["id"]: account for account in accounts}
+
+                    contacts = []
+                    for record in phonebook:
+                        # Normalize phone number by removing '+' prefix
+                        phonebook_record_number = record.get("phone_number").replace("+", "")
+                        phonebook_contact_info = Serializer.get_contact_info_by_phonebook_record(record)
+
+                        if account := number_to_accounts.get(phonebook_record_number):
+                            # If we found a matching account, use its contact info but update with phonebook data
+                            contact = Serializer.get_contact_info_by_account(account, i_account)
+                            contact.alias_name = phonebook_contact_info.alias_name
+                            contact.numbers.main = phonebook_record_number
+                        else:
+                            # No matching account found, use phonebook contact info as is
+                            contact = phonebook_contact_info
+
+                        contacts.append(contact)
 
                     return contacts
 

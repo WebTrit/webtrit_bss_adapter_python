@@ -56,6 +56,7 @@ ENV PORTASWITCH_SIGNIN_CREDENTIALS="<signin-credentials>"
 # Defines contacts list selection mode, with the following possible values (optional):
 # * accounts - account info from get_accounts_list API response (default value)
 # * extensions - extension info from get_extensions_list API response
+# * phonebook - phonebook records from get_phonebook_list API response
 ENV PORTASWITCH_CONTACTS_SELECTING="<contacts-selecting>"
 
 # Defines a list of extension types for PORTASWITCH_CONTACTS_SELECTING=extensions mode, with the following possible values (optional):

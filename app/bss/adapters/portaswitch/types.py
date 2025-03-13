@@ -20,6 +20,7 @@ class PortaSwitchSignInCredentialsType(Enum):
 class PortaSwitchContactsSelectingMode(Enum):
     ACCOUNTS = "accounts"
     EXTENSIONS = "extensions"
+    PHONEBOOK = "phonebook"
 
     @classmethod
     def _missing_(cls, value):

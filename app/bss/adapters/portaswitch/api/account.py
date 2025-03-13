@@ -240,6 +240,27 @@ class AccountAPI(HTTPAPIConnector):
             access_token=access_token,
         )
 
+    def get_phonebook_list(self, access_token: str, page: int, items_per_page: int) -> dict:
+        """Return the phonebook list of the account.
+
+        Args:
+            access_token (str): Token that authenticates the API user in the PortaBilling API using the account realm.
+            page (int): Shows what page of the phonebook to return.
+            items_per_page (int): Shows the number of items to return.
+
+        Returns:
+            dict: API method execution result containing phonebook items.
+        """
+        return self.__send_request(
+            module="Account",
+            method="get_phonebook_list",
+            params={
+                "get_total": 1,
+                "limit": items_per_page,
+                "offset": items_per_page * (page - 1),
+            },
+            access_token=access_token)
+
     def get_call_recording(self, recording_id: int, access_token: str) -> bytes:
         """Returns the bytes of the call recording file.
 
