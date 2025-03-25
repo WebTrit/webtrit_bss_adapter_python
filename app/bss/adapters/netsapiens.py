@@ -89,7 +89,7 @@ class NetsapiensAPI(HTTPAPIConnectorWithLogin):
         """Obtain the NS client object for the given user"""
         uid, domain = self.split_uid(user_id)
         if domain:
-            return self.clients.get(domain)
+            return next((client for client in self.clients.values() if client.domain == domain), None)
      
         raise KeyError(f"Could not find a client entry for {user_id}")
     
@@ -282,7 +282,7 @@ class NetsapiensAdapter(BSSAdapter):
     Either NETSAPIENS_CLIENTS or NETSAPIENS_CLIENTS_FIRESTORE env var should be defined.
     """
     
-    def get_client_list(self, config: AppConfig) -> List[NetsapiensClient]:
+    def get_client_list(self, config: AppConfig) -> Dict[str, NetsapiensClient]:
         """Get the list of Netsapiens clients"""
             
         if collection := config.get_conf_val("Netsapiens", "Clients", "Firestore",
@@ -394,7 +394,7 @@ class NetsapiensAdapter(BSSAdapter):
                 status_code=422,
                 error_message=f"Invalid login {user.login}, it should contain both username and client id, e.g. 100@abc",
             )
-        client = self.clients.get(domain)
+        client = next((client for client in self.clients.values() if client.domain == domain), None)
         if client is None:
             raise WebTritErrorException(
                 status_code=422,
