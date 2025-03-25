@@ -19,7 +19,7 @@ import logging
 import re
 
 
-VERSION = "0.3.1"
+VERSION = "0.3.2"
 
 # Interface to Netsapiens cloud PBX https://docs.ns-api.com/reference/
 
@@ -289,7 +289,7 @@ class NetsapiensAdapter(BSSAdapter):
                                         default=""):
             cfg = FirestoreKeyValue(collection_name=collection)
             clients = {
-                k: NetsapiensClient(**v)
+                v.get("domain"): NetsapiensClient(**v)
                 for k, v in cfg.items()
             }
             return clients
@@ -313,7 +313,8 @@ class NetsapiensAdapter(BSSAdapter):
         super().__init__(config)
 
         self.clients = self.get_client_list(config)
-   
+        logging.debug(f"NS Clients: {self.clients}")
+        
         self.api_client = NetsapiensAPI(
             api_server= "http://localhost", # does not really matter
             netsapiens_clients=self.clients
