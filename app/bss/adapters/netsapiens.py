@@ -34,12 +34,9 @@ class NetsapiensDeviceFilter:
         # Marker of the correct device entry in the list of devices
         self.pattern = pattern
 
-    def find_device_entry(self, devices: List[Dict]) -> Dict:
+    def find_device_entry(self, devices: List[Dict]) -> Optional[Dict]:
         """Find the device entry that matches the pattern"""
-        for dev in devices:
-            if self.pattern in dev.get("name-full-name", ""):
-                return dev
-        return None
+        return next((device for device in devices if self.pattern == device.get("name-full-name", "")), None)
     
 class NetsapiensClient(BaseModel):
     client_id: str = Field(default=None,
@@ -188,31 +185,30 @@ class NetsapiensAPI(HTTPAPIConnectorWithLogin):
         )
     
     DEVICE_PATH = "/ns-api/v2/domains/<domain>/users/<user_id>/devices"
-    def get_extension(self, user_id: str) -> Dict:
+
+    def get_extension(self, user_id: str) -> Optional[Dict]:
         """Get the extension info"""
 
         uid, domain = self.split_uid(user_id)
         path = self.DEVICE_PATH.replace("<domain>", domain).replace("<user_id>", uid)
 
-        device_list = self.send_rest_request("GET", path, json={},
-                                           user=NetsapiensUser(user_id=user_id))
-        if device_list:
-            ns_filter = NetsapiensDeviceFilter(pattern = self.get_client(user_id).device_filter)
-            if isinstance(device_list, list):
-                # need to figure out which one is the right one
-                correct_device = ns_filter.find_device_entry(device_list)
+        device_list = self.send_rest_request("GET", path, json={}, user=NetsapiensUser(user_id=user_id))
+        if not device_list:
+            return None
 
-                if correct_device is None:
-                    # TODO: ensure it is visible in the app
-                    raise WebTritErrorException(
-                        status_code=422,
-                        error_message=f"Cannot find a proper device entry on Netsapiens side in {device_list}",
-                    )
-                return correct_device
+        ns_filter = NetsapiensDeviceFilter(pattern=self.get_client(user_id).device_filter)
+        if isinstance(device_list, list):
+            # need to figure out which one is the right one
+            correct_device = ns_filter.find_device_entry(device_list)
+            if not correct_device:
+                # TODO: ensure it is visible in the app
+                raise WebTritErrorException(
+                    status_code=422,
+                    error_message=f"Cannot find a proper device entry on Netsapiens side in {device_list}",
+                )
+            return correct_device
 
-            return device_list
-
-        return None
+        return device_list
     
     CONTACTS_PATH = "/ns-api/v2/domains/<domain>/users/<user_id>/contacts"
     def get_all_extensions(self, user_id: str) -> List[Dict]:
@@ -424,22 +420,19 @@ class NetsapiensAdapter(BSSAdapter):
         """Obtain user's information - most importantly, his/her SIP credentials."""
 
         device = self.api_client.get_extension(user.user_id)
-        if device:
-            # need to append the info like email address from contacts
-            ext_list = self.api_client.get_all_extensions(user.user_id)
-            if ext_list:
-                # we need to find the correct "device" entry in the list
-                for ext in ext_list:
-                    if ext.get("uid") == user.user_id:
-                        device.update(ext)
-                        break
-            return self.netsapiens_to_webtrit_obj(device, produce_user_info=True)
+        if not device:
+            raise WebTritErrorException(status_code=404, error_message=f"User  with ID {user.user_id} not found")
 
-        # no such session
-        raise WebTritErrorException(
-            status_code=404, 
-            error_message=f"User  with ID {user.user_id} not found"
-        )
+        # need to append the info like email address from contacts
+        ext_list = self.api_client.get_all_extensions(user.user_id)
+        if ext_list:
+            # we need to find the correct "device" entry in the list
+            for ext in ext_list:
+                if ext.get("uid") == user.user_id:
+                    device.update(ext)
+                    break
+        return self.netsapiens_to_webtrit_obj(device, produce_user_info=True)
+
 
     def retrieve_contacts(self, session: SessionInfo, user: UserInfo) -> List[ContactInfo]:
         """List of other extensions in the PBX"""
@@ -529,7 +522,7 @@ class NetsapiensAdapter(BSSAdapter):
                 "port": int(components["port"]) if components["port"] else 5060,
             }
 
-        firstname =  ext.get("name-first-name", ext.get("name-full-name", "Unknown"))
+        firstname = ext.get("name-first-name", ext.get("name-full-name", ""))
         lastname = ext.get("name-last-name", "")
 
         # TODO: numbers
@@ -537,7 +530,6 @@ class NetsapiensAdapter(BSSAdapter):
             "company_name": "Netsapiens", # TODO?
             "first_name": firstname,
             "last_name": lastname,
-            "email": ext.get("email", "Unknown@unknown.com"),
             "numbers": Numbers(
                 ext=ext.get("user", ""),
                 main=ext.get("user", ""),
@@ -545,6 +537,9 @@ class NetsapiensAdapter(BSSAdapter):
             "balance": Balance( balance_type=BalanceType.inapplicable, )
         }
         display_name = ext.get("name-full-name", f"{lastname}, {firstname}")
+
+        if email := ext.get("email", None):
+            data["email"] = email
 
         if produce_user_info:
             sip_info = parse_sip_uri(ext.get("device-sip-registration-uri", ""))
@@ -568,7 +563,8 @@ class NetsapiensAdapter(BSSAdapter):
             # TODO: find out whether we can get the real
             # registration status via API - for now all extensions
             # are assumed to be registered
-            data["sip_status"] = SIPRegistrationStatus.registered
+            data["sip_status"] = SIPRegistrationStatus.notregistered \
+                if ext.get("device-sip-registration-state", "") == "unregistered" else SIPRegistrationStatus.registered
 
             return ContactInfo(**data)
 
