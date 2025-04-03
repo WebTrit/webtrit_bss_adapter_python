@@ -19,7 +19,7 @@ import logging
 import re
 
 
-VERSION = "0.3.2"
+VERSION = "0.3.3"
 
 # Interface to Netsapiens cloud PBX https://docs.ns-api.com/reference/
 
@@ -49,6 +49,7 @@ class NetsapiensClient(BaseModel):
                                description="SIP domain (returned after the login)")
     device_filter: str = Field(default="WebTrit",
                         description="Pattern to search for the correct device entry")
+    default_sip_port: int = Field(default=5060)
 
 
 class NetsapiensUser(APIUser):
@@ -350,6 +351,12 @@ class NetsapiensAdapter(BSSAdapter):
         """Not supported"""
         pass
 
+    def split_uid(self, uid: str) -> Tuple[str, str]:
+        """Split the user ID like abc@xyz.com into domain xyz.com and user name abc"""
+        parts = uid.split('@')
+        if len(parts) >= 2:
+            return (parts[0], parts[1])
+        return (None, None)
 
     def extract_user_id(self, user_data: object) -> str:
         """Extract user_id (unique and unmutable identifier of the user)
@@ -377,14 +384,7 @@ class NetsapiensAdapter(BSSAdapter):
         """Authenticate user with username and password and obtain an API token for
         further requests."""
 
-        def split_uid(uid: str) -> Tuple[str, str]:
-            """Split the user ID like abc@xyz.com into domain xyz.com and user name abc"""
-            parts = uid.split('@')
-            if len(parts) >= 2:
-                return (parts[0], parts[1])
-            return (None, None)
-        
-        username, domain = split_uid(user.login)
+        username, domain = self.split_uid(user.login)
 
         if not username or not domain:
             raise WebTritErrorException(
@@ -419,6 +419,8 @@ class NetsapiensAdapter(BSSAdapter):
     def retrieve_user(self, session: SessionInfo, user: UserInfo) -> EndUser:
         """Obtain user's information - most importantly, his/her SIP credentials."""
 
+        _username, domain = self.split_uid(user.user_id)
+        client = self.clients.get(domain)
         device = self.api_client.get_extension(user.user_id)
         if not device:
             raise WebTritErrorException(status_code=404, error_message=f"User  with ID {user.user_id} not found")
@@ -431,7 +433,7 @@ class NetsapiensAdapter(BSSAdapter):
                 if ext.get("uid") == user.user_id:
                     device.update(ext)
                     break
-        return self.netsapiens_to_webtrit_obj(device, produce_user_info=True)
+        return self.netsapiens_to_webtrit_obj(device, produce_user_info=True, default_sip_port=client.default_sip_port)
 
 
     def retrieve_contacts(self, session: SessionInfo, user: UserInfo) -> List[ContactInfo]:
@@ -479,7 +481,7 @@ class NetsapiensAdapter(BSSAdapter):
         # not yet implemented
         pass
 
-    def netsapiens_to_webtrit_obj(self, ext: dict, produce_user_info=True) -> dict:
+    def netsapiens_to_webtrit_obj(self, ext: dict, produce_user_info=True, default_sip_port=5060) -> dict:
         """Convert the JSON data returned by FreePBX API into an dictionary
         that can be used to crate a WebTrit object (either EndUser or ContactInfo)):
 
@@ -519,7 +521,7 @@ class NetsapiensAdapter(BSSAdapter):
                 "protocol": components["protocol"],
                 "username": components["username"],
                 "hostname": components["hostname"],
-                "port": int(components["port"]) if components["port"] else 5060,
+                "port": int(components["port"]) if components["port"] else default_sip_port,
             }
 
         firstname = ext.get("name-first-name", ext.get("name-full-name", ""))
@@ -545,7 +547,7 @@ class NetsapiensAdapter(BSSAdapter):
             sip_info = parse_sip_uri(ext.get("device-sip-registration-uri", ""))
             outbound_proxy = SIPServer(
                         host=ext.get("core-server"),
-                        port=5060, # TODO: figure out where to get it dynamically
+                        port=default_sip_port,
             )
             data["sip"] = SIPInfo(
                 username=ext.get("user"),
