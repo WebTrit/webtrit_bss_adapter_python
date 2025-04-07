@@ -550,7 +550,7 @@ class NetsapiensAdapter(BSSAdapter):
                         port=default_sip_port,
             )
             data["sip"] = SIPInfo(
-                username=ext.get("user"),
+                username=ext.get("device"),
                 # username=ext.get("login-username", ""),
                 display_name=display_name,
                 password=ext.get("device-sip-registration-password", ""),
