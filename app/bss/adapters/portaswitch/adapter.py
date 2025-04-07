@@ -658,8 +658,26 @@ class PortaSwitchAdapter(BSSAdapter):
         raise NotImplementedError()
 
     def signup(self, user_data, tenant_id: str = None) -> UserCreateResponse:
-        """Create a new user as a part of the sign-up process - not supported yet"""
-        raise NotImplementedError()
+        """Create a new user as a part of the sign-up process"""
+        access_token = user_data.get("access_token")
+        refresh_token = user_data.get("refresh_token")
+
+        if not access_token or not refresh_token:
+            raise WebTritErrorException(422, "Missing required access or refresh token parameters")
+
+        try:
+            account_info = self._account_api.get_account_info(access_token=access_token)["account_info"]
+
+            return SessionInfo(
+                user_id=account_info["i_account"],
+                access_token=access_token,
+                refresh_token=refresh_token,
+            )
+        except WebTritErrorException as error:
+            if extract_fault_code(error) == "Client.Session.check_auth.failed_to_process_access_token":
+                raise WebTritErrorException(status_code=404, error_message="User not found")
+
+            raise error
 
     def custom_method_public(
             self,
