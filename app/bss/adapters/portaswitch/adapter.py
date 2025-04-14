@@ -198,7 +198,7 @@ class PortaSwitchAdapter(BSSAdapter):
                 raise WebTritErrorException(status_code=404, error_message=f"Incorrect OTP code: {otp.code}")
 
             data: dict = self._admin_api.verify_otp(otp_token=otp.code)
-            if i_account not in self._otp_settings.IGNORE_ACCOUNTS and not data["success"]:
+            if str(i_account) not in self._otp_settings.IGNORE_ACCOUNTS and not data["success"]:
                 raise WebTritErrorException(status_code=404, error_message=f"Incorrect OTP code: {otp.code}")
 
             self._cached_otp_ids.pop(otp_id)
