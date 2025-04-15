@@ -50,6 +50,7 @@ class NetsapiensClient(BaseModel):
     device_filter: str = Field(default="WebTrit",
                         description="Pattern to search for the correct device entry")
     default_sip_port: int = Field(default=5060)
+    api_key: Optional[str] = Field(default=None)
 
 
 class NetsapiensUser(APIUser):
@@ -57,6 +58,7 @@ class NetsapiensUser(APIUser):
     password: str = Field(default=None)
     ns_client: NetsapiensClient = Field(default=None,
                                         description="Info about NS tenant")
+    api_key: Optional[str] = Field(default=None)
 
 class NetsapiensAPI(HTTPAPIConnectorWithLogin):
     def __init__(self, api_server: str, **kwargs):
@@ -187,13 +189,12 @@ class NetsapiensAPI(HTTPAPIConnectorWithLogin):
     
     DEVICE_PATH = "/ns-api/v2/domains/<domain>/users/<user_id>/devices"
 
-    def get_extension(self, user_id: str) -> Optional[Dict]:
+    def get_extension(self, user_id: str, api_key: Optional[str] = None) -> Optional[Dict]:
         """Get the extension info"""
 
         uid, domain = self.split_uid(user_id)
         path = self.DEVICE_PATH.replace("<domain>", domain).replace("<user_id>", uid)
-
-        device_list = self.send_rest_request("GET", path, json={}, user=NetsapiensUser(user_id=user_id))
+        device_list = self.send_rest_request("GET", path, json={}, user=NetsapiensUser(user_id=user_id, api_key=api_key))
         if not device_list:
             return None
 
@@ -421,9 +422,9 @@ class NetsapiensAdapter(BSSAdapter):
 
         _username, domain = self.split_uid(user.user_id)
         client = self.clients.get(domain)
-        device = self.api_client.get_extension(user.user_id)
+        device = self.api_client.get_extension(user.user_id, client.api_key)
         if not device:
-            raise WebTritErrorException(status_code=404, error_message=f"User  with ID {user.user_id} not found")
+            raise WebTritErrorException(status_code=404, error_message=f"User with ID {user.user_id} not found")
 
         # need to append the info like email address from contacts
         ext_list = self.api_client.get_all_extensions(user.user_id)

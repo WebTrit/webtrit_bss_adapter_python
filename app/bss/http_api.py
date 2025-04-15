@@ -244,6 +244,9 @@ class HTTPAPIConnectorWithLogin(HTTPAPIConnector):
             else:
                 auth_session = current_session
 
+            if hasattr(user, 'api_key') and user.api_key:
+                auth_session = OAuthSessionData(access_token=user.api_key)
+
         return super().send_rest_request(method, path, server,
                                          data, json, query_params,
                                          headers=headers,
