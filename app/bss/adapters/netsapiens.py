@@ -14,7 +14,7 @@ from bss.http_api import HTTPAPIConnectorWithLogin, OAuthSessionData, APIUser
 from bss.dbs.firestore import FirestoreKeyValue
 from typing import List, Dict, Tuple, Optional
 from datetime import datetime, timedelta, UTC
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ValidationError
 import logging
 import re
 
@@ -566,10 +566,13 @@ class NetsapiensAdapter(BSSAdapter):
             # TODO: find out whether we can get the real
             # registration status via API - for now all extensions
             # are assumed to be registered
-            data["sip_status"] = SIPRegistrationStatus.notregistered \
-                if ext.get("device-sip-registration-state", "") == "unregistered" else SIPRegistrationStatus.registered
-
-            return ContactInfo(**data)
+            data["sip_status"] = SIPRegistrationStatus.registered \
+                if ext.get("device-sip-registration-state", "") == "registered" else SIPRegistrationStatus.notregistered
+            try:
+                return ContactInfo(**data)
+            except ValidationError as e:
+                del data["email"]
+                return ContactInfo(**data)
 
     def map_disconnect_status(self, duration: int, status: str) -> ConnectStatus:
         """Map Netsapiens disconnect status to WebTrit CDR status"""
