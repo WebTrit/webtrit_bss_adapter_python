@@ -9,6 +9,8 @@ import requests
 
 from report_error import raise_webtrit_error
 import threading
+from request_trace import get_request_id
+import uuid
 
 
 # from bss.types import SignupExtAPIErrorCode as ExtAPIErrorCode
@@ -77,6 +79,26 @@ class HTTPAPIConnector(ABC):
 
         return request_params
 
+    def add_trace_info(self, request_params: dict) -> dict:
+        """Change the parameters of requests.request call to add there required tracing headers
+
+        Args:
+            request_params (dict): The current set of parameters for the
+                requests.request call. Most likely you will need include
+                "headers" key, as well as others like "json" or "data"
+
+        Returns:
+            dict: the modified set of parameters for requests.request. You can
+                add new keys (or remove the ones which are already there.
+        """
+        if "headers" not in request_params or request_params["headers"] is None:
+            request_params["headers"] = {}
+
+        request_params["headers"]["X-B3-TraceId"] = get_request_id()
+        request_params["headers"]["X-B3-SpanId"] = uuid.uuid4().hex[:16]
+
+        return request_params
+
     def send_rest_request(self,
                           method: str,
                           path: str,
@@ -96,7 +118,8 @@ class HTTPAPIConnector(ABC):
             'json': json if json else None,
             'stream': stream,
         }
-        params_final = self.add_auth_info(url, params, auth_session)
+        params_with_auth = self.add_auth_info(url, params, auth_session)
+        params_final = self.add_trace_info(params_with_auth)
 
         try:
             logging.debug(f"Sending {method} request to {url} with parameters {params_final}")
