@@ -738,4 +738,13 @@ class PortaSwitchAdapter(BSSAdapter):
 
         return CustomResponse(pages=pages)
 
+    def _external_page_access_token(self, user_id: str, data: CustomRequest, lang: str = None) -> CustomResponse:
+        account_info = self._admin_api.get_account_info(i_account=user_id).get("account_info")
+        session_data = self._account_api.login(account_info["login"], account_info["password"])
+
+        return CustomResponse(
+            token=session_data['access_token'],
+            expires_at=datetime.now(UTC) + timedelta(seconds=session_data["expires_in"])
+        )
+
     # endregion
