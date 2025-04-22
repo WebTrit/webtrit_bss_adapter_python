@@ -19,7 +19,7 @@ import logging
 import re
 
 
-VERSION = "0.3.3"
+VERSION = "0.3.4"
 
 # Interface to Netsapiens cloud PBX https://docs.ns-api.com/reference/
 
@@ -49,6 +49,7 @@ class NetsapiensClient(BaseModel):
                                description="SIP domain (returned after the login)")
     device_filter: str = Field(default="WebTrit",
                         description="Pattern to search for the correct device entry")
+    default_sip_outbound_proxy: Optional[str] = Field(default=None)
     default_sip_port: int = Field(default=5060)
     api_key: Optional[str] = Field(default=None)
 
@@ -434,7 +435,7 @@ class NetsapiensAdapter(BSSAdapter):
                 if ext.get("uid") == user.user_id:
                     device.update(ext)
                     break
-        return self.netsapiens_to_webtrit_obj(device, produce_user_info=True, default_sip_port=client.default_sip_port)
+        return self.netsapiens_to_webtrit_obj(device, produce_user_info=True, client=client)
 
 
     def retrieve_contacts(self, session: SessionInfo, user: UserInfo) -> List[ContactInfo]:
@@ -482,7 +483,7 @@ class NetsapiensAdapter(BSSAdapter):
         # not yet implemented
         pass
 
-    def netsapiens_to_webtrit_obj(self, ext: dict, produce_user_info=True, default_sip_port=5060) -> dict:
+    def netsapiens_to_webtrit_obj(self, ext: dict, produce_user_info=True, client: Optional[NetsapiensClient]=None) -> dict:
         """Convert the JSON data returned by FreePBX API into an dictionary
         that can be used to crate a WebTrit object (either EndUser or ContactInfo)):
 
@@ -522,7 +523,7 @@ class NetsapiensAdapter(BSSAdapter):
                 "protocol": components["protocol"],
                 "username": components["username"],
                 "hostname": components["hostname"],
-                "port": int(components["port"]) if components["port"] else default_sip_port,
+                "port": int(components["port"]) if components["port"] else client.default_sip_port,
             }
 
         firstname = ext.get("name-first-name", ext.get("name-full-name", ""))
@@ -547,8 +548,8 @@ class NetsapiensAdapter(BSSAdapter):
         if produce_user_info:
             sip_info = parse_sip_uri(ext.get("device-sip-registration-uri", ""))
             outbound_proxy = SIPServer(
-                        host=ext.get("core-server"),
-                        port=default_sip_port,
+                        host=ext.get("core-server", client.default_sip_outbound_proxy),
+                        port=client.default_sip_port,
             )
             data["sip"] = SIPInfo(
                 username=ext.get("device"),
