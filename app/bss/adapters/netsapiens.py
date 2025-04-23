@@ -30,13 +30,13 @@ VERSION = "0.3.4"
 class NetsapiensDeviceFilter:
     """Logic of finding the device entry for WebTrit in the list of devices"""
 
-    def __init__(self, pattern: str = "WebTrit"):
+    def __init__(self, pattern: str = "wt"):
         # Marker of the correct device entry in the list of devices
         self.pattern = pattern
 
     def find_device_entry(self, devices: List[Dict]) -> Optional[Dict]:
         """Find the device entry that matches the pattern"""
-        return next((device for device in devices if self.pattern == device.get("name-full-name", "")), None)
+        return next((device for device in devices if device.get("device", "").endswith(self.pattern)), None)
     
 class NetsapiensClient(BaseModel):
     client_id: str = Field(default=None,
