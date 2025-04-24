@@ -606,7 +606,7 @@ class NetsapiensAdapter(BSSAdapter):
         return CDRInfo(call_id=cdr.get("call-orig-call-id"),
                        direction=Direction.outgoing if cdr.get("call-direction") == 1 else Direction.incoming,
                        caller=cdr.get("call-orig-caller-id"),
-                       callee=cdr.get("call-term-caller-id"),
+                       callee=cdr.get("call-orig-request-user"),
                        connect_time=start,
                        disconnect_time=end,
                        duration=duration,
