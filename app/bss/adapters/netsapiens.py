@@ -547,8 +547,9 @@ class NetsapiensAdapter(BSSAdapter):
 
         if produce_user_info:
             sip_info = parse_sip_uri(ext.get("device-sip-registration-uri", ""))
+            core_server = ext.get("core-server")
             outbound_proxy = SIPServer(
-                        host=ext.get("core-server", client.default_sip_outbound_proxy),
+                        host=core_server if core_server else client.default_sip_outbound_proxy,
                         port=client.default_sip_port,
             )
             data["sip"] = SIPInfo(
