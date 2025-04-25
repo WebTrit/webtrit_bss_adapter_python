@@ -604,14 +604,13 @@ class NetsapiensAdapter(BSSAdapter):
             end = None
 
         return CDRInfo(call_id=cdr.get("call-orig-call-id"),
-                       direction=Direction.outgoing if cdr.get("call-direction") == 1 else Direction.incoming,
+                       direction=Direction.incoming if cdr.get("call-direction") == 1 else Direction.outgoing,
                        caller=cdr.get("call-orig-caller-id"),
                        callee=cdr.get("call-orig-request-user"),
                        connect_time=start,
                        disconnect_time=end,
                        duration=duration,
-                       status=self.map_disconnect_status(duration,
-                                                         cdr.get("call-disconnect-reason-text")),
+                       status=self.map_disconnect_status(duration, cdr.get("call-disconnect-reason-text")),
                        # TODO: find out how to get the recording ID
                        recording_id=None)
 
