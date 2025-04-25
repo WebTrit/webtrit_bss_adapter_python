@@ -743,7 +743,8 @@ class PortaSwitchAdapter(BSSAdapter):
         session_data = self._account_api.login(account_info["login"], account_info["password"])
 
         return CustomResponse(
-            token=session_data['access_token'],
+            access_token=session_data['access_token'],
+            refresh_token=session_data['refresh_token'],
             expires_at=datetime.now(UTC) + timedelta(seconds=session_data["expires_in"])
         )
 
