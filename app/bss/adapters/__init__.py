@@ -221,8 +221,7 @@ class BSSAdapter(SessionManagement, OTPHandler,
         """Obtain user's voicemail message details information"""
         raise NotImplementedError("Override this method in your sub-class")
 
-    def retrieve_voicemail_message_attachment(self, session: SessionInfo, message_id: str, file_format: str) -> Union[
-        bytes, Iterator]:
+    def retrieve_voicemail_message_attachment(self, session: SessionInfo, message_id: str, file_format: str) -> tuple[str, Iterator]:
         """Obtain the media file for a user's voicemail message"""
         raise NotImplementedError("Override this method in your sub-class")
 

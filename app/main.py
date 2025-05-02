@@ -832,9 +832,9 @@ def get_user_voicemail_message_attachment(
 
     access_token = auth_data.credentials
     session = bss.validate_session(access_token)
-    content_iterator = bss.retrieve_voicemail_message_attachment(session, message_id, file_format)
+    content_type, content_iterator = bss.retrieve_voicemail_message_attachment(session, message_id, file_format)
 
-    return StreamingResponse(content_iterator, media_type="application/octet-stream")
+    return StreamingResponse(content_iterator, media_type=content_type if content_type else "application/octet-stream")
 
 
 @router.post(

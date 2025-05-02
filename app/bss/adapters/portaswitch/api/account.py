@@ -27,7 +27,7 @@ class AccountAPI(HTTPAPIConnector):
 
     def __send_request(
         self, module: str, method: str, params: dict, stream: bool | None = None, access_token: str | None = None
-    ) -> Union[dict, bytes, Iterator]:
+    ) -> Union[dict, tuple[str, Union[bytes, Iterator]]]:
         """Sends the PortaBilling API method by means of HTTP POST request.
 
         Parameters:
@@ -77,7 +77,7 @@ class AccountAPI(HTTPAPIConnector):
 
         return request_params
 
-    def decode_response(self, response: requests.models.Response) -> Union[dict, bytes, Iterator]:
+    def decode_response(self, response: requests.models.Response) -> Union[dict, tuple[str, Union[bytes, Iterator]]]:
         """Decode the response.
 
         Parameters:
@@ -90,14 +90,15 @@ class AccountAPI(HTTPAPIConnector):
         """
 
         headers = response.headers
-        if "application/json" in headers.get("Content-Type", ""):
+        content_type = headers.get("Content-Type", "")
+        if "application/json" in content_type:
             return response.json()
 
         if "attachment" in headers.get("Content-Disposition", ""):
             if "chunked" in headers.get("Transfer-Encoding", ""):
-                return response.iter_content(DEFAULT_CHUNK_SIZE)
+                return content_type, response.iter_content(DEFAULT_CHUNK_SIZE)
             else:
-                return response.content
+                return content_type, response.content
 
         raise ValueError("Not expected response")
 
@@ -319,7 +320,7 @@ class AccountAPI(HTTPAPIConnector):
             access_token=access_token,
         )
 
-    def get_mailbox_message_attachment(self, access_token: str, message_id: str, file_format: str) -> Iterator:
+    def get_mailbox_message_attachment(self, access_token: str, message_id: str, file_format: str) -> tuple[str, Iterator]:
         """
         Returns the mailbox message attachment of the account, which created a session related to the access_token.
             Parameters:

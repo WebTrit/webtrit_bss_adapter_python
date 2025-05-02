@@ -570,16 +570,17 @@ class PortaSwitchAdapter(BSSAdapter):
 
     def retrieve_voicemail_message_attachment(
             self, session: SessionInfo, message_id: str, file_format: str
-    ) -> Iterator:
-        """Returns the binary representation for attachent of the voicemail message.
+    ) -> tuple[str, Iterator]:
+        """
+        Retrieve the binary attachment of a voicemail message.
 
         Parameters:
-            session :SessionInfo: The session of the PortaSwitch account.
-            message_id :str: The unique ID of the voicemail message.
-            file_format :PortaSwitchMailboxMessageAttachmentFormat: Provided file format.
+            session (SessionInfo): The session object for the PortaSwitch account.
+            message_id (str): The unique identifier of the voicemail message.
+            file_format (str): The format in which the attachment should be retrieved (e.g., 'wav', 'mp3').
 
         Returns:
-            :bytes: Raw bytes of a message attachment.
+            tuple[str, Iterator]: A tuple containing the content-type and an iterator over the raw bytes of the attachment.
         """
 
         file_format = file_format and file_format.lower()
