@@ -163,6 +163,23 @@ class Serializer:
         )
 
     @staticmethod
+    def get_contact_info_by_custom_entry(custom_entry: dict) -> ContactInfo:
+        """Forms ContactInfo based on the input custom_entry.
+        Parameters:
+            custom_entry: dict: The information about the custom entry to be added to ContactInfo.
+
+        Returns:
+            ContactInfo: The filled structure of ContactInfo.
+        """
+
+        return ContactInfo(
+            alias_name=custom_entry.get("name", ""),
+            numbers=Numbers(
+                main=custom_entry.get("number"),
+            ),
+        )
+
+    @staticmethod
     def get_voicemail_message(mailbox_message: dict) -> VoicemailMessage:
         """
         Forms VoicemailMessage based on the input mailbox_message.

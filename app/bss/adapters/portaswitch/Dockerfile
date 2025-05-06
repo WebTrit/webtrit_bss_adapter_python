@@ -64,10 +64,13 @@ ENV PORTASWITCH_CONTACTS_SELECTING="<contacts-selecting>"
 # * Group - extension type from response should be Group
 # * Unassigned - extension type from response should be Unassigned
 # By default does not apply filter by type
-ENV PORTASWITCH_CONTACTS_SELECTING_EXTENSION_TYPES="Account, Group, Unassigned"
+ENV PORTASWITCH_CONTACTS_SELECTING_EXTENSION_TYPES="Account;Group;Unassigned"
 
 # Ensures that the contacts API filters accounts that do not have an `extension_id` (optional):
 ENV PORTASWITCH_CONTACTS_SKIP_WITHOUT_EXTENSION="True"
+
+# Extend the contact list with custom entries
+ENV PORTASWITCH_CONTACTS_CUSTOM="{"name": "Customer Support", "number": "0000"};{"name": "Welcome Call", "number": "1111"}"
 
 # Defines list of the account's ids (i_account) which can use any OTP verification code for authentication - usually used for demo purposes (optional):
 ENV PORTASWITCH_OTP_IGNORE_ACCOUNTS="6088"

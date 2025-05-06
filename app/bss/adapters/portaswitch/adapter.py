@@ -373,23 +373,20 @@ class PortaSwitchAdapter(BSSAdapter):
             i_customer = int(account_info["i_customer"])
             i_account = int(account_info["i_account"])
 
+            contacts = []
             match self._portaswitch_settings.CONTACTS_SELECTING:
                 case PortaSwitchContactsSelectingMode.EXTENSIONS:
                     accounts = self._admin_api.get_account_list(i_customer)["account_list"]
                     account_to_aliases = {account["i_account"]: account.get("alias_list", []) for account in accounts}
                     extensions = self._admin_api.get_extensions_list(i_customer)["extensions_list"]
 
-                    return [
-                        Serializer.get_contact_info_by_extension(
-                            ext, account_to_aliases.get(ext.get("i_account"), []), i_account
-                        )
-                        for ext in extensions
-                        if ext["type"] in self._portaswitch_settings.CONTACTS_SELECTING_EXTENSION_TYPES
-                    ]
+                    for ext in extensions:
+                        if ext["type"] in self._portaswitch_settings.CONTACTS_SELECTING_EXTENSION_TYPES:
+                            aliases = account_to_aliases.get(ext.get("i_account"), [])
+                            contacts.append(Serializer.get_contact_info_by_extension(ext, aliases, i_account))
                 case PortaSwitchContactsSelectingMode.ACCOUNTS:
                     accounts = self._admin_api.get_account_list(i_customer)["account_list"]
 
-                    contacts = []
                     for account in accounts:
                         dual_version_system = PortaSwitchDualVersionSystem(account.get("dual_version_system"))
                         if dual_version_system != PortaSwitchDualVersionSystem.SOURCE:
@@ -397,9 +394,6 @@ class PortaSwitchAdapter(BSSAdapter):
                                     "extension_id"
                             ):
                                 contacts.append(Serializer.get_contact_info_by_account(account, i_account))
-
-                    return contacts
-
                 case PortaSwitchContactsSelectingMode.PHONEBOOK:
                     accounts = self._admin_api.get_account_list(i_customer)["account_list"]
                     phonebook = self._account_api.get_phonebook_list(access_token, 1, 100)['phonebook_rec_list']
@@ -422,7 +416,11 @@ class PortaSwitchAdapter(BSSAdapter):
 
                         contacts.append(contact)
 
-                    return contacts
+            # Extend the contact list with custom entries
+            contacts.extend([Serializer.get_contact_info_by_custom_entry(entry) for entry in
+                             self._portaswitch_settings.CONTACTS_CUSTOM])
+
+            return contacts
 
         except WebTritErrorException as error:
             fault_code = extract_fault_code(error)
