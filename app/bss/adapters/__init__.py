@@ -132,10 +132,10 @@ class BSSAdapter(SessionManagement, OTPHandler,
                  CustomMethodCall, InAppSignup, AutoProvisionByToken):
     # names of config variables to turn on/off capabilities
     CONFIG_CAPABILITIES_OPTIONS = dict(
+        SIGNUP=dict(default=False, option=Capabilities.signup),
         PASSWORD=dict(default=True, option=Capabilities.passwordSignin),
         OTP=dict(default=False, option=Capabilities.otpSignin),
         AUTO_PROVISION=dict(default=False, option=Capabilities.autoProvision),
-        SIGNUP=dict(default=False, option=Capabilities.signup),
         CDRS=dict(default=False, option=Capabilities.callHistory),
         RECORDINGS=dict(default=False, option=Capabilities.recordings),
         EXTENSIONS=dict(default=True, option=Capabilities.extensions),
