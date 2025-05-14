@@ -3,10 +3,10 @@ from datetime import datetime
 from typing import Final, List, Union, Iterator
 
 import requests
-
+from bss.adapters.portaswitch.config import PortaSwitchSettings
 from bss.adapters.portaswitch.types import PortaSwitchMailboxMessageFlag, PortaSwitchMailboxMessageFlagAction
 from bss.http_api import HTTPAPIConnector, AuthSessionData
-from bss.adapters.portaswitch.config import PortaSwitchSettings
+from jose import jwt
 
 DEFAULT_CHUNK_SIZE: Final[int] = 8192
 
@@ -26,7 +26,7 @@ class AccountAPI(HTTPAPIConnector):
         self._verify_https = portaswitch_settings.VERIFY_HTTPS
 
     def __send_request(
-        self, module: str, method: str, params: dict, stream: bool | None = None, access_token: str | None = None
+            self, module: str, method: str, params: dict, stream: bool | None = None, access_token: str | None = None
     ) -> Union[dict, tuple[str, Union[bytes, Iterator]]]:
         """Sends the PortaBilling API method by means of HTTP POST request.
 
@@ -210,7 +210,7 @@ class AccountAPI(HTTPAPIConnector):
         return self.__send_request(module="Account", method="get_alias_list", params={}, access_token=access_token)
 
     def get_xdr_list(
-        self, access_token: str, page: int, items_per_page: int, time_from: datetime, time_to: datetime
+            self, access_token: str, page: int, items_per_page: int, time_from: datetime, time_to: datetime
     ) -> dict:
         """Returns the account_info of the account, which created a session related to
         the access_token.
@@ -320,7 +320,8 @@ class AccountAPI(HTTPAPIConnector):
             access_token=access_token,
         )
 
-    def get_mailbox_message_attachment(self, access_token: str, message_id: str, file_format: str) -> tuple[str, Iterator]:
+    def get_mailbox_message_attachment(self, access_token: str, message_id: str, file_format: str) -> tuple[
+        str, Iterator]:
         """
         Returns the mailbox message attachment of the account, which created a session related to the access_token.
             Parameters:
@@ -341,11 +342,11 @@ class AccountAPI(HTTPAPIConnector):
         )
 
     def set_mailbox_message_flag(
-        self,
-        access_token: str,
-        message_id: str,
-        flag: PortaSwitchMailboxMessageFlag,
-        action: PortaSwitchMailboxMessageFlagAction,
+            self,
+            access_token: str,
+            message_id: str,
+            flag: PortaSwitchMailboxMessageFlag,
+            action: PortaSwitchMailboxMessageFlagAction,
     ) -> dict:
         """
         Returns the mailbox message details of the account, which created a session related to the access_token.
@@ -380,3 +381,17 @@ class AccountAPI(HTTPAPIConnector):
             params={"message_uids": [message_id]},
             access_token=access_token,
         )
+
+    @classmethod
+    def decode_and_verify_access_token_expiration(cls, access_token: str) -> dict:
+        return jwt.decode(access_token, '', options={
+            "verify_signature": False,
+            'verify_aud': False,
+            'verify_iat': False,
+            'verify_exp': True,
+            'verify_nbf': False,
+            'verify_iss': False,
+            'verify_sub': False,
+            'verify_jti': False,
+            'verify_at_hash': False,
+        })

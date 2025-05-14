@@ -23,6 +23,7 @@ from bss.types import (
     UserEventGroup,
     UserEventType,
 )
+from jose.exceptions import ExpiredSignatureError, JWTError
 from localization import get_translation_func
 from report_error import WebTritErrorException
 
@@ -237,20 +238,31 @@ class PortaSwitchAdapter(BSSAdapter):
 
         """
         try:
+            self._account_api.decode_and_verify_access_token_expiration(access_token)
             session_data: dict = self._account_api.ping(access_token=access_token)
 
             return SessionInfo(
                 user_id=session_data["user_id"],
                 access_token=access_token,
             )
-
+        except ExpiredSignatureError:
+            raise WebTritErrorException(
+                status_code=401,
+                error_message=f"Access token expired",
+                code="access_token_expired",
+            )
+        except JWTError:
+            raise WebTritErrorException(
+                    status_code=401,
+                    error_message="Access token invalid",
+                    code="access_token_invalid",
+                )
         except WebTritErrorException as error:
-            faultcode = extract_fault_code(error)
-            if faultcode in ("Client.Session.ping.failed_to_process_access_token",):
+            if extract_fault_code(error) in ("Client.Session.ping.failed_to_process_access_token",):
                 raise WebTritErrorException(
                     status_code=401,
-                    # code = APIAccessErrorCode.authorization_header_missing,
-                    error_message=f"Invalid access token {access_token}",
+                    error_message="Access token invalid",
+                    code="access_token_invalid",
                 )
 
             raise error
