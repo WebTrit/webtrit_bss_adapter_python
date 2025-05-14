@@ -413,6 +413,8 @@ class PortaSwitchAdapter(BSSAdapter):
                         else:
                             # No matching account found, use phonebook contact info as is
                             contact = phonebook_contact_info
+                            if contact.numbers.main:
+                                contact.numbers.main = contact.numbers.main.replace("+", "")
 
                         contacts.append(contact)
 
