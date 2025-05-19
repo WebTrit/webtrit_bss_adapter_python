@@ -21,14 +21,19 @@ class PortaSwitchSettings(BaseSettings):
     SIGNIN_CREDENTIALS: PortaSwitchSignInCredentialsType = PortaSwitchSignInCredentialsType.SELF_CARE
     CONTACTS_SELECTING: PortaSwitchContactsSelectingMode = PortaSwitchContactsSelectingMode.ACCOUNTS
     CONTACTS_SELECTING_EXTENSION_TYPES: Union[List[PortaSwitchExtensionType], str] = list(PortaSwitchExtensionType)
+    CONTACTS_SELECTING_PHONEBOOK_CUSTOMER_IDS: Union[List[str], str] = []
     CONTACTS_SKIP_WITHOUT_EXTENSION: bool = False
     CONTACTS_CUSTOM: Union[List[dict], str] = []
     HIDE_BALANCE_IN_USER_INFO: Optional[bool] = False
     SELF_CONFIG_PORTAL_URL: Optional[str] = None
 
     @validator("CONTACTS_SELECTING_EXTENSION_TYPES", pre=True)
-    def decode_contacts_selection_extension_types(cls, v: Union[List, str]) -> List[PortaSwitchExtensionType]:
+    def decode_contacts_selecting_extension_types(cls, v: Union[List, str]) -> List[PortaSwitchExtensionType]:
         return [PortaSwitchExtensionType(x) for x in v.split(';')] if isinstance(v, str) else v
+
+    @validator("CONTACTS_SELECTING_PHONEBOOK_CUSTOMER_IDS", pre=True)
+    def decode_contacts_selecting_phonebook_customer_ids(cls, v: Union[List, str]) -> List[str]:
+        return [json.loads(x) for x in v.split(';')] if isinstance(v, str) else v
 
     @validator("CONTACTS_CUSTOM", pre=True)
     def decode_contacts_custom(cls, v: Union[List, str]) -> List[dict]:

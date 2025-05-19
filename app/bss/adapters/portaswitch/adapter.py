@@ -1,4 +1,5 @@
 import logging
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timedelta, UTC
 from typing import Final, Iterator, Optional, Dict
 
@@ -253,10 +254,10 @@ class PortaSwitchAdapter(BSSAdapter):
             )
         except JWTError:
             raise WebTritErrorException(
-                    status_code=401,
-                    error_message="Access token invalid",
-                    code="access_token_invalid",
-                )
+                status_code=401,
+                error_message="Access token invalid",
+                code="access_token_invalid",
+            )
         except WebTritErrorException as error:
             if extract_fault_code(error) in ("Client.Session.ping.failed_to_process_access_token",):
                 raise WebTritErrorException(
@@ -407,9 +408,24 @@ class PortaSwitchAdapter(BSSAdapter):
                             ):
                                 contacts.append(Serializer.get_contact_info_by_account(account, i_account))
                 case PortaSwitchContactsSelectingMode.PHONEBOOK:
-                    accounts = self._admin_api.get_account_list(i_customer)["account_list"]
                     phonebook = self._account_api.get_phonebook_list(access_token, 1, 100)['phonebook_rec_list']
-                    number_to_accounts = {account["id"]: account for account in accounts}
+                    number_to_accounts = {}
+                    # Retrieve accounts for a pre-defined list of customers to map them to phonebook records
+                    with ThreadPoolExecutor(max_workers=10) as executor:
+                        future_to_customer_id = {
+                            executor.submit(lambda cid: self._admin_api.get_account_list(int(cid))["account_list"],
+                                            cid): cid
+                            for cid in self._portaswitch_settings.CONTACTS_SELECTING_PHONEBOOK_CUSTOMER_IDS
+                        }
+
+                        for future in as_completed(future_to_customer_id):
+                            try:
+                                accounts = future.result()
+                                for account in accounts:
+                                    number_to_accounts[account["id"]] = account
+                            except Exception as e:
+                                logging.warning(
+                                    f"Error fetching accounts for customer {future_to_customer_id[future]}: {e}")
 
                     contacts = []
                     for record in phonebook:
