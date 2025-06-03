@@ -63,6 +63,7 @@ class PortaSwitchAdapter(BSSAdapter):
         Capabilities.customMethods,
         Capabilities.internal_messaging,
         Capabilities.sms_messaging,
+        Capabilities.notifications,
     ]
 
     def __init__(self, config: AppConfig):

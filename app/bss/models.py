@@ -567,6 +567,7 @@ class SupportedEnum(Enum):
     internal_messaging = "internalMessaging"
     sms_messaging = "smsMessaging"
     user_events = "userEvents"
+    notifications = "notifications"
 
 
 class SystemInfoShowResponse(BaseModel):
