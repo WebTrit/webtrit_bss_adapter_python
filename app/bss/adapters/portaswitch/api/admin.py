@@ -39,7 +39,7 @@ class AdminAPI(HTTPAPIConnectorWithLogin):
             module="Session", method="login", params=dict(login=user.user_id, token=user.token), turn_off_login=True
         )
 
-        if response and (session := self.extract_access_token(response)):
+        if response and (session := self.extract_access_token(response)) and session.access_token is not None:
             return session
 
         logging.debug(f"Could not find an access token in the response {response}")
