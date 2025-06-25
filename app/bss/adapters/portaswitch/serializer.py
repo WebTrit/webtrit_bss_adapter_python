@@ -69,7 +69,7 @@ class Serializer:
                 additional=[alias["id"] for alias in aliases],
                 ext=account_info.get("extension_id"),
                 main=account_info["id"],
-                sms=[number["did_number"] for number in account_info["alias_did_number_list"]],
+                sms=[number["did_number"] for number in account_info.get("alias_did_number_list", [])],
             ),
             sip=SIPInfo(
                 username=account_info["id"],
@@ -110,7 +110,7 @@ class Serializer:
                 additional=[alias["id"] for alias in account_info.get("alias_list", [])],
                 ext=account_info.get("extension_id", ""),
                 main=account_info["id"],
-                sms=[number["did_number"] for number in account_info["alias_did_number_list"]],
+                sms=[number["did_number"] for number in account_info.get("alias_did_number_list", [])],
             ),
             sip_status=(
                 SIPRegistrationStatus.registered
@@ -141,7 +141,7 @@ class Serializer:
                 additional=aliases,
                 ext=extension_info.get("id"),
                 main=extension_info.get("id"),
-                sms=[number["did_number"] for number in extension_info["alias_did_number_list"]],
+                sms=[number["did_number"] for number in extension_info.get("alias_did_number_list", [])],
             ),
         )
 
