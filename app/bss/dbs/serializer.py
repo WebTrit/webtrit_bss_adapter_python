@@ -73,8 +73,8 @@ class SerializerBase(ABC):
     def produce_object(cls, obj_type: str, params: dict) -> object:
         """Dynamically produce an object of a given type"""
         if (constructor := cls.get_object_factory(obj_type)) is not None:
-            if hasattr(constructor, 'parse_raw') and SerializerBase.FULL_JSON in params:
-                return constructor.parse_raw(params[SerializerBase.FULL_JSON])
+            if hasattr(constructor, 'model_validate_json') and SerializerBase.FULL_JSON in params:
+                return constructor.model_validate_json(params[SerializerBase.FULL_JSON])
 
             return constructor(**params)
         raise ValueError(f"Cannot produce object of type {obj_type}")
@@ -165,9 +165,9 @@ class SerializerPydantic(SerializerBase):
             return [ cls.obj_to_dict(item) for item in obj ]
         elif isinstance(obj, dict):
             return { key: cls.obj_to_dict(val) for key, val in obj.items() }
-        elif hasattr(obj, 'dict') and callable(getattr(obj, 'dict')):
+        elif hasattr(obj, 'model_dump') and callable(getattr(obj, 'model_dump')):
             data = { key: cls.obj_to_dict(val)
-                      for key, val in obj.dict().items() }
+                      for key, val in obj.model_dump().items() }
             return data
         raise ValueError(f"Cannot convert object of type {type(obj)} to dict")
                          
@@ -179,11 +179,11 @@ class SerializerPydantic(SerializerBase):
         obj_data = { key: val if cls.is_scalar(val) else 
                     cls.pack(val) if isinstance(val, Serialiazable)
                         else orjson.dumps(val).decode('utf-8') 
-                    for key, val in obj.dict().items() }
+                    for key, val in obj.model_dump().items() }
         
         # other attributes are for browsing / searching objects, this one
         # to re-store the object
-        obj_data[SerializerBase.FULL_JSON] = obj.json()
+        obj_data[SerializerBase.FULL_JSON] = obj.model_dump_json()
         return obj_data | {
                 SerializerBase.OBJ_TYPE: type(obj).__name__,
                 SerializerBase.OBJ_PACKER: SerializerPydantic.ID,
@@ -290,7 +290,7 @@ if __name__ == "__main__":
             date_attr=datetime.now(),
             list_attr=[  sub, 'Manowar'],
             obj_attr=sub)
-    print(x.json())
+    print(x.model_dump_json())
     assert (packed:=pack(x)) 
     assert (unpacked:=unpack(packed))
     assert unpacked == x

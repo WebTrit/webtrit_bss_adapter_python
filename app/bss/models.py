@@ -130,8 +130,8 @@ class UserId(BaseModel):
     __root__: str = Field(
         ...,
         description="A primary unique identifier of the user on the **Adaptee**.\n\nThis identifier is crucial for the proper functioning of **WebTrit Core**, as it is used\nto store information such as push tokens and other relevant data associated to the user.\n\nThe **Adaptee** must consistently return the same `UserId` for the same user,\nregardless of the `UserRef` used for sign-in.\n",
-        example="123456789abcdef0123456789abcdef0",
         title="UserId",
+        json_schema_extra={"example": "123456789abcdef0123456789abcdef0"},
     )
 
 
@@ -167,8 +167,8 @@ class UserRef(BaseModel):
     __root__: str = Field(
         ...,
         description="A reference identifier of the user on the **Adaptee**\n\nThis identifier is entered by the user in client applications and passed\nvia **WebTrit Core** to the **Adaptee** for sign-in purposes.\n\nThe identifier can be a phone number or any other attribute associated\nwith the user. When the same user is accessed using different references,\nit is crucial to ensure that the same `UserId` is assigned to this user.\n",
-        example="1234567890",
         title="UserRef",
+        json_schema_extra={"example": "1234567890"},
     )
 
 
@@ -240,12 +240,12 @@ class SipServer(BaseModel):
     host: str = Field(
         ...,
         description="The SIP server address, which can be either a hostname or an IP address.",
-        example="sip.webtrit.com",
+        json_schema_extra={"example": "sip.webtrit.com"},
     )
     port: Optional[int] = Field(
         5060,
         description="The port on which the SIP server listens for incoming requests. 5060 by default.",
-        example=5060,
+        json_schema_extra={"example": 5060},
     )
 
 
@@ -257,18 +257,18 @@ class BalanceType(Enum):
 
 
 class Balance(BaseModel):
-    amount: Optional[float] = Field(None, description="The user's current balance.", example="50.00")
+    amount: Optional[float] = Field(None, description="The user's current balance.", json_schema_extra={"example": "50.00"})
     balance_type: Optional[BalanceType] = Field(
         None,
         description="Meaning of the balance figure for this user.\n\n* `inapplicable` means the **Adaptee** does not handle\n  billing and does not have the balance data.\n* `prepaid` means the number reflects the funds that\n  the user has available for spending.\n* `postpaid` means the balance reflects the amount of\n  previously accumulated charges (how much the user\n  owes - to be used in conjunction with a `credit_limit`).\n",
     )
     credit_limit: Optional[float] = Field(
-        None, description="The user's credit limit (if applicable).", example="100.00"
+        None, description="The user's credit limit (if applicable).", json_schema_extra={"example": "100.00"}
     )
     currency: Optional[str] = Field(
         "$",
         description="Currency symbol or name in ISO 4217:2015 format (e.g. USD).",
-        example="$",
+        json_schema_extra={"example": "$"},
     )
 
 
@@ -282,14 +282,14 @@ class GetUserRecordingNotFoundErrorResponse(ErrorResponse):
 
 class Pagination(BaseModel):
     items_per_page: Optional[conint(ge=1)] = Field(
-        None, description="Number of items presented per page.", example=100
+        None, description="Number of items presented per page.", json_schema_extra={"example": 100}
     )
     items_total: Optional[conint(ge=0)] = Field(
         None,
         description="Total number of items found in filtered result set.\nIf no filters are provided, this represents total number\nof items available.\n",
-        example=1000,
+        json_schema_extra={"example": 1000},
     )
-    page: Optional[conint(ge=1)] = Field(None, description="Current page number.", example=1)
+    page: Optional[conint(ge=1)] = Field(None, description="Current page number.", json_schema_extra={"example": 1})
 
 
 class ProvisionSessionAutoUnprocessableEntityErrorResponse(ErrorResponse):
@@ -330,14 +330,14 @@ class SipInfo(BaseModel):
     auth_username: Optional[str] = Field(
         None,
         description="The username for SIP authorization;\nonly needs to be populated if for a user it differs\nfrom his/her registration ID (which is normally a phone number) supplied in the `username` attribute.\n",
-        example="thomas",
+        json_schema_extra={"example": "thomas"},
     )
     display_name: Optional[str] = Field(
         None,
         description="The visible identification of the caller to be included in the SIP request.\nThis will be shown to the called party as the caller's name. If not provided,\nthe `display_name` will be populated with the `username`.\n",
-        example="Thomas A. Anderson",
+        json_schema_extra={"example": "Thomas A. Anderson"},
     )
-    password: str = Field(..., description="The password for the SIP account.", example="strong_password")
+    password: str = Field(..., description="The password for the SIP account.", json_schema_extra={"example": "strong_password"})
     transport: Optional[SIPTransport] = Field(
         default_factory=lambda: SIPTransport.UDP,
         description="The transport protocol for SIP communication. UDP by default.",
@@ -348,7 +348,7 @@ class SipInfo(BaseModel):
     username: str = Field(
         ...,
         description="The identity (typically a phone number but can be some other alphanumeric ID)\nthat should be registered to SIP server to receive incoming calls.\nUsually it is also used as a username for SIP authorization of registrations (SIP REGISTER)\nand outgoing calls (SIP INVITE).\n",
-        example="14155551234",
+        json_schema_extra={"example": "14155551234"},
     )
 
 
@@ -519,8 +519,8 @@ class OtpId(BaseModel):
     __root__: str = Field(
         ...,
         description="Unique identifier of the OTP request on the **Adapter** and/or **Adaptee** side.\n\nNote: This ID is NOT the code that the user will enter. It serves\nto match the originally generated OTP with the one provided by the user.\n",
-        example="12345678-9abc-def0-1234-56789abcdef0",
         title="OtpId",
+        json_schema_extra={"example": "12345678-9abc-def0-1234-56789abcdef0"},
     )
 
 
@@ -550,7 +550,7 @@ class SessionAutoProvisionRequest(BaseModel):
     config_token: str = Field(
         ...,
         description="URL encoded unique token to identify user on the **Adaptee**.",
-        example="YKnra0qV3FHeOeMNwotRoP0955gHHHy7y7BWeb",
+        json_schema_extra={"example": "YKnra0qV3FHeOeMNwotRoP0955gHHHy7y7BWeb"},
     )
 
 
@@ -604,22 +604,22 @@ class Numbers(BaseModel):
     additional: Optional[List[str]] = Field(
         None,
         description="A list of other phone numbers associated with the user. This may\ninclude extra phone numbers that the user purchased (also called\ndirect-inward-dials or DID) to ring on their VoIP phone,\nand other numbers that can be used to identify them in the\naddress book of others (e.g. their mobile number).\n",
-        example=["380441234567", "34911234567"],
+        json_schema_extra={"example": ["380441234567", "34911234567"]},
     )
     ext: Optional[str] = Field(
         None,
         description="The user's extension number (short dialing code) within the **Adaptee**.\n",
-        example="0001",
+        json_schema_extra={"example": "0001"},
     )
     main: str = Field(
         ...,
         description="The user's primary phone number. It is strongly suggested\nto use the full number, including the country code\n(also known as the E.164 format).\n",
-        example="14155551234",
+        json_schema_extra={"example": "14155551234"},
     )
     sms: Optional[List[str]] = Field(
         None,
         description="A list of phone sms phone numbers associated with the user.\nThese numbers may be associated with third-party SMS services, such as Twilio,\nand can include mobile numbers capable of receiving text messages.",
-        example=["380441234567", "+1-212-456-7890"],
+        json_schema_extra={"example": ["380441234567", "+1-212-456-7890"]},
     )
 
 
@@ -651,11 +651,11 @@ class Contact(BaseModel):
     company_name: Optional[str] = Field(
         None,
         description="The name of the company the user is associated with.",
-        example="Matrix",
+        json_schema_extra={"example": "Matrix"},
     )
-    email: Optional[EmailStr] = Field(None, description="The user's email address.", example="a.black@matrix.com")
-    first_name: Optional[str] = Field(None, description="The user's first name.", example="Annabelle")
-    last_name: Optional[str] = Field(None, description="The user's last name.", example="Black")
+    email: Optional[EmailStr] = Field(None, description="The user's email address.", json_schema_extra={"example": "a.black@matrix.com"})
+    first_name: Optional[str] = Field(None, description="The user's first name.", json_schema_extra={"example": "Annabelle"})
+    last_name: Optional[str] = Field(None, description="The user's last name.", json_schema_extra={"example": "Black"})
     numbers: Numbers
     sip_status: Optional[SipStatus] = Field(
         None,
@@ -667,13 +667,13 @@ class UserInfoShowResponse(BaseModel):
     alias_name: Optional[str] = Field(
         None,
         description="The user's alternative name. May be used for indicate role or position.",
-        example="CTO",
+        json_schema_extra={"example": "CTO"},
     )
     balance: Optional[Balance] = None
-    company_name: Optional[str] = Field(None, description="The company the user is associated with.", example="Matrix")
-    email: Optional[EmailStr] = Field(None, description="The user's email address.", example="neo@matrix.com")
-    first_name: Optional[str] = Field(None, description="The user's first name.", example="Thomas")
-    last_name: Optional[str] = Field(None, description="The user's last name.", example="Anderson")
+    company_name: Optional[str] = Field(None, description="The company the user is associated with.", json_schema_extra={"example": "Matrix"})
+    email: Optional[EmailStr] = Field(None, description="The user's email address.", json_schema_extra={"example": "neo@matrix.com"})
+    first_name: Optional[str] = Field(None, description="The user's first name.", json_schema_extra={"example": "Thomas"})
+    last_name: Optional[str] = Field(None, description="The user's last name.", json_schema_extra={"example": "Anderson"})
     numbers: Numbers
     sip: SipInfo
     status: Optional[Status] = Field(

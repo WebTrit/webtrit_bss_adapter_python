@@ -1,7 +1,8 @@
 import json
 from typing import Optional, List, Union
 
-from pydantic import BaseSettings, validator
+from pydantic import field_validator
+from pydantic_settings import BaseSettings
 
 from .types import (
     PortaSwitchContactsSelectingMode,
@@ -28,15 +29,18 @@ class PortaSwitchSettings(BaseSettings):
     SELF_CONFIG_PORTAL_URL: Optional[str] = None
     ALLOWED_ADDONS: Union[List[str], str] = []
 
-    @validator("CONTACTS_SELECTING_EXTENSION_TYPES", pre=True)
+    @field_validator("CONTACTS_SELECTING_EXTENSION_TYPES", mode='before')
+    @classmethod
     def decode_contacts_selecting_extension_types(cls, v: Union[List, str]) -> List[PortaSwitchExtensionType]:
         return [PortaSwitchExtensionType(x) for x in v.split(';')] if isinstance(v, str) else v
 
-    @validator("CONTACTS_SELECTING_PHONEBOOK_CUSTOMER_IDS", pre=True)
+    @field_validator("CONTACTS_SELECTING_PHONEBOOK_CUSTOMER_IDS", mode='before')
+    @classmethod
     def decode_contacts_selecting_phonebook_customer_ids(cls, v: Union[List, str]) -> List[str]:
         return [x.strip() for x in v.split(';')] if isinstance(v, str) else v
 
-    @validator("CONTACTS_CUSTOM", pre=True)
+    @field_validator("CONTACTS_CUSTOM", mode='before')
+    @classmethod
     def decode_contacts_custom(cls, v: Union[List, str]) -> List[dict]:
         return [json.loads(x) for x in v.split(';')] if isinstance(v, str) and v else v
 
@@ -44,23 +48,26 @@ class PortaSwitchSettings(BaseSettings):
     def decode_allowed_addons(cls, v: Union[List, str]) -> List[str]:
         return [x.strip() for x in v.split(';')] if isinstance(v, str) and v else v
 
-    class Config:
-        env_prefix = "PORTASWITCH_"
-        env_file_encoding = "utf-8"
-        case_sensitive = False
+    model_config = {
+        "env_prefix": "PORTASWITCH_",
+        "env_file_encoding": "utf-8",
+        "case_sensitive": False
+    }
 
 
 class OTPSettings(BaseSettings):
     IGNORE_ACCOUNTS: Union[List[str], str] = []
 
-    @validator("IGNORE_ACCOUNTS", pre=True)
+    @field_validator("IGNORE_ACCOUNTS", mode='before')
+    @classmethod
     def decode_ignore_accounts(cls, v: str) -> List[str]:
         return [str(x) for x in v.split(';')] if isinstance(v, str) else v
 
-    class Config:
-        env_prefix = "OTP_"
-        env_file_encoding = "utf-8"
-        case_sensitive = False
+    model_config = {
+        "env_prefix": "OTP_",
+        "env_file_encoding": "utf-8",
+        "case_sensitive": False
+    }
 
 
 class Settings(BaseSettings):
@@ -69,6 +76,7 @@ class Settings(BaseSettings):
     PORTASWITCH_SETTINGS: PortaSwitchSettings = PortaSwitchSettings()
     OTP_SETTINGS: OTPSettings = OTPSettings()
 
-    class Config:
-        env_file_encoding = "utf-8"
-        case_sensitive = False
+    model_config = {
+        "env_file_encoding": "utf-8",
+        "case_sensitive": False
+    }

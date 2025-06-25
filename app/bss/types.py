@@ -184,10 +184,6 @@ def orjson_dumps(v, *, default):
 class Serialiazable(BaseModel):
     """Object that can be converted into JSON structure"""
 
-    class Config:
-        json_loads = orjson.loads
-        json_dumps = orjson_dumps
-
 
 class SessionInfo(SessionResponse, Serialiazable):
     """Info about a session, initiated by WebTrit core on behalf of user"""
@@ -203,7 +199,7 @@ class SessionInfo(SessionResponse, Serialiazable):
 
 class Health(BaseModel):
     status: Optional[str] = Field(
-        None, description="A response from the server.", example="OK"
+        None, description="A response from the server.", json_schema_extra={"example": "OK"}
     )
 
 
@@ -233,19 +229,19 @@ class CallToAction(BaseModel):
     """An action invitation (button, link, etc.) to be shown in the app, which takes
     the user to the external page - e.g. invite friends, etc."""
     type: CallToActionType = Field(description='How this CTA should be rendered',
-                                   example='Link')
+                                   json_schema_extra={'example': 'Link'})
     title: Optional[str] = Field(description='The title to be shown to the user',
-                                   example='Invite others',
-                                   default = None)
+                                   default = None,
+                                   json_schema_extra={'example': 'Invite others'})
     description: Optional[str] = Field(description='Extended info about the action (to be shown in the tool-tip, etc.)',
-                                   example='Invite your colleagues or friends to use webTrit, so you can call each other for free',
-                                   default = None)
+                                   default = None,
+                                   json_schema_extra={'example': 'Invite your colleagues or friends to use webTrit, so you can call each other for free'})
 
 class CallToActionLink(CallToAction):
     type: CallToActionType = Field(description='How this CTA should be rendered',
-                                   example='Link', default=CallToActionType.LINK)
+                                   default=CallToActionType.LINK, json_schema_extra={'example': 'Link'})
     url: str = Field(description='URL that the user should be taken to',
-                                   example='https://signup.webtrit.com/?email=abc@test.com')
+                                   json_schema_extra={'example': 'https://signup.webtrit.com/?email=abc@test.com'})
 
 class CallToActionMenu(BaseModel):
     """Set of links to be shown in the app"""

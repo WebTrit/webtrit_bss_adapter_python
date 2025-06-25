@@ -9,10 +9,10 @@ from pydantic import BaseModel, Field
 from typing import Optional
 
 class QueryFilter(BaseModel):
-    field: str = Field( description="Field name", example="tenant_id")
-    value: str = Field( description="Field value", example="1234")
+    field: str = Field( description="Field name", json_schema_extra={"example": "tenant_id"})
+    value: str = Field( description="Field value", json_schema_extra={"example": "1234"})
     op: Optional[str] = Field( description="Comparison operator (== by default)",
-                                default=u"==", example="!=")
+                                default=u"==", json_schema_extra={"example": "!="})
 
 
 class FirestoreKeyValue(TiedKeyValue):
