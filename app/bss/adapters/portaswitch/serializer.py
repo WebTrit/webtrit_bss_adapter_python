@@ -250,7 +250,7 @@ class Serializer:
 
         """
         return CDRInfo(
-            call_id=cdr_info["call_id"],
+            call_id=cdr_info.get("call_id", None),  # sometimes 'call_id' field may be missing in cdr_info
             caller=cdr_info["CLI"],
             callee=cdr_info["CLD"],
             connect_time=datetime.datetime.fromtimestamp(int(cdr_info["unix_connect_time"]), datetime.timezone.utc),
