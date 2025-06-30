@@ -69,7 +69,7 @@ class HTTPAPIConnector(ABC):
             dict: the modified set of parameters for requests.request. You can
                 add new keys (or remove the ones which are already there.
         """
-        if auth_session and hasattr(auth_session, "access_token"):
+        if auth_session and hasattr(auth_session, "access_token") and auth_session.access_token:
             if "headers" in request_params:
                 headers = request_params["headers"]
             else:
