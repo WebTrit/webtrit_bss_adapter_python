@@ -26,6 +26,7 @@ class PortaSwitchSettings(BaseSettings):
     CONTACTS_CUSTOM: Union[List[dict], str] = []
     HIDE_BALANCE_IN_USER_INFO: Optional[bool] = False
     SELF_CONFIG_PORTAL_URL: Optional[str] = None
+    ALLOWED_ADDONS: Union[List[str], str] = []
 
     @validator("CONTACTS_SELECTING_EXTENSION_TYPES", pre=True)
     def decode_contacts_selecting_extension_types(cls, v: Union[List, str]) -> List[PortaSwitchExtensionType]:
@@ -38,6 +39,10 @@ class PortaSwitchSettings(BaseSettings):
     @validator("CONTACTS_CUSTOM", pre=True)
     def decode_contacts_custom(cls, v: Union[List, str]) -> List[dict]:
         return [json.loads(x) for x in v.split(';')] if isinstance(v, str) else v
+
+    @validator("ALLOWED_ADDONS", pre=True)
+    def decode_allowed_addons(cls, v: Union[List, str]) -> List[str]:
+        return [x.strip() for x in v.split(';')] if isinstance(v, str) else v
 
     class Config:
         env_prefix = "PORTASWITCH_"

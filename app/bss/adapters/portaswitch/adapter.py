@@ -117,6 +117,9 @@ class PortaSwitchAdapter(BSSAdapter):
             if not account_info or account_info[password_attr] != password:
                 raise WebTritErrorException(401, "User authentication error", code="incorrect_credentials")
 
+            if self._portaswitch_settings.ALLOWED_ADDONS:
+                self._check_allowed_addons(account_info)
+
             session_data = self._account_api.login(account_info["login"], account_info["password"])
 
             return SessionInfo(
@@ -157,6 +160,9 @@ class PortaSwitchAdapter(BSSAdapter):
             account_info = self._admin_api.get_account_info(id=user.user_id).get("account_info")
             if not account_info:
                 raise WebTritErrorException(404, f"There is no an account with such id: {user.user_id}")
+
+            if self._portaswitch_settings.ALLOWED_ADDONS:
+                self._check_allowed_addons(account_info)
 
             i_account = account_info["i_account"]
             success: int = self._admin_api.create_otp(i_account, self.OTP_DELIVERY_CHANNEL)["success"]
@@ -780,3 +786,15 @@ class PortaSwitchAdapter(BSSAdapter):
         )
 
     # endregion
+
+    def _check_allowed_addons(self, account_info: dict):
+        """Raise an error if allowed add-ons are set and none are present in assigned_addons."""
+        allowed_addons = set(self._portaswitch_settings.ALLOWED_ADDONS)
+
+        assigned_addons = account_info.get("assigned_addons", [])
+        assigned_addon_names = {addon.get("name") for addon in assigned_addons if "name" in addon}
+
+        logging.info(f"Check add-ons {assigned_addon_names} for access. Allowed add-ons: {allowed_addons}")
+
+        if not allowed_addons.intersection(assigned_addon_names):
+            raise WebTritErrorException(403, "Access denied: required add-on not assigned", code="addon_required")
