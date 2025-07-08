@@ -1,4 +1,4 @@
-import datetime
+from datetime import datetime, timezone
 from typing import Optional
 
 from bss.models import SIPTransport
@@ -8,7 +8,6 @@ from bss.types import (
     CDRInfo,
     ConnectStatus,
     ContactInfo,
-    Direction,
     EndUser,
     Numbers,
     SIPInfo,
@@ -20,6 +19,7 @@ from bss.types import (
     VoicemailMessageDetails,
     VoicemailMessageAttachment,
 )
+
 from .types import PortaSwitchMailboxMessageFlag
 
 #: dict: Contains a map between a PortaSwitch AccountInfo.billing_model and BalanceType.
@@ -37,7 +37,7 @@ class Serializer:
 
     @staticmethod
     def get_end_user(
-        account_info: dict, aliases: list, sip_server: SIPServer, hide_balance: bool, force_tcp: bool
+            account_info: dict, aliases: list, sip_server: SIPServer, hide_balance: bool, force_tcp: bool
     ) -> EndUser:
         """Forms EndUser based on the input account_info and its aliases.
 
@@ -195,7 +195,7 @@ class Serializer:
             type=VoicemailMessageType.FAX if mailbox_message.get("fax_pages") else VoicemailMessageType.VOICE,
             duration=mailbox_message.get("voicemail_duration"),
             size=mailbox_message["size"],
-            date=datetime.datetime.strptime(mailbox_message["delivery_date"], "%d-%b-%Y %H:%M:%S %z"),
+            date=datetime.strptime(mailbox_message["delivery_date"], "%d-%b-%Y %H:%M:%S %z"),
             seen=f"\\{PortaSwitchMailboxMessageFlag.SEEN.value}" in mailbox_message.get("flags", []),
         )
 
@@ -253,15 +253,15 @@ class Serializer:
             call_id=cdr_info.get("call_id", None),  # sometimes 'call_id' field may be missing in cdr_info
             caller=cdr_info["CLI"],
             callee=cdr_info["CLD"],
-            connect_time=datetime.datetime.fromtimestamp(int(cdr_info["unix_connect_time"]), datetime.timezone.utc),
-            direction=Direction.incoming,  # TODO determine the value according to CDR.
+            connect_time=datetime.fromtimestamp(int(cdr_info["unix_connect_time"]), timezone.utc),
+            direction=Serializer.parse_cdr_direction(cdr_info),
             disconnect_reason=cdr_info["disconnect_reason"],
-            disconnect_time=datetime.datetime.fromtimestamp(
-                int(cdr_info["unix_disconnect_time"]), datetime.timezone.utc
+            disconnect_time=datetime.fromtimestamp(
+                int(cdr_info["unix_disconnect_time"]), timezone.utc
             ),
             duration=cdr_info["charged_quantity"],
             recording_id=cdr_info["i_xdr"],  # our Admin UI downloads recordings by this.
-            status=ConnectStatus.accepted,  # TODO determine the value according to CDR.
+            status=Serializer.parse_call_status(cdr)
         )
 
     @staticmethod
@@ -284,3 +284,55 @@ class Serializer:
     @staticmethod
     def parse_voicemail_message_receiver_user_ref(receiver: str) -> str:
         return receiver.split(" ")[0]
+
+    @staticmethod
+    def parse_cdr_direction(cdr) -> str:
+        bit_flags = cdr["bit_flags"]
+
+        masked_value = bit_flags & 12
+
+        if masked_value == 4:
+            return "outgoing"
+        elif masked_value == 8:
+            return "incoming"
+        elif masked_value == 12:
+            return "forwarded"
+        else:
+            return "unknown"
+
+    @staticmethod
+    def parse_call_status(cdr) -> str:
+        """
+        Determines call status based on CDR data.
+
+        Returns: 'accepted', 'declined', 'missed', or 'error'
+        """
+        disconnect_cause = cdr["disconnect_cause"]
+        if isinstance(disconnect_cause, (int, float)):
+            cause = disconnect_cause
+        else:
+            cause = int(disconnect_cause)
+
+        failed = cdr["failed"] == 1
+
+        return Serializer._xdr_to_call_status(failed, cause)
+
+    @staticmethod
+    def _xdr_to_call_status(failed: bool, disconnect_cause: int) -> str:
+        """
+        Maps CDR parameters to call status using pattern matching logic.
+
+        Args:
+            failed: Whether the call failed
+            disconnect_cause: Numeric disconnect cause code
+
+        Returns: 'accepted', 'declined', 'missed', or 'error'
+        """
+        if failed and disconnect_cause == 16:
+            return "declined"
+        elif failed and disconnect_cause == 19:
+            return "missed"
+        elif not failed and disconnect_cause == 16:
+            return "declined"
+        else:
+            return "error"
