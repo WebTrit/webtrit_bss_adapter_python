@@ -2,8 +2,10 @@ import logging
 
 from bss.adapters.portaswitch.config import PortaSwitchSettings
 from bss.adapters.portaswitch.types import PortaSwitchAdminUser
+from bss.adapters.portaswitch.utils import extract_fault_code
 from bss.http_api import HTTPAPIConnectorWithLogin
 from bss.models import DeliveryChannel
+from report_error import WebTritErrorException
 
 
 class AdminAPI(HTTPAPIConnectorWithLogin):
@@ -167,13 +169,29 @@ class AdminAPI(HTTPAPIConnectorWithLogin):
         """
         logging.debug(f"Sending Admin.API request: {module}/{method}/{params}")
 
-        result = self.send_rest_request(
-            method="POST",
-            path=f"/rest/{module}/{method}",
-            json={"params": params},
-            turn_off_login=turn_off_login,
-            user=self._api_user,
-        )
+        try:
+            result = self.send_rest_request(
+                method="POST",
+                path=f"/rest/{module}/{method}",
+                json={"params": params},
+                turn_off_login=turn_off_login,
+                user=self._api_user,
+            )
+        except WebTritErrorException as error:
+            fault_code = extract_fault_code(error)
+            if fault_code == 'Server.Session.check_auth.auth_failed':
+                logging.info(f"Unexpected session error from PBX: {error}. Trying to refresh access token...")
+                self.refresh()
+
+                result = self.send_rest_request(
+                    method="POST",
+                    path=f"/rest/{module}/{method}",
+                    json={"params": params},
+                    turn_off_login=turn_off_login,
+                    user=self._api_user,
+                )
+            else:
+                raise error
 
         logging.debug(f"Processing the Admin.API result: {module}/{method}/{params}: \n {result}")
         return result
