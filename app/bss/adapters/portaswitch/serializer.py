@@ -261,7 +261,7 @@ class Serializer:
             ),
             duration=cdr_info["charged_quantity"],
             recording_id=cdr_info["i_xdr"],  # our Admin UI downloads recordings by this.
-            status=Serializer.parse_call_status(cdr)
+            status=Serializer.parse_call_status(cdr_info)
         )
 
     @staticmethod
