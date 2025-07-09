@@ -261,7 +261,7 @@ class BSSAdapter(SessionManagement, OTPHandler,
     @abstractmethod
     def retrieve_call_recording(
             self, session: SessionInfo, recording_id: str
-    ) -> bytes:
+    ) -> tuple[str, Iterator]:
         """Get the media file for a previously recorded call."""
         raise NotImplementedError("Override this method in your sub-class")
 
@@ -412,7 +412,7 @@ class BSSAdapterExternalDB(BSSAdapter, SampleOTPHandler):
     @abstractmethod
     def retrieve_call_recording(
             self, session: SessionInfo, recording_id: str
-    ) -> bytes:
+    ) -> tuple[str, Iterator]:
         """Get the media file for a previously recorded call."""
         raise NotImplementedError("Override this method in your sub-class")
 

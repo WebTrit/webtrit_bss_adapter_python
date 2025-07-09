@@ -522,7 +522,7 @@ class PortaSwitchAdapter(BSSAdapter):
 
             raise error
 
-    def retrieve_call_recording(self, session: SessionInfo, call_recording: CallRecordingId) -> bytes:
+    def retrieve_call_recording(self, session: SessionInfo, call_recording: CallRecordingId) -> tuple[str, Iterator]:
         """Returns the binary representation of the recorded call.
 
         Parameters:
@@ -530,7 +530,7 @@ class PortaSwitchAdapter(BSSAdapter):
             :call_recording (CallRecordingId): Contains an identifier of a call recording record.
 
         Returns:
-            :(bytes): Raw bytes of a call recording file.
+            tuple[str, Iterator]: A tuple containing the content-type and an iterator over the raw bytes of the recording.
 
         """
         try:

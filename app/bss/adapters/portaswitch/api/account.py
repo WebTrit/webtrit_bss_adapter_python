@@ -262,7 +262,7 @@ class AccountAPI(HTTPAPIConnector):
             },
             access_token=access_token)
 
-    def get_call_recording(self, recording_id: int, access_token: str) -> bytes:
+    def get_call_recording(self, recording_id: int, access_token: str) -> tuple[str, Iterator]:
         """Returns the bytes of the call recording file.
 
         Parameters:
@@ -280,6 +280,7 @@ class AccountAPI(HTTPAPIConnector):
             params={
                 "i_xdr": recording_id,
             },
+            stream=True,
             access_token=access_token,
         )
 
