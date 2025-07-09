@@ -334,6 +334,6 @@ class Serializer:
         elif failed and disconnect_cause == 19:
             return "missed"
         elif not failed and disconnect_cause == 16:
-            return "declined"
+            return "accepted"
         else:
             return "error"
