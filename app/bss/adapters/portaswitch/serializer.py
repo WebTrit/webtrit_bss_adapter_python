@@ -18,6 +18,7 @@ from bss.types import (
     VoicemailMessageType,
     VoicemailMessageDetails,
     VoicemailMessageAttachment,
+    Direction,
 )
 
 from .types import PortaSwitchMailboxMessageFlag
@@ -292,13 +293,13 @@ class Serializer:
         masked_value = bit_flags & 12
 
         if masked_value == 4:
-            return "outgoing"
+            return Direction.outgoing
         elif masked_value == 8:
-            return "incoming"
+            return Direction.incoming
         elif masked_value == 12:
-            return "forwarded"
+            return Direction.forwarded
         else:
-            return "unknown"
+            return Direction.unknown
 
     @staticmethod
     def parse_call_status(cdr) -> str:

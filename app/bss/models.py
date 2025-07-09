@@ -462,8 +462,10 @@ class VerifySessionOtpUnprocessableEntityErrorResponse(ErrorResponse):
 
 
 class Direction(Enum):
+    unknown = "unknown"
     incoming = "incoming"
     outgoing = "outgoing"
+    forwarded = "forwarded"
 
 
 class ConnectStatus(Enum):
