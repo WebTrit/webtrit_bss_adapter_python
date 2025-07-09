@@ -542,11 +542,9 @@ class PortaSwitchAdapter(BSSAdapter):
 
         except WebTritErrorException as error:
             faultcode = extract_fault_code(error)
-            if faultcode in ("Server.CDR.xdr_not_found",):
-                # Race condition case, when session is validated and then the access_token dies.
+            if faultcode in ("Server.CDR.xdr_not_found", "Server.CDR.invalid_call_recording_id",):
                 raise WebTritErrorException(
                     status_code=404,
-                    # code = UserAccessErrorCode.session_not_found,
                     error_message="The recording with such a recording_id is not found.",
                 )
 
