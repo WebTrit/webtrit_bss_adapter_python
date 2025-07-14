@@ -49,7 +49,9 @@ class AdminAPI(HTTPAPIConnectorWithLogin):
 
     def refresh(self):
         """Rerfreshes access token."""
-        return self.login(self._api_user)
+        session = self.login(self._api_user)
+        self.store_auth_session(session, self._api_user)
+        return session
 
     def get_account_list(self, i_customer: int):
         """Returns information about accounts related to the input i_customer.
