@@ -47,7 +47,7 @@ class AdminAPI(HTTPAPIConnectorWithLogin):
         logging.debug(f"Could not find an access token in the response {response}")
         raise ValueError("Could not find an access token in the response")
 
-    def refresh(self):
+    def refresh(self, user=None, auth_session=None):
         """Rerfreshes access token."""
         session = self.login(self._api_user)
         self.store_auth_session(session, self._api_user)
