@@ -261,7 +261,7 @@ class Serializer:
                 int(cdr_info["unix_disconnect_time"]), timezone.utc
             ),
             duration=cdr_info["charged_quantity"],
-            recording_id=cdr_info["i_xdr"],  # our Admin UI downloads recordings by this.
+            recording_id=cdr_info["i_xdr"] if Serializer._call_recording_exist(cdr_info) else None,
             status=Serializer.parse_call_status(cdr_info)
         )
 
@@ -337,3 +337,9 @@ class Serializer:
             return "accepted"
         else:
             return "error"
+        
+    @staticmethod
+    def _call_recording_exist(cdr) -> bool:
+        bit_flags = cdr["bit_flags"]
+
+        return (bit_flags & 64) != 0
