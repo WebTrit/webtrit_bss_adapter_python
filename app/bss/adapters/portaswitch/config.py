@@ -34,11 +34,11 @@ class PortaSwitchSettings(BaseSettings):
 
     @validator("CONTACTS_SELECTING_PHONEBOOK_CUSTOMER_IDS", pre=True)
     def decode_contacts_selecting_phonebook_customer_ids(cls, v: Union[List, str]) -> List[str]:
-        return [json.loads(x) for x in v.split(';')] if isinstance(v, str) else v
+        return [x.strip() for x in v.split(';')] if isinstance(v, str) else v
 
     @validator("CONTACTS_CUSTOM", pre=True)
     def decode_contacts_custom(cls, v: Union[List, str]) -> List[dict]:
-        return [json.loads(x) for x in v.split(';')] if isinstance(v, str) else v
+        return [json.loads(x) for x in v.split(';')] if isinstance(v, str) and v else v
 
     @validator("ALLOWED_ADDONS", pre=True)
     def decode_allowed_addons(cls, v: Union[List, str]) -> List[str]:
