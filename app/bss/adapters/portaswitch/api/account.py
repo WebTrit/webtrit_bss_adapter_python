@@ -231,6 +231,7 @@ class AccountAPI(HTTPAPIConnector):
             module="Account",
             method="get_xdr_list",
             params={
+                "i_service_type": 3,
                 "get_total": 1,
                 "show_unsuccessful": 1,
                 "limit": items_per_page,
