@@ -42,7 +42,7 @@ class PortaSwitchSettings(BaseSettings):
 
     @validator("ALLOWED_ADDONS", pre=True)
     def decode_allowed_addons(cls, v: Union[List, str]) -> List[str]:
-        return [x.strip() for x in v.split(';')] if isinstance(v, str) else v
+        return [x.strip() for x in v.split(';')] if isinstance(v, str) and v else v
 
     class Config:
         env_prefix = "PORTASWITCH_"
