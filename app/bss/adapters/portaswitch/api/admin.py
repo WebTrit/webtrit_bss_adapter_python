@@ -69,9 +69,10 @@ class AdminAPI(HTTPAPIConnectorWithLogin):
             params={
                 "i_customer": i_customer,
                 "with_aliases": 1,
-                "limit_alias_did_number_list": 100,
                 "get_not_closed_accounts": 1,
-                "limit": 1000
+                "get_only_real_accounts": 1,
+                "limit": 1000,
+                "limit_alias_did_number_list": 100
             },
         )
 

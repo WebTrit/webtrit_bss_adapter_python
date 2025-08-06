@@ -397,12 +397,13 @@ class PortaSwitchAdapter(BSSAdapter):
             contacts = []
             match self._portaswitch_settings.CONTACTS_SELECTING:
                 case PortaSwitchContactsSelectingMode.EXTENSIONS:
+                    allowed_ext_types = {type.value for type in self._portaswitch_settings.CONTACTS_SELECTING_EXTENSION_TYPES}
                     accounts = self._admin_api.get_account_list(i_customer)["account_list"]
                     account_to_aliases = {account["i_account"]: account.get("alias_list", []) for account in accounts}
                     extensions = self._admin_api.get_extensions_list(i_customer)["extensions_list"]
 
                     for ext in extensions:
-                        if ext["type"] in self._portaswitch_settings.CONTACTS_SELECTING_EXTENSION_TYPES:
+                        if ext["type"] in allowed_ext_types:
                             aliases = account_to_aliases.get(ext.get("i_account"), [])
                             contacts.append(Serializer.get_contact_info_by_extension(ext, aliases, i_account))
                 case PortaSwitchContactsSelectingMode.ACCOUNTS:
