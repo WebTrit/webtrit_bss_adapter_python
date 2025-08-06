@@ -51,7 +51,7 @@ class Serializer:
             Response :EndUser: The filled structure of EndUser.
         """
         return EndUser(
-            alias_name=None,  # TODO: shall we fill it?
+            alias_name=account_info["extension_name"],
             balance=(
                 None
                 if hide_balance
@@ -102,8 +102,8 @@ class Serializer:
         return ContactInfo(
             user_id=account_info["i_account"],
             is_current_user=account_info["i_account"] == current_user,
-            alias_name="",  # TODO: shall we fill it?
-            company_name=account_info.get("companyname", ""),  # TODO: PortaSwitch sometimes does
+            alias_name=account_info["extension_name"],
+            company_name=account_info.get("companyname", ""),
             email=account_info.get("email", None),
             first_name=account_info.get("firstname", ""),
             last_name=account_info.get("lastname", ""),
