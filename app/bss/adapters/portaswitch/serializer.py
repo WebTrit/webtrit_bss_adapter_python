@@ -140,7 +140,6 @@ class Serializer:
             last_name=extension_info.get("lastname", ""),
             numbers=Numbers(
                 additional=aliases,
-                ext=extension_info.get("id"),
                 main=extension_info.get("id"),
                 sms=[number["did_number"] for number in extension_info.get("alias_did_number_list", [])],
             ),
