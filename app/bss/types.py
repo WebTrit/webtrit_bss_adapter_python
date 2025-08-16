@@ -2,7 +2,6 @@ from enum import Enum
 from typing import List, Dict, Any, Optional, Type, Union
 from pydantic import BaseModel, Field
 from datetime import datetime
-import orjson
 
 # for now these are just "clones" but we may extend them in the future
 # plus we do not want to depend on the names of the objects in the schema too much
@@ -178,12 +177,9 @@ class OTP(BaseModel):
     expires_at: datetime
 
 
-def orjson_dumps(v, *, default):
-    return orjson.dumps(v, default=default).decode('utf-8')
-
 class Serialiazable(BaseModel):
     """Object that can be converted into JSON structure"""
-
+    pass
 
 class SessionInfo(SessionResponse, Serialiazable):
     """Info about a session, initiated by WebTrit core on behalf of user"""
@@ -269,5 +265,9 @@ def safely_extract_scalar_value(obj: object):
         return obj
     if hasattr(obj, "__root__"):
         return obj.__root__
+    elif hasattr(obj, "root"):
+        # pydantic 2.x
+        return obj.root
+
     raise ValueError(f"Cannot extract scalar value from {type(obj)} {obj}")
 

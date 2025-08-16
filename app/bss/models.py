@@ -8,7 +8,7 @@ from datetime import datetime
 from enum import Enum
 from typing import Any, Dict, List, Optional, Union, NewType
 
-from pydantic import BaseModel, EmailStr, Field, conint
+from pydantic import BaseModel, EmailStr, Field, conint, RootModel
 
 Code = NewType("Code", str)
 
@@ -90,8 +90,9 @@ class SipStatus(Enum):
     notregistered = "notregistered"
 
 
-class CustomRequest(Dict):
-    pass
+class CustomRequest(BaseModel):
+    """Custom request model - flexible dictionary-like structure"""
+    model_config = {"extra": "allow"}
 
 
 class VerifySessionOtpNotFoundErrorResponse(ErrorResponse):
@@ -114,25 +115,33 @@ class Status(Enum):
     blocked = "blocked"
 
 
-class RefreshToken(BaseModel):
-    __root__: str = Field(
-        ...,
-        description="A single-use token for refreshing the API session and obtaining a new `access_token`.\n\nWhen the current `access_token` is close to expiration or has already expired, the\n`refresh_token` can be exchanged for a new `access_token`, ensuring uninterrupted access\nto the API without requiring the user to manually sign in again.\n\nPlease note that each `refresh_token` can only be used once, and a new `refresh_token`\nwill be issued along with the new `access_token`.\n",
-        title="RefreshToken",
-    )
+class RefreshToken(RootModel[str]):
+    """A single-use token for refreshing the API session and obtaining a new `access_token`.
+
+    When the current `access_token` is close to expiration or has already expired, the
+    `refresh_token` can be exchanged for a new `access_token`, ensuring uninterrupted access
+    to the API without requiring the user to manually sign in again.
+
+    Please note that each `refresh_token` can only be used once, and a new `refresh_token`
+    will be issued along with the new `access_token`.
+    """
 
 
-class BinaryResponse(BaseModel):
-    __root__: bytes = Field(..., title="BinaryResponse")
+class BinaryResponse(RootModel[bytes]):
+    """Binary response data"""
 
 
-class UserId(BaseModel):
-    __root__: str = Field(
-        ...,
-        description="A primary unique identifier of the user on the **Adaptee**.\n\nThis identifier is crucial for the proper functioning of **WebTrit Core**, as it is used\nto store information such as push tokens and other relevant data associated to the user.\n\nThe **Adaptee** must consistently return the same `UserId` for the same user,\nregardless of the `UserRef` used for sign-in.\n",
-        title="UserId",
-        json_schema_extra={"example": "123456789abcdef0123456789abcdef0"},
-    )
+class UserId(RootModel[str]):
+    """A primary unique identifier of the user on the **Adaptee**.
+
+    This identifier is crucial for the proper functioning of **WebTrit Core**, as it is used
+    to store information such as push tokens and other relevant data associated to the user.
+
+    The **Adaptee** must consistently return the same `UserId` for the same user,
+    regardless of the `UserRef` used for sign-in.
+    """
+    
+    model_config = {"json_schema_extra": {"example": "123456789abcdef0123456789abcdef0"}}
 
 
 class GetUserContactListUnauthorizedErrorResponse(ErrorResponse):
@@ -163,13 +172,18 @@ class GetUserHistoryListInternalServerErrorErrorResponse(ErrorResponse):
     )
 
 
-class UserRef(BaseModel):
-    __root__: str = Field(
-        ...,
-        description="A reference identifier of the user on the **Adaptee**\n\nThis identifier is entered by the user in client applications and passed\nvia **WebTrit Core** to the **Adaptee** for sign-in purposes.\n\nThe identifier can be a phone number or any other attribute associated\nwith the user. When the same user is accessed using different references,\nit is crucial to ensure that the same `UserId` is assigned to this user.\n",
-        title="UserRef",
-        json_schema_extra={"example": "1234567890"},
-    )
+class UserRef(RootModel[str]):
+    """A reference identifier of the user on the **Adaptee**
+
+    This identifier is entered by the user in client applications and passed
+    via **WebTrit Core** to the **Adaptee** for sign-in purposes.
+
+    The identifier can be a phone number or any other attribute associated
+    with the user. When the same user is accessed using different references,
+    it is crucial to ensure that the same `UserId` is assigned to this user.
+    """
+    
+    model_config = {"json_schema_extra": {"example": "1234567890"}}
 
 
 class DeleteSessionNotFoundErrorResponse(ErrorResponse):
@@ -197,8 +211,9 @@ class SessionOtpCreateRequest(BaseModel):
     user_ref: UserRef
 
 
-class CustomResponse(Dict):
-    pass
+class CustomResponse(BaseModel):
+    """Custom response model - flexible dictionary-like structure"""
+    model_config = {"extra": "allow"}
 
 
 class CustomPage(BaseModel):
@@ -482,16 +497,21 @@ class CreateUserUnprocessableEntityErrorResponse(ErrorResponse):
     )
 
 
-class AccessToken(BaseModel):
-    __root__: str = Field(
-        ...,
-        description="A short-lived token that grants access to the API resources.\n\nIt must be included as an Authorization header in the format `Bearer {access_token}` with each API request.\nThe `access_token` has an expiration date, so it needs to be refreshed periodically using a `refresh_token`\nto maintain uninterrupted access to the API without requiring the user to manually sign in again.\n\nPlease note that the `access_token` should be kept secure and not shared, as it grants access to the user's\ndata and actions within the API.\n",
-        title="AccessToken",
-    )
+class AccessToken(RootModel[str]):
+    """A short-lived token that grants access to the API resources.
+
+    It must be included as an Authorization header in the format `Bearer {access_token}` with each API request.
+    The `access_token` has an expiration date, so it needs to be refreshed periodically using a `refresh_token`
+    to maintain uninterrupted access to the API without requiring the user to manually sign in again.
+
+    Please note that the `access_token` should be kept secure and not shared, as it grants access to the user's
+    data and actions within the API.
+    """
 
 
-class UserCreateRequest(Dict):
-    pass
+class UserCreateRequest(BaseModel):
+    """Request model for user creation - flexible dictionary-like structure"""
+    model_config = {"extra": "allow"}
 
 
 class UpdateSessionNotFoundErrorResponse(ErrorResponse):
@@ -515,21 +535,18 @@ class CreateUserMethodNotAllowedErrorResponse(ErrorResponse):
     )
 
 
-class OtpId(BaseModel):
-    __root__: str = Field(
-        ...,
-        description="Unique identifier of the OTP request on the **Adapter** and/or **Adaptee** side.\n\nNote: This ID is NOT the code that the user will enter. It serves\nto match the originally generated OTP with the one provided by the user.\n",
-        title="OtpId",
-        json_schema_extra={"example": "12345678-9abc-def0-1234-56789abcdef0"},
-    )
+class OtpId(RootModel[str]):
+    """Unique identifier of the OTP request on the **Adapter** and/or **Adaptee** side.
+
+    Note: This ID is NOT the code that the user will enter. It serves
+    to match the originally generated OTP with the one provided by the user.
+    """
+    
+    model_config = {"json_schema_extra": {"example": "12345678-9abc-def0-1234-56789abcdef0"}}
 
 
-class CallRecordingId(BaseModel):
-    __root__: str = Field(
-        ...,
-        description="A unique identifier for a call recording, used to reference the recorded media of a specific call.\n",
-        title="CallRecordingId",
-    )
+class CallRecordingId(RootModel[str]):
+    """A unique identifier for a call recording, used to reference the recorded media of a specific call."""
 
 
 class CreateSessionUnprocessableEntityErrorResponse(ErrorResponse):
@@ -746,8 +763,8 @@ class CDRInfo(BaseModel):
     status: ConnectStatus = Field(..., description="Indicates the call status.")
 
 
-class UserCreateResponse(BaseModel):
-    __root__: Union[Dict[str, Any], SessionOtpCreateResponse, SessionResponse] = Field(..., title="UserCreateResponse")
+class UserCreateResponse(RootModel[Union[Dict[str, Any], SessionOtpCreateResponse, SessionResponse]]):
+    """Response for user creation operations"""
 
 
 class UserHistoryIndexResponse(BaseModel):

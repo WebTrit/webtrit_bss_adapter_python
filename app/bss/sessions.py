@@ -159,7 +159,7 @@ def configure_session_storage(config):
         "Sessions", "Storage", "Class", default="SessionsInFile"
     )
 
-    logging.debug(f"Using file {class_name} for session storage")
+    logging.debug(f"Using {class_name} for session storage")
     storage_creator = ModuleLoader.load_module_and_class(
         module_path=None,
         module_name=module_name,
