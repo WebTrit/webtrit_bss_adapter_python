@@ -32,21 +32,26 @@ class PortaSwitchSettings(BaseSettings):
     @field_validator("CONTACTS_SELECTING_EXTENSION_TYPES", mode='before')
     @classmethod
     def decode_contacts_selecting_extension_types(cls, v: Union[List, str]) -> List[PortaSwitchExtensionType]:
-        return [PortaSwitchExtensionType(x) for x in v.split(';')] if isinstance(v, str) else v
+        v = str(v)
+        return [PortaSwitchExtensionType(x) for x in v.split(';')] if v else v
 
     @field_validator("CONTACTS_SELECTING_PHONEBOOK_CUSTOMER_IDS", mode='before')
     @classmethod
     def decode_contacts_selecting_phonebook_customer_ids(cls, v: Union[List, str]) -> List[str]:
-        return [x.strip() for x in v.split(';')] if isinstance(v, str) else v
+        v = str(v)
+        return [x.strip() for x in v.split(';')] if v else v
 
     @field_validator("CONTACTS_CUSTOM", mode='before')
     @classmethod
     def decode_contacts_custom(cls, v: Union[List, str]) -> List[dict]:
-        return [json.loads(x) for x in v.split(';')] if isinstance(v, str) and v else v
+        v = str(v)
+        return [json.loads(x) for x in v.split(';')] if v else v
 
     @field_validator("ALLOWED_ADDONS", mode='before')
+    @classmethod
     def decode_allowed_addons(cls, v: Union[List, str]) -> List[str]:
-        return [x.strip() for x in v.split(';')] if isinstance(v, str) and v else v
+        v = str(v)
+        return [x.strip() for x in v.split(';')] if str(v) else v
 
     model_config = {
         "env_prefix": "PORTASWITCH_",
@@ -61,7 +66,8 @@ class OTPSettings(BaseSettings):
     @field_validator("IGNORE_ACCOUNTS", mode='before')
     @classmethod
     def decode_ignore_accounts(cls, v: str) -> List[str]:
-        return [str(x) for x in v.split(';')] if isinstance(v, str) else v
+        v = str(v)
+        return [str(x) for x in v.split(';')] if v else v
 
     model_config = {
         "env_prefix": "OTP_",
