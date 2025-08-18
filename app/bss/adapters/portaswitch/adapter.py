@@ -698,6 +698,7 @@ class PortaSwitchAdapter(BSSAdapter):
 
     def signup(self, user_data, tenant_id: str = None) -> UserCreateResponse:
         """Create a new user as a part of the sign-up process"""
+        user_data = user_data.model_dump()
         access_token = user_data.get("access_token")
         refresh_token = user_data.get("refresh_token")
 
