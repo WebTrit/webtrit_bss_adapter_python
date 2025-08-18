@@ -305,7 +305,8 @@ class PortaSwitchAdapter(BSSAdapter):
                     "Client.Session.check_auth.failed_to_process_access_token",
             ):
                 raise WebTritErrorException(
-                    status_code=401,
+                    status_code=422,
+                    code="refresh_token_invalid",
                     error_message=f"Invalid refresh token {refresh_token}",
                 )
 
