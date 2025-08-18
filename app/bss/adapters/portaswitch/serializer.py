@@ -212,7 +212,7 @@ class Serializer:
         voicemail_message = Serializer.get_voicemail_message(mailbox_message_details)
 
         return VoicemailMessageDetails(
-            **voicemail_message.dict(),
+            **voicemail_message.model_dump(),
             sender=Serializer.parse_voicemail_message_sender_user_ref(mailbox_message_details["from"]),
             receiver=Serializer.parse_voicemail_message_receiver_user_ref(mailbox_message_details["to"]),
             attachments=[
