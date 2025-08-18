@@ -44,7 +44,7 @@ class PortaSwitchSettings(BaseSettings):
     def decode_contacts_custom(cls, v: Union[List, str]) -> List[dict]:
         return [json.loads(x) for x in v.split(';')] if isinstance(v, str) and v else v
 
-    @validator("ALLOWED_ADDONS", pre=True)
+    @field_validator("ALLOWED_ADDONS", mode='before')
     def decode_allowed_addons(cls, v: Union[List, str]) -> List[str]:
         return [x.strip() for x in v.split(';')] if isinstance(v, str) and v else v
 
