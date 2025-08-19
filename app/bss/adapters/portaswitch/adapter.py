@@ -249,11 +249,16 @@ class PortaSwitchAdapter(BSSAdapter):
         try:
             self._account_api.decode_and_verify_access_token_expiration(access_token)
             session_data: dict = self._account_api.ping(access_token=access_token)
+            user_id = session_data["user_id"]
 
-            return SessionInfo(
-                user_id=session_data["user_id"],
-                access_token=access_token,
-            )
+            if not user_id:
+                raise WebTritErrorException(
+                    status_code=401,
+                    error_message="Access token invalid",
+                    code="access_token_invalid",
+                )
+
+            return SessionInfo(user_id=user_id, access_token=access_token)
         except ExpiredSignatureError:
             raise WebTritErrorException(
                 status_code=401,
