@@ -425,27 +425,10 @@ class PortaSwitchAdapter(BSSAdapter):
                                 contacts.append(Serializer.get_contact_info_by_account(account, i_account))
                 case PortaSwitchContactsSelectingMode.PHONEBOOK:
                     phonebook = self._account_api.get_phonebook_list(access_token, 1, 100)['phonebook_rec_list']
-                    number_to_accounts = {}
-                    # Retrieve accounts for a pre-defined list of customers to map them to phonebook records
-                    with ThreadPoolExecutor(max_workers=10) as executor:
-                        future_to_customer_id = {
-                            executor.submit(lambda cid: self._admin_api.get_account_list(int(cid))["account_list"],
-                                            cid): cid
-                            for cid in self._portaswitch_settings.CONTACTS_SELECTING_PHONEBOOK_CUSTOMER_IDS
-                        }
+                    number_to_accounts = self._get_number_to_customer_accounts_map()
 
-                        for future in as_completed(future_to_customer_id):
-                            try:
-                                accounts = future.result()
-                                for account in accounts:
-                                    number_to_accounts[account["id"]] = account
-                            except Exception as e:
-                                logging.warning(
-                                    f"Error fetching accounts for customer {future_to_customer_id[future]}: {e}")
-
-                    contacts = []
                     for record in phonebook:
-                        # Normalize phone number by removing '+' prefix
+                        # Normalize phone number by removing the '+' prefix
                         phonebook_record_number = record.get("phone_number").replace("+", "")
                         phonebook_contact_info = Serializer.get_contact_info_by_phonebook_record(record)
 
@@ -462,6 +445,40 @@ class PortaSwitchAdapter(BSSAdapter):
 
                         if contact.is_current_user is not True:
                             contacts.append(contact)
+
+                case PortaSwitchContactsSelectingMode.PHONE_DIRECTORY:
+                    phone_directories = self._account_api.get_phone_directory_list(access_token, 1, 100)[
+                        'phone_directory_list']
+                    number_to_accounts = self._get_number_to_customer_accounts_map()
+
+                    for directory in phone_directories:
+                        directory_info = self._account_api.get_phone_directory_info(
+                            access_token,
+                            directory['i_ua_config_directory'],
+                            1,
+                            10_000
+                        )['phone_directory_info']
+                        for record in directory_info['directory_records']:
+                            # Normalize phone number by removing the '+' prefix
+                            phone_directory_record_number = record.get("office_number").replace("+", "")
+                            phone_directory_contact_info = Serializer.get_contact_info_by_phone_directory_record(record,
+                                                                                                                 directory_info[
+                                                                                                                     'name'])
+
+                            if account := number_to_accounts.get(phone_directory_record_number):
+                                # If we found a matching account, use its contact info but update with phone directory data
+                                contact = Serializer.get_contact_info_by_account(account, i_account)
+                                contact.first_name = phone_directory_contact_info.first_name
+                                contact.last_name = phone_directory_contact_info.last_name
+                                contact.numbers.main = phone_directory_record_number
+                            else:
+                                # No matching account found, use phone directory contact info as is
+                                contact = phone_directory_contact_info
+                                if contact.numbers.main:
+                                    contact.numbers.main = contact.numbers.main.replace("+", "")
+
+                            if contact.is_current_user is not True:
+                                contacts.append(contact)
 
             # Extend the contact list with custom entries
             contacts.extend([Serializer.get_contact_info_by_custom_entry(entry) for entry in
@@ -806,3 +823,25 @@ class PortaSwitchAdapter(BSSAdapter):
 
         if not allowed_addons.intersection(assigned_addon_names):
             raise WebTritErrorException(403, "Access denied: required add-on not assigned", code="addon_required")
+
+    def _get_number_to_customer_accounts_map(self) -> dict[str, dict]:
+        """Return a mapping of phone numbers to customer accounts."""
+        number_to_accounts = {}
+        # Retrieve accounts for a pre-defined list of customers to map them to phonebook records
+        with ThreadPoolExecutor(max_workers=10) as executor:
+            future_to_customer_id = {
+                executor.submit(lambda cid: self._admin_api.get_account_list(int(cid))["account_list"],
+                                cid): cid
+                for cid in self._portaswitch_settings.CONTACTS_SELECTING_CUSTOMER_IDS
+            }
+
+            for future in as_completed(future_to_customer_id):
+                try:
+                    accounts = future.result()
+                    for account in accounts:
+                        number_to_accounts[account["id"]] = account
+                except Exception as e:
+                    logging.warning(
+                        f"Error fetching accounts for customer {future_to_customer_id[future]}: {e}")
+
+        return number_to_accounts

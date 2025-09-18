@@ -22,7 +22,7 @@ class PortaSwitchSettings(BaseSettings):
     SIGNIN_CREDENTIALS: PortaSwitchSignInCredentialsType = PortaSwitchSignInCredentialsType.SELF_CARE
     CONTACTS_SELECTING: PortaSwitchContactsSelectingMode = PortaSwitchContactsSelectingMode.ACCOUNTS
     CONTACTS_SELECTING_EXTENSION_TYPES: Union[List[PortaSwitchExtensionType], str] = list(PortaSwitchExtensionType)
-    CONTACTS_SELECTING_PHONEBOOK_CUSTOMER_IDS: Union[List[str], str] = []
+    CONTACTS_SELECTING_CUSTOMER_IDS: Union[List[str], str] = []
     CONTACTS_SKIP_WITHOUT_EXTENSION: bool = False
     CONTACTS_CUSTOM: Union[List[dict], str] = []
     HIDE_BALANCE_IN_USER_INFO: Optional[bool] = False
@@ -35,9 +35,9 @@ class PortaSwitchSettings(BaseSettings):
         v = str(v)
         return [PortaSwitchExtensionType(x) for x in v.split(';')] if v else v
 
-    @field_validator("CONTACTS_SELECTING_PHONEBOOK_CUSTOMER_IDS", mode='before')
+    @field_validator("CONTACTS_SELECTING_CUSTOMER_IDS", mode='before')
     @classmethod
-    def decode_contacts_selecting_phonebook_customer_ids(cls, v: Union[List, str]) -> List[str]:
+    def decode_contacts_selecting_customer_ids(cls, v: Union[List, str]) -> List[str]:
         v = str(v)
         return [x.strip() for x in v.split(';')] if v else v
 

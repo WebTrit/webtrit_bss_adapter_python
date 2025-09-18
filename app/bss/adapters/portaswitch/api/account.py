@@ -263,6 +263,51 @@ class AccountAPI(HTTPAPIConnector):
             },
             access_token=access_token)
 
+    def get_phone_directory_list(self, access_token: str, page: int, items_per_page: int) -> dict:
+        """Return the phone directory list of the account.
+
+        Args:
+            access_token (str): Token that authenticates the API user in the PortaBilling API using the account realm.
+            page (int): Shows what page of the phone directory to return.
+            items_per_page (int): Shows the number of items to return.
+
+        Returns:
+            dict: API method execution result containing phone directory items.
+        """
+        return self.__send_request(
+            module="UA",
+            method="get_phone_directory_list",
+            params={
+                "get_total": 1,
+                "limit": items_per_page,
+                "offset": items_per_page * (page - 1),
+            },
+            access_token=access_token)
+
+    def get_phone_directory_info(self, access_token: str, i_ua_config_directory: str, page: int, items_per_page: int) -> dict:
+        """Return the phone directory info of the account.
+
+        Args:
+            access_token (str): Token that authenticates the API user in the PortaBilling API using the account realm.
+            i_ua_config_directory (str): Identifier of the phone directory.
+            page (int): Shows what page of the phone directory items to return.
+            items_per_page (int): Shows the number of items to return.
+
+        Returns:
+            dict: API method execution result containing phone directory items.
+        """
+        return self.__send_request(
+            module="UA",
+            method="get_phone_directory_info",
+            params={
+                "i_ua_config_directory": i_ua_config_directory,
+                "get_total": 1,
+                "get_records": "Y",
+                "limit": items_per_page,
+                "offset": items_per_page * (page - 1),
+            },
+            access_token=access_token)
+
     def get_call_recording(self, recording_id: int, access_token: str) -> tuple[str, Iterator]:
         """Returns the bytes of the call recording file.
 
