@@ -21,6 +21,7 @@ class PortaSwitchContactsSelectingMode(Enum):
     ACCOUNTS = "accounts"
     EXTENSIONS = "extensions"
     PHONEBOOK = "phonebook"
+    PHONE_DIRECTORY = "phone_directory"
 
     @classmethod
     def _missing_(cls, value):

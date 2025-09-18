@@ -163,6 +163,31 @@ class Serializer:
         )
 
     @staticmethod
+    def get_contact_info_by_phone_directory_record(phone_directory_record_info: dict, company_name: str) -> ContactInfo:
+        """Forms ContactInfo based on the input phonebook_record.
+        Parameters:
+            phone_directory_record_info: dict: The information about the phone directory record to be added to ContactInfo.
+            company_name: str: The name of the phone directory.
+
+        Returns:
+            ContactInfo: The filled structure of ContactInfo.
+        """
+        additional_numbers = [
+            phone_directory_record_info.get("mobile_number"),
+            phone_directory_record_info.get("other_number"),
+        ]
+
+        return ContactInfo(
+            company_name=company_name,
+            first_name=phone_directory_record_info.get("first_name"),
+            last_name=phone_directory_record_info.get("last_name"),
+            numbers=Numbers(
+                main=phone_directory_record_info.get("office_number"),
+                additional=list(filter(lambda x: x not in (None, ""), additional_numbers))
+            ),
+        )
+
+    @staticmethod
     def get_contact_info_by_custom_entry(custom_entry: dict) -> ContactInfo:
         """Forms ContactInfo based on the input custom_entry.
         Parameters:
@@ -336,7 +361,7 @@ class Serializer:
             return "accepted"
         else:
             return "error"
-        
+
     @staticmethod
     def _call_recording_exist(cdr) -> bool:
         bit_flags = cdr["bit_flags"]

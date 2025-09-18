@@ -66,8 +66,8 @@ ENV PORTASWITCH_CONTACTS_SELECTING="<contacts-selecting>"
 # By default does not apply filter by type
 ENV PORTASWITCH_CONTACTS_SELECTING_EXTENSION_TYPES="Account;Group;Unassigned"
 
-# Defines a list of customer ids for PORTASWITCH_CONTACTS_SELECTING=phonebook mode (optional)
-ENV PORTASWITCH_CONTACTS_SELECTING_PHONEBOOK_CUSTOMER_IDS="8;10;11;13;14"
+# Defines a list of customer ids for PORTASWITCH_CONTACTS_SELECTING=phonebook|phone_directory modes (optional)
+ENV PORTASWITCH_CONTACTS_SELECTING_CUSTOMER_IDS="8;10;11;13;14"
 
 # Ensures that the contacts API filters accounts that do not have an `extension_id` (optional):
 ENV PORTASWITCH_CONTACTS_SKIP_WITHOUT_EXTENSION="True"
