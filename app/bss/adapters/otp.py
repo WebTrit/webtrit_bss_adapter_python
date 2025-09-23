@@ -10,6 +10,8 @@ from report_error import raise_webtrit_error
 import logging
 
 class OTPHandler(ABC):
+    OTP_LOGIN_IDENTIFIERS = ('email', 'phone_number')
+
     @abstractmethod
     def generate_otp(self, user: UserInfo) -> OTPCreateResponse:
         """Request that the remote hosted PBX system / BSS generates a new
