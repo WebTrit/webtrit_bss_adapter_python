@@ -403,8 +403,13 @@ def get_system_info(
     Supply information about the capabilities of the hosted PBX system and/or BSS adapter
     """
     global bss, bss_capabilities
+
     return GeneralSystemInfoResponse(
-        name=bss.name(), version=bss.version(), supported=bss_capabilities
+        name=bss.name(),
+        version=bss.VERSION,
+        supported=bss_capabilities,
+        custom=dict(
+            otp_login_identifiers=bss.OTP_LOGIN_IDENTIFIERS) if Capabilities.otpSignin in bss_capabilities else dict()
     )
 
 

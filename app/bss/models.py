@@ -574,7 +574,7 @@ class SupportedEnum(Enum):
 
 
 class SystemInfoShowResponse(BaseModel):
-    custom: Optional[Dict[str, str]] = Field(
+    custom: Optional[Dict[str, Any]] = Field(
         None,
         description="Additional custom key-value pairs providing extended information about\nthe **Adaptee** and/or its environment.\n",
     )
