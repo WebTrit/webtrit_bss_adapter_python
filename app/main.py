@@ -406,7 +406,7 @@ def get_system_info(
 
     return GeneralSystemInfoResponse(
         name=bss.name(),
-        version=bss.VERSION,
+        version=bss.version(),
         supported=bss_capabilities,
         custom=dict(
             otp_login_identifiers=bss.OTP_LOGIN_IDENTIFIERS) if Capabilities.otpSignin in bss_capabilities else dict()
