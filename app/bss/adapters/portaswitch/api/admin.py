@@ -71,6 +71,7 @@ class AdminAPI(HTTPAPIConnectorWithLogin):
                 "with_aliases": 1,
                 "get_not_closed_accounts": 1,
                 "get_only_real_accounts": 1,
+                "get_statuses": 1,
                 "limit": 1000,
                 "limit_alias_did_number_list": 100
             },
