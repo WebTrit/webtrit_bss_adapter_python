@@ -419,6 +419,8 @@ class PortaSwitchAdapter(BSSAdapter):
                     accounts = self._admin_api.get_account_list(i_customer)["account_list"]
 
                     for account in accounts:
+                        if (status := account.get("status")) and status == "blocked":
+                            continue
                         dual_version_system = PortaSwitchDualVersionSystem(account.get("dual_version_system"))
                         if dual_version_system != PortaSwitchDualVersionSystem.SOURCE:
                             if (not self._portaswitch_settings.CONTACTS_SKIP_WITHOUT_EXTENSION or account.get(
