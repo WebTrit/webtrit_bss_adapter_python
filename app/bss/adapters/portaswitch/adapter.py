@@ -3,6 +3,8 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timedelta, UTC
 from typing import Final, Iterator, Optional, Dict
 
+from jose.exceptions import ExpiredSignatureError, JWTError
+
 from app_config import AppConfig
 from bss.adapters import BSSAdapter
 from bss.dbs import TiedKeyValue
@@ -24,10 +26,8 @@ from bss.types import (
     UserEventGroup,
     UserEventType,
 )
-from jose.exceptions import ExpiredSignatureError, JWTError
 from localization import get_translation_func
 from report_error import WebTritErrorException
-
 from .api import AccountAPI, AdminAPI
 from .config import Settings
 from .serializer import Serializer
@@ -171,7 +171,7 @@ class PortaSwitchAdapter(BSSAdapter):
                 raise WebTritErrorException(500, "Unknown error", code="external_api_issue")
 
             otp_id: str = generate_otp_id()
-            self._cached_otp_ids[otp_id] = i_account
+            self._cached_otp_ids[otp_id] = i_account, user.user_id
 
             env_info = self._admin_api.get_env_info()
 
@@ -204,12 +204,12 @@ class PortaSwitchAdapter(BSSAdapter):
             # We need the otp_id only for storing the i_account.
             otp_id = safely_extract_scalar_value(otp.otp_id)
 
-            i_account: int = self._cached_otp_ids.get(otp_id)
+            (i_account, user_ref) = self._cached_otp_ids.get(otp_id, (None, None))
             if not i_account:
                 raise WebTritErrorException(status_code=404, error_message=f"Incorrect OTP code: {otp.code}")
 
             data: dict = self._admin_api.verify_otp(otp_token=otp.code)
-            if str(i_account) not in self._otp_settings.IGNORE_ACCOUNTS and not data["success"]:
+            if user_ref not in self._otp_settings.IGNORE_ACCOUNTS and not data["success"]:
                 raise WebTritErrorException(status_code=404, error_message=f"Incorrect OTP code: {otp.code}")
 
             self._cached_otp_ids.pop(otp_id)
@@ -407,7 +407,7 @@ class PortaSwitchAdapter(BSSAdapter):
                         type.value for type in
                         self._portaswitch_settings.CONTACTS_SELECTING_EXTENSION_TYPES
                     }
-                    accounts = self._admin_api.get_account_list(i_customer)["account_list"]
+                    accounts = self._get_all_accounts_by_customer(i_customer)
                     account_to_aliases = {account["i_account"]: account.get("alias_list", []) for account in accounts}
                     extensions = self._admin_api.get_extensions_list(i_customer)["extensions_list"]
 
@@ -416,7 +416,7 @@ class PortaSwitchAdapter(BSSAdapter):
                             aliases = [str(alias) for alias in account_to_aliases.get(ext.get("i_account"), [])]
                             contacts.append(Serializer.get_contact_info_by_extension(ext, aliases, i_account))
                 case PortaSwitchContactsSelectingMode.ACCOUNTS:
-                    accounts = self._admin_api.get_account_list(i_customer)["account_list"]
+                    accounts = self._get_all_accounts_by_customer(i_customer)
 
                     for account in accounts:
                         if (status := account.get("status")) and status == "blocked":
@@ -833,7 +833,7 @@ class PortaSwitchAdapter(BSSAdapter):
         # Retrieve accounts for a pre-defined list of customers to map them to phonebook records
         with ThreadPoolExecutor(max_workers=10) as executor:
             future_to_customer_id = {
-                executor.submit(lambda cid: self._admin_api.get_account_list(int(cid))["account_list"],
+                executor.submit(lambda cid: self._get_all_accounts_by_customer(int(cid)),
                                 cid): cid
                 for cid in self._portaswitch_settings.CONTACTS_SELECTING_CUSTOMER_IDS
             }
@@ -848,3 +848,26 @@ class PortaSwitchAdapter(BSSAdapter):
                         f"Error fetching accounts for customer {future_to_customer_id[future]}: {e}")
 
         return number_to_accounts
+
+    def _get_all_accounts_by_customer(self, i_customer: int) -> list[dict]:
+        """Fetch all accounts for a customer using pagination with offset until total is reached."""
+        all_accounts: list[dict] = []
+        offset = 0
+        limit = 1000
+
+        while True:
+            resp = self._admin_api.get_account_list(i_customer, limit, offset)
+            page = resp.get("account_list", []) if isinstance(resp, dict) else []
+            total = resp.get("total") if isinstance(resp, dict) else None
+
+            all_accounts.extend(page)
+
+            # Stop if we've reached the total or the page is shorter than limit
+            if total is not None and len(all_accounts) >= int(total):
+                break
+            if len(page) < limit:
+                break
+
+            offset += limit
+
+        return all_accounts

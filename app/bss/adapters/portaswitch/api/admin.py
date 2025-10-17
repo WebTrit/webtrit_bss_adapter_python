@@ -53,7 +53,7 @@ class AdminAPI(HTTPAPIConnectorWithLogin):
         self.store_auth_session(session, self._api_user)
         return session
 
-    def get_account_list(self, i_customer: int):
+    def get_account_list(self, i_customer: int, limit: int = 1000, offset: int = 0):
         """Returns information about accounts related to the input i_customer.
 
         Parameters:
@@ -72,7 +72,9 @@ class AdminAPI(HTTPAPIConnectorWithLogin):
                 "get_not_closed_accounts": 1,
                 "get_only_real_accounts": 1,
                 "get_statuses": 1,
-                "limit": 1000,
+                "get_total": 1,
+                "limit": limit,
+                "offset": offset,
                 "limit_alias_did_number_list": 100
             },
         )
