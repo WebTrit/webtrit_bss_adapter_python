@@ -45,7 +45,10 @@ class PortaSwitchSettings(BaseSettings):
 
     @validator("ALLOWED_ADDONS", pre=True)
     def decode_allowed_addons(cls, v: Union[List, str]) -> List[str]:
-        return [x.strip() for x in v.split(';')] if isinstance(v, str) and v else v
+        if isinstance(v, int):
+            v = str(v)
+
+        return [x.strip() for x in v.split(';')] if isinstance(v, str) else v
 
     class Config:
         env_prefix = "PORTASWITCH_"
@@ -57,8 +60,11 @@ class OTPSettings(BaseSettings):
     IGNORE_ACCOUNTS: Union[List[str], str] = []
 
     @validator("IGNORE_ACCOUNTS", pre=True)
-    def decode_ignore_accounts(cls, v: str) -> List[str]:
-        return [str(x) for x in v.split(';')] if isinstance(v, str) else v
+    def decode_ignore_accounts(cls, v: Union[List, str]) -> List[str]:
+        if isinstance(v, int):
+            v = str(v)
+
+        return [x.strip() for x in v.split(';')] if isinstance(v, str) else v
 
     class Config:
         env_prefix = "OTP_"
