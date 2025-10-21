@@ -428,7 +428,16 @@ class PortaSwitchAdapter(BSSAdapter):
                                 contacts.append(Serializer.get_contact_info_by_account(account, i_account))
                 case PortaSwitchContactsSelectingMode.PHONEBOOK:
                     phonebook = self._account_api.get_phonebook_list(access_token, 1, 100)['phonebook_rec_list']
-                    number_to_accounts = self._get_number_to_customer_accounts_map()
+                    
+                    # Extract phone numbers from phonebook records
+                    phonebook_numbers = set()
+                    for record in phonebook:
+                        phone_number = record.get("phone_number", "").replace("+", "")
+                        if phone_number:
+                            phonebook_numbers.add(phone_number)
+                    
+                    # Get accounts mapping only for phonebook numbers (on-demand)
+                    number_to_accounts = self._get_number_to_customer_accounts_map_for_numbers(phonebook_numbers)
 
                     for record in phonebook:
                         # Normalize phone number by removing the '+' prefix
@@ -452,7 +461,23 @@ class PortaSwitchAdapter(BSSAdapter):
                 case PortaSwitchContactsSelectingMode.PHONE_DIRECTORY:
                     phone_directories = self._account_api.get_phone_directory_list(access_token, 1, 100)[
                         'phone_directory_list']
-                    number_to_accounts = self._get_number_to_customer_accounts_map()
+                    
+                    # Extract phone numbers from phone directory records
+                    phone_directory_numbers = set()
+                    for directory in phone_directories:
+                        directory_info = self._account_api.get_phone_directory_info(
+                            access_token,
+                            directory['i_ua_config_directory'],
+                            1,
+                            10_000
+                        )['phone_directory_info']
+                        for record in directory_info['directory_records']:
+                            office_number = record.get("office_number", "").replace("+", "")
+                            if office_number:
+                                phone_directory_numbers.add(office_number)
+                    
+                    # Get accounts mapping only for phone directory numbers (on-demand)
+                    number_to_accounts = self._get_number_to_customer_accounts_map_for_numbers(phone_directory_numbers)
 
                     for directory in phone_directories:
                         directory_info = self._account_api.get_phone_directory_info(
@@ -827,26 +852,59 @@ class PortaSwitchAdapter(BSSAdapter):
         if not allowed_addons.intersection(assigned_addon_names):
             raise WebTritErrorException(403, "Access denied: required add-on not assigned", code="addon_required")
 
-    def _get_number_to_customer_accounts_map(self) -> dict[str, dict]:
-        """Return a mapping of phone numbers to customer accounts."""
+    def _get_number_to_customer_accounts_map_for_numbers(self, target_numbers: set[str]) -> dict[str, dict]:
+        """Return a mapping of phone numbers to customer accounts, optimized for specific numbers.
+        
+        This method searches for accounts on-demand, fetching them in batches of 1000
+        and stopping when all target numbers are found or all accounts are processed.
+        
+        Args:
+            target_numbers: Set of phone numbers to search for
+            
+        Returns:
+            Dictionary mapping phone numbers to account information
+        """
+        if not target_numbers:
+            return {}
+            
         number_to_accounts = {}
-        # Retrieve accounts for a pre-defined list of customers to map them to phonebook records
-        with ThreadPoolExecutor(max_workers=10) as executor:
-            future_to_customer_id = {
-                executor.submit(lambda cid: self._get_all_accounts_by_customer(int(cid)),
-                                cid): cid
-                for cid in self._portaswitch_settings.CONTACTS_SELECTING_CUSTOMER_IDS
-            }
-
-            for future in as_completed(future_to_customer_id):
-                try:
-                    accounts = future.result()
-                    for account in accounts:
-                        number_to_accounts[account["id"]] = account
-                except Exception as e:
-                    logging.warning(
-                        f"Error fetching accounts for customer {future_to_customer_id[future]}: {e}")
-
+        remaining_numbers = target_numbers.copy()
+        
+        # Search through each customer's accounts
+        for customer_id in self._portaswitch_settings.CONTACTS_SELECTING_CUSTOMER_IDS:
+            if not remaining_numbers:
+                break  # All numbers found, no need to continue
+                
+            try:
+                # Get accounts for this customer in batches
+                offset = 0
+                limit = 1000
+                
+                while remaining_numbers and offset < 10000:  # Safety limit to prevent infinite loops
+                    accounts = self._admin_api.get_account_list(int(customer_id), limit, offset)
+                    page = accounts.get("account_list", []) if isinstance(accounts, dict) else []
+                    total = accounts.get("total") if isinstance(accounts, dict) else None
+                    
+                    # Process accounts in this batch
+                    for account in page:
+                        account_number = account.get("id", "")
+                        if account_number in remaining_numbers:
+                            number_to_accounts[account_number] = account
+                            remaining_numbers.remove(account_number)
+                    
+                    # Stop if we've processed all accounts or found all target numbers
+                    if not remaining_numbers or len(page) < limit:
+                        break
+                    if total is not None and offset + len(page) >= int(total):
+                        break
+                        
+                    offset += limit
+                    
+            except Exception as e:
+                logging.warning(f"Error fetching accounts for customer {customer_id}: {e}")
+                continue
+                
+        logging.debug(f"Found {len(number_to_accounts)} accounts out of {len(target_numbers)} target numbers")
         return number_to_accounts
 
     def _get_all_accounts_by_customer(self, i_customer: int) -> list[dict]:
