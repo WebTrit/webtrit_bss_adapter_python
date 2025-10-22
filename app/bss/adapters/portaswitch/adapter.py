@@ -912,7 +912,7 @@ class PortaSwitchAdapter(BSSAdapter):
             # Use individual search for each number
             for number in target_numbers:
                 try:
-                    account_info = self._admin_api.get_account_info(id=number).get("account_info")
+                    account_info = self._admin_api.get_account_info(id=number, detailed_info=1).get("account_info")
                     if account_info:
                         number_to_accounts[number] = account_info
                 except Exception as e:
