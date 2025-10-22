@@ -10,6 +10,17 @@ from .types import (
 )
 
 
+def parse_string_list(value: Union[List, str, int, None]) -> List[str]:
+    if not value:
+        return []
+    if isinstance(value, int):
+        return [str(value)]
+    if isinstance(value, str):
+        return [x.strip() for x in value.split(';') if x.strip()]
+    if isinstance(value, list):
+        return [str(x).strip() for x in value if str(x).strip()]
+
+
 class PortaSwitchSettings(BaseSettings):
     ADMIN_API_URL: str
     ADMIN_API_LOGIN: str
@@ -33,22 +44,16 @@ class PortaSwitchSettings(BaseSettings):
         return [PortaSwitchExtensionType(x) for x in v.split(';')] if isinstance(v, str) else v
 
     @validator("CONTACTS_SELECTING_CUSTOMER_IDS", pre=True)
-    def decode_contacts_selecting_customer_ids(cls, v: Union[List, str]) -> List[str]:
-        if isinstance(v, int):
-            v = str(v)
-
-        return [x.strip() for x in v.split(';')] if isinstance(v, str) else v
+    def decode_contacts_selecting_customer_ids(cls, v: Union[List, str, int, None]) -> List[str]:
+        return parse_string_list(v)
 
     @validator("CONTACTS_CUSTOM", pre=True)
     def decode_contacts_custom(cls, v: Union[List, str]) -> List[dict]:
         return [json.loads(x) for x in v.split(';')] if isinstance(v, str) and v else v
 
     @validator("ALLOWED_ADDONS", pre=True)
-    def decode_allowed_addons(cls, v: Union[List, str]) -> List[str]:
-        if isinstance(v, int):
-            v = str(v)
-
-        return [x.strip() for x in v.split(';')] if isinstance(v, str) else v
+    def decode_allowed_addons(cls, v: Union[List, str, int, None]) -> List[str]:
+        return parse_string_list(v)
 
     class Config:
         env_prefix = "PORTASWITCH_"
@@ -60,11 +65,8 @@ class OTPSettings(BaseSettings):
     IGNORE_ACCOUNTS: Union[List[str], str] = []
 
     @validator("IGNORE_ACCOUNTS", pre=True)
-    def decode_ignore_accounts(cls, v: Union[List, str]) -> List[str]:
-        if isinstance(v, int):
-            v = str(v)
-
-        return [x.strip() for x in v.split(';')] if isinstance(v, str) else v
+    def decode_ignore_accounts(cls, v: Union[List, str, int, None]) -> List[str]:
+        return parse_string_list(v)
 
     class Config:
         env_prefix = "OTP_"
