@@ -11,6 +11,17 @@ from .types import (
 )
 
 
+def parse_string_list(value: Union[List, str, int, None]) -> List[str]:
+    if not value:
+        return []
+    if isinstance(value, int):
+        return [str(value)]
+    if isinstance(value, str):
+        return [x.strip() for x in value.split(';') if x.strip()]
+    if isinstance(value, list):
+        return [str(x).strip() for x in value if str(x).strip()]
+
+
 class PortaSwitchSettings(BaseSettings):
     ADMIN_API_URL: str
     ADMIN_API_LOGIN: str
@@ -37,9 +48,8 @@ class PortaSwitchSettings(BaseSettings):
 
     @field_validator("CONTACTS_SELECTING_CUSTOMER_IDS", mode='before')
     @classmethod
-    def decode_contacts_selecting_customer_ids(cls, v: Union[List, str]) -> List[str]:
-        v = str(v)
-        return [x.strip() for x in v.split(';')] if v else v
+    def decode_contacts_selecting_customer_ids(cls, v: Union[List, str, int, None]) -> List[str]:
+        return parse_string_list(v)
 
     @field_validator("CONTACTS_CUSTOM", mode='before')
     @classmethod
@@ -49,11 +59,8 @@ class PortaSwitchSettings(BaseSettings):
 
     @field_validator("ALLOWED_ADDONS", mode='before')
     @classmethod
-    def decode_allowed_addons(cls, v: Union[List, str]) -> List[str]:
-        if isinstance(v, int):
-            v = str(v)
-
-        return [x.strip() for x in v.split(';')] if isinstance(v, str) else v
+    def decode_allowed_addons(cls, v: Union[List, str, int, None]) -> List[str]:
+        return parse_string_list(v)
 
     model_config = {
         "env_prefix": "PORTASWITCH_",
@@ -67,11 +74,8 @@ class OTPSettings(BaseSettings):
 
     @field_validator("IGNORE_ACCOUNTS", mode='before')
     @classmethod
-    def decode_ignore_accounts(cls, v: Union[List, str]) -> List[str]:
-        if isinstance(v, int):
-            v = str(v)
-
-        return [x.strip() for x in v.split(';')] if isinstance(v, str) else v
+    def decode_ignore_accounts(cls, v: Union[List, str, int, None]) -> List[str]:
+        return parse_string_list(v)
 
     model_config = {
         "env_prefix": "OTP_",
