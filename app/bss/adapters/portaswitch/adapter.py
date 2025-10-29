@@ -115,6 +115,11 @@ class PortaSwitchAdapter(BSSAdapter):
             password_attr = "h323_password" if is_sip_credentials else "password"
 
             account_info = self._admin_api.get_account_info(**{login_attr: user.login}).get("account_info")
+
+            # If the provided identifier refers to an alias, resolve to the master account
+            if account_info and (master_id := account_info.get("i_master_account")):
+                account_info = self._admin_api.get_account_info(i_account=master_id).get("account_info")
+
             if not account_info or account_info[password_attr] != password:
                 raise WebTritErrorException(401, "User authentication error", code="incorrect_credentials")
 
@@ -165,7 +170,7 @@ class PortaSwitchAdapter(BSSAdapter):
             if self._portaswitch_settings.ALLOWED_ADDONS:
                 self._check_allowed_addons(account_info)
 
-            i_account = account_info["i_account"]
+            i_account = account_info.get("i_master_account", account_info["i_account"])
             success: int = self._admin_api.create_otp(i_account, self.OTP_DELIVERY_CHANNEL)["success"]
             if not success:
                 raise WebTritErrorException(500, "Unknown error", code="external_api_issue")
