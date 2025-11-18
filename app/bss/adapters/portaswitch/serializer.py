@@ -311,7 +311,7 @@ class Serializer:
         return receiver.split(" ")[0]
 
     @staticmethod
-    def parse_cdr_direction(cdr) -> str:
+    def parse_cdr_direction(cdr) -> Direction:
         bit_flags = cdr["bit_flags"]
 
         masked_value = bit_flags & 12
@@ -326,11 +326,11 @@ class Serializer:
             return Direction.unknown
 
     @staticmethod
-    def parse_call_status(cdr) -> str:
+    def parse_call_status(cdr) -> ConnectStatus:
         """
         Determines call status based on CDR data.
-
-        Returns: 'accepted', 'declined', 'missed', or 'error'
+        
+        Returns: 'accepted', 'declined', 'missed', 'failed', or 'error'
         """
         disconnect_cause = cdr["disconnect_cause"]
         if isinstance(disconnect_cause, (int, float)):
@@ -339,28 +339,32 @@ class Serializer:
             cause = int(disconnect_cause)
 
         failed = cdr["failed"] == 1
+        direction = Serializer.parse_cdr_direction(cdr)
 
-        return Serializer._xdr_to_call_status(failed, cause)
+        return Serializer._xdr_to_call_status(failed, cause, direction)
 
     @staticmethod
-    def _xdr_to_call_status(failed: bool, disconnect_cause: int) -> str:
+    def _xdr_to_call_status(failed: bool, disconnect_cause: int, direction: Direction) -> ConnectStatus:
         """
         Maps CDR parameters to call status using pattern matching logic.
-
+        
         Args:
             failed: Whether the call failed
             disconnect_cause: Numeric disconnect cause code
-
-        Returns: 'accepted', 'declined', 'missed', or 'error'
+            direction: Call direction (incoming, outgoing, forwarded, unknown)
+        
+        Returns: 'accepted', 'declined', 'missed', 'failed', or 'error'
         """
+        if failed and direction == Direction.outgoing and disconnect_cause == 1:
+            return ConnectStatus.failed
         if failed and disconnect_cause == 16:
-            return "declined"
+            return ConnectStatus.declined
         elif failed and disconnect_cause == 19:
-            return "missed"
+            return ConnectStatus.missed
         elif not failed and disconnect_cause == 16:
-            return "accepted"
+            return ConnectStatus.accepted
         else:
-            return "error"
+            return ConnectStatus.error
 
     @staticmethod
     def _call_recording_exist(cdr) -> bool:

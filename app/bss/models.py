@@ -487,6 +487,7 @@ class ConnectStatus(Enum):
     accepted = "accepted"
     declined = "declined"
     missed = "missed"
+    failed = "failed"
     error = "error"
 
 
