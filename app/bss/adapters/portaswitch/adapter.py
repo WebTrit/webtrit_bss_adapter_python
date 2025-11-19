@@ -1,5 +1,4 @@
 import logging
-from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timedelta, UTC
 from typing import Final, Iterator, Optional, Dict
 
@@ -8,7 +7,16 @@ from jose.exceptions import ExpiredSignatureError, JWTError
 from app_config import AppConfig
 from bss.adapters import BSSAdapter
 from bss.dbs import TiedKeyValue
-from bss.models import DeliveryChannel, SipServer, UserCreateResponse, CustomRequest, CustomResponse, CustomPage
+from bss.models import (
+    DeliveryChannel,
+    SipServer,
+    UserCreateResponse,
+    CustomRequest,
+    CustomResponse,
+    CustomPage,
+    UserId,
+    AccessToken,
+)
 from bss.types import (
     CallRecordingId,
     Capabilities,
@@ -43,11 +51,11 @@ from .utils import generate_otp_id, extract_fault_code
 
 
 class PortaSwitchAdapter(BSSAdapter):
-    """Connects WebTrit and PortaSwitch. Authenticate a user using his/her data in PortaSwitch,
-    retrieve user's SIP credentials to be used by WebTrit and return a list of other configured
-    extenstions (to be provided as 'Cloud PBX' contacts).
-    Currently does not support OTP login.
+    """Bridges WebTrit Core with PortaSwitch APIs.
 
+    Provides authentication (password, OTP, auto-provision), session lifecycle management,
+    SIP credential retrieval, contacts, call history, voicemail, notifications, and other
+    capabilities required by WebTrit clients.
     """
 
     VERSION: Final[str] = "0.1.20"
@@ -129,8 +137,8 @@ class PortaSwitchAdapter(BSSAdapter):
             session_data = self._account_api.login(account_info["login"], account_info["password"])
 
             return SessionInfo(
-                user_id=account_info["i_account"],
-                access_token=session_data["access_token"],
+                user_id=UserId(str(account_info["i_account"])),
+                access_token=AccessToken(session_data["access_token"]),
                 refresh_token=session_data["refresh_token"],
                 expires_at=datetime.now() + timedelta(seconds=session_data["expires_in"]),
             )
@@ -224,7 +232,7 @@ class PortaSwitchAdapter(BSSAdapter):
             session_data: dict = self._account_api.login(account_info["login"], account_info["password"])
 
             return SessionInfo(
-                user_id=account_info["i_account"],
+                user_id=str(account_info["i_account"]),
                 access_token=session_data["access_token"],
                 refresh_token=session_data["refresh_token"],
                 expires_at=datetime.now() + timedelta(seconds=session_data["expires_in"]),
@@ -264,7 +272,7 @@ class PortaSwitchAdapter(BSSAdapter):
                     code="access_token_invalid",
                 )
 
-            return SessionInfo(user_id=user_id, access_token=access_token)
+            return SessionInfo(user_id=str(user_id), access_token=access_token)
         except ExpiredSignatureError:
             raise WebTritErrorException(
                 status_code=401,
@@ -303,7 +311,7 @@ class PortaSwitchAdapter(BSSAdapter):
             account_info: dict = self._account_api.get_account_info(access_token=access_token)["account_info"]
 
             return SessionInfo(
-                user_id=account_info["i_account"],
+                user_id=str(account_info["i_account"]),
                 access_token=session_data["access_token"],
                 refresh_token=session_data["refresh_token"],
                 expires_at=datetime.now() + timedelta(seconds=session_data["expires_in"]),

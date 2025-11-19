@@ -1,7 +1,7 @@
 from datetime import datetime, timezone
 from typing import Optional
 
-from bss.models import SIPTransport
+from bss.models import SIPTransport, UserId
 from bss.types import (
     Balance,
     BalanceType,
@@ -20,7 +20,6 @@ from bss.types import (
     VoicemailMessageAttachment,
     Direction,
 )
-
 from .types import PortaSwitchMailboxMessageFlag
 
 #: dict: Contains a map between a PortaSwitch AccountInfo.billing_model and BalanceType.
@@ -100,7 +99,7 @@ class Serializer:
         """
 
         return ContactInfo(
-            user_id=account_info["i_account"],
+            user_id=UserId(str(account_info["i_account"])),
             is_current_user=account_info["i_account"] == current_user,
             alias_name=account_info.get("extension_name"),
             company_name=account_info.get("companyname", ""),
@@ -132,9 +131,11 @@ class Serializer:
             ContactInfo: The filled structure of ContactInfo.
         """
 
+        i_account = extension_info.get("i_account")
+
         return ContactInfo(
-            user_id=extension_info.get("i_account"),
-            is_current_user=extension_info.get("i_account") == current_user,
+            user_id=UserId(str(i_account)) if i_account else None,
+            is_current_user=i_account == current_user,
             alias_name=extension_info.get("name", ""),
             first_name=extension_info.get("firstname", ""),
             last_name=extension_info.get("lastname", ""),
