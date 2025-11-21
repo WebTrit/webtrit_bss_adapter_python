@@ -286,7 +286,7 @@ class Serializer:
                 int(cdr_info["unix_disconnect_time"]), timezone.utc
             ),
             duration=cdr_info["charged_quantity"],
-            recording_id=cdr_info["i_xdr"] if Serializer._call_recording_exist(cdr_info) else None,
+            recording_id=str(cdr_info["i_xdr"]) if Serializer._call_recording_exist(cdr_info) else None,
             status=Serializer.parse_call_status(cdr_info)
         )
 
