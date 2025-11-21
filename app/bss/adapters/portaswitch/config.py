@@ -43,8 +43,22 @@ class PortaSwitchSettings(BaseSettings):
     @field_validator("CONTACTS_SELECTING_EXTENSION_TYPES", mode='before')
     @classmethod
     def decode_contacts_selecting_extension_types(cls, v: Union[List, str]) -> List[PortaSwitchExtensionType]:
+        if v is None or (isinstance(v, list) and len(v) == 0):
+            return list(PortaSwitchExtensionType)
+
+        if isinstance(v, list) and all(isinstance(item, PortaSwitchExtensionType) for item in v):
+            return v
+
         v = str(v)
-        return [PortaSwitchExtensionType(x) for x in v.split(';')] if v else v
+
+        if not v or not v.strip():
+            return list(PortaSwitchExtensionType)
+
+        parts = [x.strip() for x in v.split(';') if x.strip()]
+        if not parts:
+            return list(PortaSwitchExtensionType)
+        
+        return [PortaSwitchExtensionType(x) for x in parts]
 
     @field_validator("CONTACTS_SELECTING_CUSTOMER_IDS", mode='before')
     @classmethod
@@ -54,8 +68,19 @@ class PortaSwitchSettings(BaseSettings):
     @field_validator("CONTACTS_CUSTOM", mode='before')
     @classmethod
     def decode_contacts_custom(cls, v: Union[List, str]) -> List[dict]:
+        if v is None or (isinstance(v, list) and len(v) == 0):
+            return []
+
         v = str(v)
-        return [json.loads(x) for x in v.split(';')] if v else v
+
+        if not v or not v.strip():
+            return []
+
+        parts = [x.strip() for x in v.split(';') if x.strip()]
+        if not parts:
+            return []
+        
+        return [json.loads(x) for x in parts]
 
     @field_validator("ALLOWED_ADDONS", mode='before')
     @classmethod
