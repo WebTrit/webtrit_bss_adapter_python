@@ -668,7 +668,7 @@ def get_user_recording(
 
     access_token = auth_data.credentials
     session = bss.validate_session(access_token)
-    content_type, content_iterator = bss.retrieve_call_recording(session, CallRecordingId(__root__=recording_id))
+    content_type, content_iterator = bss.retrieve_call_recording(session, CallRecordingId(recording_id))
 
     return StreamingResponse(content_iterator, media_type=content_type if content_type else "application/octet-stream")
 
