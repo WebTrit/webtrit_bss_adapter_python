@@ -146,6 +146,7 @@ class BSSAdapter(SessionManagement, OTPHandler,
         USER_EVENTS=dict(default=False, option=Capabilities.user_events),
         NOTIFICATIONS=dict(default=False, option=Capabilities.notifications),
         NOTIFICATIONS_PUSH=dict(default=False, option=Capabilities.notifications_push),
+        SIP_PRESENCE=dict(default=False, option=Capabilities.sip_presence),
     )
     # what our adapter can do in general (what is coded)
     # should be overridden in the sub-class
