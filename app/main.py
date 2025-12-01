@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import logging
 import os
 import sys
 from datetime import datetime
@@ -59,6 +58,7 @@ from bss.types import (
     UpdateSessionNotFoundErrorResponse,
     UpdateSessionUnprocessableEntityErrorResponse,
     Contacts,
+    ContactInfo,
     # signup
     UserCreateRequest,
     UserCreateResponse,
@@ -193,7 +193,7 @@ def create_session(
 
     if eval_as_bool(config.get_conf_val("Capabilities",
                                         "Password", "Force",
-                            default="False")):
+                                        default="False")):
         # forcefully allow this method to be called even if the
         # adapter declares it as not implemented. This is useful
         # in case when app UI should not display this type of login
@@ -205,7 +205,7 @@ def create_session(
         is_method_allowed(Capabilities.passwordSignin)
 
     user_ref = safely_extract_scalar_value(body.user_ref) or \
-        safely_extract_scalar_value(body.login)
+               safely_extract_scalar_value(body.login)
     if not (user_ref and body.password):
         # missing parameters
         raise_webtrit_error(422, "Missing username & password")
@@ -580,6 +580,49 @@ def get_user_contact_list(
 
 
 @router.get(
+    '/user/contacts/{user_id}',
+    response_model=ContactInfo,
+    responses={
+        '401': {'model': GetUserContactListUnauthorizedErrorResponse},
+        '404': {'model': GetUserContactListNotFoundErrorResponse},
+        '422': {'model': GetUserContactListUnprocessableEntityErrorResponse},
+        '500': {'model': GetUserContactListInternalServerErrorErrorResponse},
+    },
+    tags=['user'],
+)
+def get_user_contact_by_id(
+        user_id: str,
+        auth_data: HTTPAuthorizationCredentials = Depends(security),
+        x_webtrit_tenant_id: Optional[str] = Header(None, alias=TENANT_ID_HTTP_HEADER),
+) -> (
+        Union[
+            ContactInfo,
+            GetUserContactListUnauthorizedErrorResponse,
+            GetUserContactListNotFoundErrorResponse,
+            GetUserContactListUnprocessableEntityErrorResponse,
+            GetUserContactListInternalServerErrorErrorResponse,
+        ]
+):
+    """
+    Get contact information by user ID
+    """
+    global bss
+
+    access_token = auth_data.credentials
+    session = bss.validate_session(access_token)
+
+    contact = bss.retrieve_contact_by_user_id(
+        session,
+        ExtendedUserInfo(
+            user_id=safely_extract_scalar_value(session.user_id),
+            tenant_id=bss.default_id_if_none(x_webtrit_tenant_id)
+        ),
+        user_id
+    )
+    return contact
+
+
+@router.get(
     '/user/history',
     response_model=Calls,
     responses={
@@ -949,7 +992,7 @@ def create_user_event(
 ) -> Union[
     Response,
     CreateUserEventUnauthorizedErrorResponse,
-    CreateUserEventUnprocessableEntityErrorResponse, 
+    CreateUserEventUnprocessableEntityErrorResponse,
     CreateUserEventInternalServerErrorErrorResponse,
 ]:
     """

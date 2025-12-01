@@ -146,7 +146,13 @@ class AdminAPI(HTTPAPIConnectorWithLogin):
             dict: The API method execution result that contains an account info.
         """
         return self._send_request(
-            module="Account", method="get_account_info", params={"without_service_features": 1, **params}
+            module="Account",
+            method="get_account_info",
+            params={
+                "without_service_features": 1,
+                "detailed_info": 1,
+                **params
+            }
         )
 
     def get_env_info(self) -> dict:

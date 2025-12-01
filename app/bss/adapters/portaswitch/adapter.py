@@ -540,6 +540,14 @@ class PortaSwitchAdapter(BSSAdapter):
 
             raise error
 
+    def retrieve_contact_by_user_id(self, session: SessionInfo, user: UserInfo, user_id: str) -> ContactInfo:
+        """Retrieve extension by User ID in the PBX"""
+        account_info = self._admin_api.get_account_info(i_account=int(user_id)).get("account_info")
+        if not account_info:
+            raise WebTritErrorException(404, f"There is no an account with such id: {user_id}")
+
+        return Serializer.get_contact_info_by_account(account_info, int(user.user_id))
+
     def retrieve_calls(
             self,
             session: SessionInfo,
