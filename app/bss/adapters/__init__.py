@@ -246,7 +246,6 @@ class BSSAdapter(SessionManagement, OTPHandler,
         """List of other extensions in the PBX"""
         raise NotImplementedError("Override this method in your sub-class")
 
-    @abstractmethod
     def retrieve_contact_by_user_id(self, session: SessionInfo, user: UserInfo, user_id: str) -> ContactInfo:
         """Retrieve extension by User ID in the PBX"""
         raise NotImplementedError("Override this method in your sub-class")
