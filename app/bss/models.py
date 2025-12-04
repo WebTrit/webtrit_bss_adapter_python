@@ -10,8 +10,6 @@ from typing import Any, Dict, List, Optional, Union, NewType
 
 from pydantic import BaseModel, EmailStr, Field, conint, RootModel
 
-from webtrit_common.core.types import SIPServerInfo
-
 Code = NewType("Code", str)
 
 
@@ -361,9 +359,9 @@ class SipInfo(BaseModel):
         default_factory=lambda: SIPTransport.UDP,
         description="The transport protocol for SIP communication. UDP by default.",
     )
-    sip_server: Union[SipServer, SIPServerInfo]
-    registrar_server: Optional[Union[SipServer, SIPServerInfo]] = None
-    outbound_proxy_server: Optional[Union[SipServer, SIPServerInfo]] = None
+    sip_server: SipServer
+    registrar_server: Optional[SipServer] = None
+    outbound_proxy_server: Optional[SipServer] = None
     username: str = Field(
         ...,
         description="The identity (typically a phone number but can be some other alphanumeric ID)\nthat should be registered to SIP server to receive incoming calls.\nUsually it is also used as a username for SIP authorization of registrations (SIP REGISTER)\nand outgoing calls (SIP INVITE).\n",
