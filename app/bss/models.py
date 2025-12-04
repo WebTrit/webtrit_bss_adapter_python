@@ -218,7 +218,7 @@ class CustomResponse(BaseModel):
 
 class CustomPage(BaseModel):
     title: Optional[str]
-    description: Optional[str]
+    description: Optional[str] = None
     url: str
     expires_at: Optional[datetime]
     extra_data: Dict[str, Any]

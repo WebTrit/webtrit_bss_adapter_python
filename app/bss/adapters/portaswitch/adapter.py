@@ -15,7 +15,8 @@ from bss.models import (
     CustomResponse,
     CustomPage,
     UserId,
-    AccessToken,
+    OtpId,
+    AccessToken, SessionResponse,
 )
 from bss.types import (
     CallRecordingId,
@@ -108,15 +109,17 @@ class PortaSwitchAdapter(BSSAdapter):
         return self._cached_capabilities
 
     def authenticate(self, user: UserInfo, password: str = None) -> SessionInfo:
-        """Authenticate a PortaSwitch account with login and password and obtain an API token for
-        further requests.
+        """Authenticate a PortaSwitch account with login and password.
 
         Parameters:
-            :user (UserInfo): The information about the account to be logged in.
-            :password (str): The password of the account to be verified.
+            user (UserInfo): The information about the account to be logged in.
+            password (str): The password of the account to be verified.
 
         Returns:
-            :(SessionInfo): The object with the obtained session tokens.
+            SessionInfo: The object with the obtained session tokens and expiration information.
+
+        Raises:
+            WebTritErrorException: If authentication fails or the account is not authorized.
         """
         try:
             is_sip_credentials = self._portaswitch_settings.SIGNIN_CREDENTIALS == PortaSwitchSignInCredentialsType.SIP
@@ -159,17 +162,18 @@ class PortaSwitchAdapter(BSSAdapter):
             raise error
 
     def generate_otp(self, user: UserInfo) -> OTPCreateResponse:
-        """Requests PortaSwitch to generate OTP.
+        """Requests PortaSwitch to generate and send an OTP code to the user.
 
         Parameters:
-            :user (UserInfo): The object containing user_ref.
+            user (UserInfo): The object containing the user identifier.
 
         Returns:
-            :(OTPCreateResponse): Information about the created OTP.
-                In our case, PortaSwitch does not return any valueable info.
-                We return here a dummy otp_id. So, when PortaSwitch supported returning the
-                otp_id, we would not break the interface.
+            OTPCreateResponse: Information about the created OTP, including the OTP ID,
+                delivery channel, and sender address.
 
+        Raises:
+            WebTritErrorException: If the account is not found, a delivery channel is unspecified,
+                or OTP generation fails.
         """
         try:
             account_info = self._admin_api.get_account_info(id=user.user_id).get("account_info")
@@ -190,7 +194,7 @@ class PortaSwitchAdapter(BSSAdapter):
             env_info = self._admin_api.get_env_info()
 
             return OTPCreateResponse(
-                otp_id=otp_id, delivery_channel=self.OTP_DELIVERY_CHANNEL, delivery_from=env_info.get("email")
+                otp_id=OtpId(otp_id), delivery_channel=self.OTP_DELIVERY_CHANNEL, delivery_from=env_info.get("email")
             )
 
         except WebTritErrorException as error:
@@ -201,17 +205,16 @@ class PortaSwitchAdapter(BSSAdapter):
             raise error
 
     def validate_otp(self, otp: OTPVerifyRequest) -> SessionInfo:
-        """Requests PortaSwitch to generate OTP.
+        """Validates the OTP code provided by the user and creates a session.
 
         Parameters:
-            :otp (OTPVerifyRequest): The object containing OTP token to be verified.
+            otp (OTPVerifyRequest): The object containing the OTP token to be verified.
 
         Returns:
-            :(OTPCreateResponse): Information about the created OTP.
-                In our case, PortaSwitch does not return any valueable info.
-                We return here a dummy otp_id. So, when PortaSwitch supported returning the
-                otp_id, we would not break the interface.
+            SessionInfo: Session information including access token, refresh token, and user ID.
 
+        Raises:
+            WebTritErrorException: If the OTP code is invalid or expired, or if authentication fails.
         """
         try:
             # PortaSwitch API does not operate with otp_id.
@@ -233,7 +236,7 @@ class PortaSwitchAdapter(BSSAdapter):
             session_data: dict = self._account_api.login(account_info["login"], account_info["password"])
 
             return SessionInfo(
-                user_id=str(account_info["i_account"]),
+                user_id=UserId(str(account_info["i_account"])),
                 access_token=session_data["access_token"],
                 refresh_token=session_data["refresh_token"],
                 expires_at=datetime.now() + timedelta(seconds=session_data["expires_in"]),
@@ -252,14 +255,16 @@ class PortaSwitchAdapter(BSSAdapter):
             raise error
 
     def validate_session(self, access_token: str) -> SessionInfo:
-        """Checks whether the input access_token is valid.
+        """Validates whether the provided access token is still valid.
 
         Parameters:
-            :access_token (str): The token used to access PortaSwitch API.
+            access_token (str): The token used to access PortaSwitch API.
 
         Returns:
-            :(SessionInfo): The object with the obtained session tokens.
+            SessionInfo: The object containing the validated session information.
 
+        Raises:
+            WebTritErrorException: If the token is invalid, expired, or cannot be verified.
         """
         try:
             self._account_api.decode_and_verify_access_token_expiration(access_token)
@@ -273,7 +278,7 @@ class PortaSwitchAdapter(BSSAdapter):
                     code="access_token_invalid",
                 )
 
-            return SessionInfo(user_id=str(user_id), access_token=access_token)
+            return SessionInfo(user_id=UserId(str(user_id)), access_token=AccessToken(session_data["access_token"]))
         except ExpiredSignatureError:
             raise WebTritErrorException(
                 status_code=401,
@@ -300,10 +305,10 @@ class PortaSwitchAdapter(BSSAdapter):
         """Refreshes the PortaSwitch account session.
 
         Parameters:
-            :refresh_token (str): The token used to refresh the session.
+            refresh_token (str): The token used to refresh the session.
 
         Returns:
-            :(SessionInfo): The object with the obtained session tokens.
+            (SessionInfo): The object with the obtained session tokens.
 
         """
         try:
@@ -312,15 +317,15 @@ class PortaSwitchAdapter(BSSAdapter):
             account_info: dict = self._account_api.get_account_info(access_token=access_token)["account_info"]
 
             return SessionInfo(
-                user_id=str(account_info["i_account"]),
+                user_id=UserId(str(account_info["i_account"])),
                 access_token=session_data["access_token"],
                 refresh_token=session_data["refresh_token"],
                 expires_at=datetime.now() + timedelta(seconds=session_data["expires_in"]),
             )
 
         except WebTritErrorException as error:
-            faultcode = extract_fault_code(error)
-            if faultcode in (
+            fault_code = extract_fault_code(error)
+            if fault_code in (
                     "Server.Session.refresh_access_token.refresh_failed",
                     "Client.Session.check_auth.failed_to_process_access_token",
             ):
@@ -336,18 +341,20 @@ class PortaSwitchAdapter(BSSAdapter):
         """Closes the PortaSwitch account session.
 
         Parameters:
-            :access_token (str): The token used to close the session.
+            access_token (str): The token used to close the session.
 
         Returns:
-            :(bool): Shows whether is succeeded to close the session.
+            bool: True if the session was successfully closed, False otherwise.
 
+        Raises:
+            WebTritErrorException: If the session is not found or cannot be closed.
         """
         try:
             return self._account_api.logout(access_token=access_token)["success"] == 1
 
         except WebTritErrorException as error:
-            faultcode = extract_fault_code(error)
-            if faultcode in ("Client.Session.logout.failed_to_process_access_token",):
+            fault_code = extract_fault_code(error)
+            if fault_code in ("Client.Session.logout.failed_to_process_access_token",):
                 raise WebTritErrorException(
                     status_code=404,
                     # code = UserAccessErrorCode.session_not_found,
@@ -360,12 +367,15 @@ class PortaSwitchAdapter(BSSAdapter):
         """Returns information about the PortaSwitch account in WebTrit representation.
 
         Parameters:
-            :session (SessionInfo): The session of the PortaSwitch account.
-            :user (UserInfo): The information about the PortaSwitch account.
+            session (SessionInfo): The session of the PortaSwitch account.
+            user (UserInfo): The information about the PortaSwitch account.
 
         Returns:
-            :(EndUser): Fetched information about the PortaSwitch account in WebTrit representation.
+            EndUser: Fetched information about the PortaSwitch account including SIP credentials,
+                aliases, and balance information.
 
+        Raises:
+            WebTritErrorException: If the user is not found or the session is invalid.
         """
         try:
             account_info: dict = self._account_api.get_account_info(
@@ -385,9 +395,9 @@ class PortaSwitchAdapter(BSSAdapter):
             )
 
         except WebTritErrorException as error:
-            faultcode = extract_fault_code(error)
-            if faultcode in ("Client.Session.check_auth.failed_to_process_access_token",):
-                # Race condition case, when session is validated and then the access_token dies.
+            fault_code = extract_fault_code(error)
+            if fault_code in ("Client.Session.check_auth.failed_to_process_access_token",):
+                # Race condition case, when the session is validated, and then the access_token dies.
                 raise WebTritErrorException(
                     status_code=404,
                     # code = UserAccessErrorCode.session_not_found,
@@ -397,16 +407,20 @@ class PortaSwitchAdapter(BSSAdapter):
             raise error
 
     def retrieve_contacts(self, session: SessionInfo, user: UserInfo) -> list[ContactInfo]:
-        """Returns information about other extentions of the same PortaSwitch customer.
+        """Returns information about contacts based on the configured selection mode.
+
+        Supports multiple selection modes: EXTENSIONS, ACCOUNTS, PHONEBOOK, or PHONE_DIRECTORY.
 
         Parameters:
-            :session (SessionInfo): The session of the PortaSwitch account.
-            :user (UserInfo): The information about the PortaSwitch account.
+            session (SessionInfo): The session of the PortaSwitch account.
+            user (UserInfo): The information about the PortaSwitch account.
 
         Returns:
-            :(list[ContactInfo]): Fetched information about other extentions of the same PortaSwitch
-                customer in the WebTrit representation.
+            list[ContactInfo]: List of contacts in WebTrit representation, including custom entries
+                if configured.
 
+        Raises:
+            WebTritErrorException: If the user is not found or the session is invalid.
         """
         try:
             access_token = safely_extract_scalar_value(session.access_token)
@@ -450,7 +464,7 @@ class PortaSwitchAdapter(BSSAdapter):
                         if phone_number:
                             phonebook_numbers.add(phone_number)
 
-                    # Get accounts mapping only for phonebook numbers (on-demand)
+                    # Get account mapping only for phonebook numbers (on-demand)
                     number_to_accounts = self._get_number_to_customer_accounts_map_for_numbers(phonebook_numbers)
 
                     for record in phonebook:
@@ -490,7 +504,7 @@ class PortaSwitchAdapter(BSSAdapter):
                             if office_number:
                                 phone_directory_numbers.add(office_number)
 
-                    # Get accounts mapping only for phone directory numbers (on-demand)
+                    # Get account mapping only for phone directory numbers (on-demand)
                     number_to_accounts = self._get_number_to_customer_accounts_map_for_numbers(phone_directory_numbers)
 
                     for directory in phone_directories:
@@ -531,7 +545,7 @@ class PortaSwitchAdapter(BSSAdapter):
         except WebTritErrorException as error:
             fault_code = extract_fault_code(error)
             if fault_code in ("Client.Session.check_auth.failed_to_process_access_token",):
-                # Race condition case, when session is validated and then the access_token dies.
+                # Race condition case, when the session is validated, and then the access_token dies.
                 raise WebTritErrorException(
                     status_code=404,
                     # code = UserAccessErrorCode.session_not_found,
@@ -541,10 +555,23 @@ class PortaSwitchAdapter(BSSAdapter):
             raise error
 
     def retrieve_contact_by_user_id(self, session: SessionInfo, user: UserInfo, user_id: str) -> ContactInfo:
-        """Retrieve extension by User ID in the PBX"""
+        """Retrieve contact information by user ID in the PortaSwitch system.
+
+        Parameters:
+            session (SessionInfo): The session of the PortaSwitch account.
+            user (UserInfo): The information about the requesting account.
+            user_id (str): The unique identifier of the account to retrieve.
+
+        Returns:
+            ContactInfo: Contact information for the specified user.
+
+        Raises:
+            WebTritErrorException: If no account exists with the specified ID.
+        """
         account_info = self._admin_api.get_account_info(i_account=int(user_id)).get("account_info")
         if not account_info:
-            raise WebTritErrorException(404, f"There is no an account with such id: {user_id}", code="contact_not_found")
+            raise WebTritErrorException(404, f"There is no an account with such id: {user_id}",
+                                        code="contact_not_found")
 
         return Serializer.get_contact_info_by_account(account_info, int(user.user_id))
 
@@ -560,17 +587,19 @@ class PortaSwitchAdapter(BSSAdapter):
         """Returns the CDR history of the logged in PortaSwitch account.
 
         Parameters:
-            :session (SessionInfo): The session of the PortaSwitch account.
-            :user (UserInfo): The information about the PortaSwitch account.
-            :page (int): Shows what page of the CDR history to return.
-            :items_per_page (int): Shows the number of items to return.
-            :time_from (datetime|None): Filters the time frame of the CDR history.
-            :time_to (datetime|None): Filters the time frame of the CDR history.
+            session (SessionInfo): The session of the PortaSwitch account.
+            user (UserInfo): The information about the PortaSwitch account.
+            page (int): The page number of the CDR history to return.
+            items_per_page (int): The number of items per page.
+            time_from (datetime | None): Start of the time range filter. Defaults to 1970-01-01.
+            time_to (datetime | None): End of the time range filter. Defaults to year 9000.
 
         Returns:
-            :(tuple[list[CDRInfo], int]): Fetched CDR history and the number of total records
-                that are located in the DB without taking into account the pagination.
+            tuple[list[CDRInfo], int]: A tuple containing the list of CDR records and the total
+                count of records available (without pagination).
 
+        Raises:
+            WebTritErrorException: If the user is not found or the session is invalid.
         """
         try:
             time_from: datetime = time_from if time_from else datetime(1970, 1, 1)
@@ -584,12 +613,12 @@ class PortaSwitchAdapter(BSSAdapter):
                 time_to=time_to,
             )
 
-            return ([Serializer.get_cdr_info(cdr) for cdr in result["xdr_list"]], result["total"])
+            return [Serializer.get_cdr_info(cdr) for cdr in result["xdr_list"]], result["total"]
 
         except WebTritErrorException as error:
-            faultcode = extract_fault_code(error)
-            if faultcode in ("Client.Session.check_auth.failed_to_process_access_token",):
-                # Race condition case, when session is validated and then the access_token dies.
+            fault_code = extract_fault_code(error)
+            if fault_code in ("Client.Session.check_auth.failed_to_process_access_token",):
+                # Race condition case, when the session is validated, and then the access_token dies.
                 raise WebTritErrorException(
                     status_code=404,
                     # code = UserNotFoundCode.user_not_found,
@@ -599,15 +628,18 @@ class PortaSwitchAdapter(BSSAdapter):
             raise error
 
     def retrieve_call_recording(self, session: SessionInfo, call_recording: CallRecordingId) -> tuple[str, Iterator]:
-        """Returns the binary representation of the recorded call.
+        """Returns the binary representation of a recorded call.
 
         Parameters:
-            :session (SessionInfo): The session of the PortaSwitch account.
-            :call_recording (CallRecordingId): Contains an identifier of a call recording record.
+            session (SessionInfo): The session of the PortaSwitch account.
+            call_recording (CallRecordingId): The identifier of the call recording record.
 
         Returns:
-            tuple[str, Iterator]: A tuple containing the content-type and an iterator over the raw bytes of the recording.
+            tuple[str, Iterator]: A tuple containing the content-type and an iterator over the
+                raw bytes of the recording.
 
+        Raises:
+            WebTritErrorException: If the recording is not found or the ID is invalid.
         """
         try:
             recording_id = safely_extract_scalar_value(call_recording)
@@ -617,8 +649,8 @@ class PortaSwitchAdapter(BSSAdapter):
             )
 
         except WebTritErrorException as error:
-            faultcode = extract_fault_code(error)
-            if faultcode in ("Server.CDR.xdr_not_found", "Server.CDR.invalid_call_recording_id",):
+            fault_code = extract_fault_code(error)
+            if fault_code in ("Server.CDR.xdr_not_found", "Server.CDR.invalid_call_recording_id",):
                 raise WebTritErrorException(
                     status_code=404,
                     error_message="The recording with such a recording_id is not found.",
@@ -627,13 +659,17 @@ class PortaSwitchAdapter(BSSAdapter):
             raise error
 
     def retrieve_voicemails(self, session: SessionInfo, user: UserInfo) -> UserVoicemailsResponse:
-        """Returns users voicemail messages
+        """Returns the user's voicemail messages.
+
         Parameters:
-            session :SessionInfo: The session of the PortaSwitch account.
-            user :UserInfo: The information about the PortaSwitch account.
+            session (SessionInfo): The session of the PortaSwitch account.
+            user (UserInfo): The information about the PortaSwitch account.
 
         Returns:
-            EndUser: Filled structure of the UserVoicemailResponse.
+            UserVoicemailsResponse: Structure containing voicemail messages and a new message flag.
+
+        Raises:
+            WebTritErrorException: If the user is not found or the session is invalid.
         """
         try:
             mailbox_messages = self._account_api.get_mailbox_messages(
@@ -655,14 +691,18 @@ class PortaSwitchAdapter(BSSAdapter):
     def retrieve_voicemail_message_details(
             self, session: SessionInfo, user: UserInfo, message_id: str
     ) -> VoicemailMessageDetails:
-        """Returns users voicemail message detail
+        """Returns detailed information about a specific voicemail message.
+
         Parameters:
-            session :SessionInfo: The session of the PortaSwitch account.
-            user :UserInfo: The information about the PortaSwitch account.
-            message_id :str: The unique ID of the voicemail message.
+            session (SessionInfo): The session of the PortaSwitch account.
+            user (UserInfo): The information about the PortaSwitch account.
+            message_id (str): The unique ID of the voicemail message.
 
         Returns:
-            EndUser: Filled structure of the VoicemailMessageDetails.
+            VoicemailMessageDetails: Detailed information about the voicemail message.
+
+        Raises:
+            WebTritErrorException: If the user is not found or the session is invalid.
         """
         try:
             message_details = self._account_api.get_mailbox_message_details(
@@ -714,15 +754,18 @@ class PortaSwitchAdapter(BSSAdapter):
     def patch_voicemail_message(
             self, session: SessionInfo, message_id: str, body: UserVoicemailMessagePatch
     ) -> UserVoicemailMessagePatch:
-        """Update attributes for a user's voicebox message.
+        """Update attributes for a user's voicemail message.
 
         Parameters:
-            session :SessionInfo: The session of the PortaSwitch account.
-            message_id :str: The unique ID of the voicemail message.
-            body: :bool: Attributes to patch.
+            session (SessionInfo): The session of the PortaSwitch account.
+            message_id (str): The unique ID of the voicemail message.
+            body (UserVoicemailMessagePatch): Attributes to update (e.g., seen status).
 
         Returns:
-            Response :UserVoicemailMessageSeenResponse: Filled structure of the UserVoicemailMessageSeenResponse.
+            UserVoicemailMessagePatch: The updated message attributes.
+
+        Raises:
+            WebTritErrorException: If the user is not found or the session is invalid.
         """
         seen = body.seen
 
@@ -744,10 +787,14 @@ class PortaSwitchAdapter(BSSAdapter):
             raise error
 
     def delete_voicemail_message(self, session: SessionInfo, message_id: str) -> None:
-        """Delete an existing user's voicebox message.
+        """Delete an existing voicemail message.
+
         Parameters:
-            session :SessionInfo: The session of the PortaSwitch account.
-            message_id :str: The unique ID of the voicemail message.
+            session (SessionInfo): The session of the PortaSwitch account.
+            message_id (str): The unique ID of the voicemail message.
+
+        Raises:
+            WebTritErrorException: If the user is not found or the session is invalid.
         """
         try:
             self._account_api.delete_mailbox_message(safely_extract_scalar_value(session.access_token), message_id)
@@ -761,15 +808,45 @@ class PortaSwitchAdapter(BSSAdapter):
 
     def create_user_event(self, user: UserInfo, timestamp: datetime, group: UserEventGroup, type: UserEventType,
                           data: Optional[dict] = None) -> None:
-        """Create user's event"""
+        """Create a user event (not implemented for PortaSwitch adapter).
+
+        Parameters:
+            user (UserInfo): The user information.
+            timestamp (datetime): The timestamp of the event.
+            group (UserEventGroup): The event group.
+            type (UserEventType): The event type.
+            data (Optional[dict]): Additional event data.
+
+        Raises:
+            NotImplementedError: This method is not implemented for PortaSwitch.
+        """
         raise NotImplementedError()
 
     def create_new_user(self, user_data, tenant_id: str = None):
-        """Create a new user as a part of the sign-up process - not supported yet"""
+        """Create a new user as part of the sign-up process (not implemented).
+
+        Parameters:
+            user_data: The user data for account creation.
+            tenant_id (str | None): The tenant identifier.
+
+        Raises:
+            NotImplementedError: This method is not implemented for PortaSwitch.
+        """
         raise NotImplementedError()
 
-    def signup(self, user_data, tenant_id: str = None) -> UserCreateResponse:
-        """Create a new user as a part of the sign-up process"""
+    def signup(self, user_data, tenant_id: str = None) -> SessionResponse:
+        """Complete the sign-up process using existing PortaSwitch access tokens.
+
+        Parameters:
+            user_data: User data containing access_token and refresh_token from PortaSwitch.
+            tenant_id (str | None): The tenant identifier (unused).
+
+        Returns:
+            SessionInfo: Session information including user ID and tokens.
+
+        Raises:
+            WebTritErrorException: If required tokens are missing or invalid, or user is not found.
+        """
         user_data = user_data.model_dump()
         access_token = user_data.get("access_token")
         refresh_token = user_data.get("refresh_token")
@@ -780,9 +857,9 @@ class PortaSwitchAdapter(BSSAdapter):
         try:
             account_info = self._account_api.get_account_info(access_token=access_token)["account_info"]
 
-            return SessionInfo(
-                user_id=account_info["i_account"],
-                access_token=access_token,
+            return SessionResponse(
+                user_id=UserId(str(account_info["i_account"])),
+                access_token=AccessToken(access_token),
                 refresh_token=refresh_token,
             )
         except WebTritErrorException as error:
@@ -855,7 +932,7 @@ class PortaSwitchAdapter(BSSAdapter):
         session_data = self._account_api.login(account_info["login"], account_info["password"])
 
         return CustomResponse(
-            access_token=session_data['access_token'],
+            access_token=AccessToken(session_data['access_token']),
             refresh_token=session_data['refresh_token'],
             expires_at=datetime.now(UTC) + timedelta(seconds=session_data["expires_in"])
         )
@@ -863,7 +940,14 @@ class PortaSwitchAdapter(BSSAdapter):
     # endregion
 
     def _check_allowed_addons(self, account_info: dict):
-        """Raise an error if allowed add-ons are set and none are present in assigned_addons."""
+        """Verify that the account has at least one of the required add-ons.
+
+        Parameters:
+            account_info (dict): Account information including an assigned_addons list.
+
+        Raises:
+            WebTritErrorException: If the account doesn't have any of the required add-ons.
+        """
         allowed_addons = set(self._portaswitch_settings.ALLOWED_ADDONS)
 
         assigned_addons = account_info.get("assigned_addons", [])
@@ -900,7 +984,7 @@ class PortaSwitchAdapter(BSSAdapter):
             # Search through each customer's accounts
             for customer_id in self._portaswitch_settings.CONTACTS_SELECTING_CUSTOMER_IDS:
                 if not remaining_numbers:
-                    break  # All numbers found, no need to continue
+                    break  # All numbers found no need to continue
 
                 try:
                     # Get accounts for this customer in batches
@@ -945,7 +1029,14 @@ class PortaSwitchAdapter(BSSAdapter):
         return number_to_accounts
 
     def _get_all_accounts_by_customer(self, i_customer: int) -> list[dict]:
-        """Fetch all accounts for a customer using pagination with offset until total is reached."""
+        """Fetch all accounts for a customer using pagination.
+
+        Parameters:
+            i_customer (int): The unique identifier of the customer.
+
+        Returns:
+            list[dict]: List of all account records for the specified customer.
+        """
         all_accounts: list[dict] = []
         offset = 0
         limit = 1000
@@ -957,7 +1048,7 @@ class PortaSwitchAdapter(BSSAdapter):
 
             all_accounts.extend(page)
 
-            # Stop if we've reached the total or the page is shorter than limit
+            # Stop if we've reached the total or the page is shorter than the limit
             if total is not None and len(all_accounts) >= int(total):
                 break
             if len(page) < limit:
