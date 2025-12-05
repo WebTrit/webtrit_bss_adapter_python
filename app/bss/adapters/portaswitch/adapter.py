@@ -10,7 +10,6 @@ from bss.dbs import TiedKeyValue
 from bss.models import (
     DeliveryChannel,
     SipServer,
-    UserCreateResponse,
     CustomRequest,
     CustomResponse,
     CustomPage,
@@ -59,7 +58,7 @@ class PortaSwitchAdapter(BSSAdapter):
     capabilities required by WebTrit clients.
     """
 
-    VERSION: Final[str] = "0.3.2"
+    VERSION: Final[str] = "0.3.3"
     OTP_DELIVERY_CHANNEL: Final[DeliveryChannel] = DeliveryChannel.email
     OTP_LOGIN_IDENTIFIERS = ('phone_number',)
     CAPABILITIES: Final[Capabilities] = [
