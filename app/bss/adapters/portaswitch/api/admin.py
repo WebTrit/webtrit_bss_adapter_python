@@ -48,7 +48,7 @@ class AdminAPI(HTTPAPIConnectorWithLogin):
         raise ValueError("Could not find an access token in the response")
 
     def refresh(self, user=None, auth_session=None):
-        """Rerfreshes access token."""
+        """Refreshes access token."""
         session = self.login(self._api_user)
         self.store_auth_session(session, self._api_user)
         return session
@@ -191,8 +191,11 @@ class AdminAPI(HTTPAPIConnectorWithLogin):
             )
         except WebTritErrorException as error:
             fault_code = extract_fault_code(error)
-            if fault_code == 'Server.Session.check_auth.auth_failed':
-                logging.info(f"Unexpected session error from PBX: {error}. Trying to refresh access token...")
+            if fault_code in (
+                    'Server.Session.check_auth.auth_failed',
+                    'Client.Session.check_auth.failed_to_process_access_token',
+            ):
+                logging.warning(f"Unexpected session error from PBX: {error}. Trying to refresh access token...")
                 self.refresh()
 
                 result = self.send_rest_request(
