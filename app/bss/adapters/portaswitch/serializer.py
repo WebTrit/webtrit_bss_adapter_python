@@ -69,7 +69,7 @@ class Serializer:
                 additional=[alias["id"] for alias in aliases],
                 ext=account_info.get("extension_id"),
                 main=account_info["id"],
-                sms=[number["did_number"] for number in account_info.get("alias_did_number_list", [])],
+                sms=Serializer._parse_sms_numbers(account_info),
             ),
             sip=SIPInfo(
                 username=account_info["id"],
@@ -110,7 +110,7 @@ class Serializer:
                 additional=[alias["id"] for alias in account_info.get("alias_list", [])],
                 ext=account_info.get("extension_id", ""),
                 main=account_info["id"],
-                sms=[number["did_number"] for number in account_info.get("alias_did_number_list", [])],
+                sms=Serializer._parse_sms_numbers(account_info),
             ),
             sip_status=(
                 SIPRegistrationStatus.registered
@@ -142,7 +142,7 @@ class Serializer:
             numbers=Numbers(
                 additional=aliases,
                 main=extension_info.get("id"),
-                sms=[number["did_number"] for number in extension_info.get("alias_did_number_list", [])],
+                sms=Serializer._parse_sms_numbers(extension_info),
             ),
         )
 
@@ -343,6 +343,15 @@ class Serializer:
         direction = Serializer.parse_cdr_direction(cdr)
 
         return Serializer._xdr_to_call_status(failed, cause, direction)
+
+    @staticmethod
+    def _parse_sms_numbers(account_info: dict) -> list[str]:
+        numbers = [number["did_number"] for number in account_info.get("alias_did_number_list", [])]
+
+        if sms_number := account_info.get("did_number"):
+            numbers.append(sms_number)
+
+        return numbers
 
     @staticmethod
     def _xdr_to_call_status(failed: bool, disconnect_cause: int, direction: Direction) -> ConnectStatus:
