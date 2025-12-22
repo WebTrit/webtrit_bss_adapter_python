@@ -440,7 +440,7 @@ class PortaSwitchAdapter(BSSAdapter):
 
                     for ext in extensions:
                         if ext["type"] in allowed_ext_types and ext.get("i_account") != i_account:
-                            aliases = [str(alias) for alias in account_to_aliases.get(ext.get("i_account"), [])]
+                            aliases = account_to_aliases.get(ext.get("i_account"), [])
                             contacts.append(Serializer.get_contact_info_by_extension(ext, aliases, i_account))
                 case PortaSwitchContactsSelectingMode.ACCOUNTS:
                     accounts = self._get_all_accounts_by_customer(i_customer)

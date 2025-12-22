@@ -140,7 +140,7 @@ class Serializer:
             first_name=extension_info.get("firstname", ""),
             last_name=extension_info.get("lastname", ""),
             numbers=Numbers(
-                additional=aliases,
+                additional=[alias["id"] for alias in aliases],
                 main=extension_info.get("id"),
                 sms=Serializer._parse_sms_numbers(extension_info),
             ),
