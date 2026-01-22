@@ -186,12 +186,13 @@ class RouteWithLogging(APIRoute):
                             "Reply", err_response.body.decode("utf-8").replace("\n", " "))
                 return err_response
             except Exception as e:
-                logging.error(f"Application error: {e} {traceback.format_exc()}")
+                trace_str = traceback.format_exc()
+                logging.error(f"Application error: {e} {trace_str.replace(chr(10), ' | ')}")
                 return JSONResponse(
                                         status_code=500,
                                         content=dict(
                                             message = f"Server error: {e}",
-                                            trace = traceback.format_exc()
+                                            trace = trace_str
                                         )
                 )
             
