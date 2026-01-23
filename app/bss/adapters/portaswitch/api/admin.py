@@ -53,30 +53,34 @@ class AdminAPI(HTTPAPIConnectorWithLogin):
         self.store_auth_session(session, self._api_user)
         return session
 
-    def get_account_list(self, i_customer: int, limit: int = 1000, offset: int = 0):
+    def get_account_list(self, i_customer: int, **search_params):
         """Returns information about accounts related to the input i_customer.
 
         Parameters:
             :i_customer (int): The identifier of a customer which accounts to be returned.
+            :limit (int): Maximum number of accounts to return.
+            :offset (int): Number of accounts to skip.
+            :**search_params: Additional search parameters (e.g., firstname, lastname, extension_name, email).
 
         Returns:
             :(dict): The API method execution result that contains info about accounts.
 
         """
+        params = {
+            "i_customer": i_customer,
+            "with_aliases": 1,
+            "get_not_closed_accounts": 1,
+            "get_only_real_accounts": 1,
+            "get_statuses": 1,
+            "get_total": 1,
+            "limit_alias_did_number_list": 100
+        }
+        params.update(search_params)
+
         return self._send_request(
             module="Account",
             method="get_account_list",
-            params={
-                "i_customer": i_customer,
-                "with_aliases": 1,
-                "get_not_closed_accounts": 1,
-                "get_only_real_accounts": 1,
-                "get_statuses": 1,
-                "get_total": 1,
-                "limit": limit,
-                "offset": offset,
-                "limit_alias_did_number_list": 100
-            },
+            params=params,
         )
 
     def get_extensions_list(self, i_customer: int) -> dict:

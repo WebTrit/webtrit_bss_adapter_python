@@ -725,6 +725,7 @@ class SessionResponse(BaseModel):
 
 class UserContactIndexResponse(BaseModel):
     items: Optional[List[Contact]] = None
+    pagination: Optional[Pagination] = None
 
 
 class SessionOtpCreateResponse(BaseModel):

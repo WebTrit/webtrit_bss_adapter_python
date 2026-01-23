@@ -119,8 +119,7 @@ from report_error import WebTritErrorException
 from report_error import raise_webtrit_error
 from request_trace import RouteWithLogging
 
-VERSION = "0.1.0"
-API_VERSION_PREFIX = "/api/v1"
+VERSION = "1.0.0"
 
 my_project_path = os.path.dirname(__file__)
 sys.path.append(my_project_path)
@@ -133,11 +132,11 @@ app = FastAPI(
         obtain their SIP credentials, etc.""",
     title="Sample adapter for connecting WebTrit to a BSS",
     version=VERSION,
-    #    servers=[{'url': '/api/v1', 'variables': {}}],
 )
 security = HTTPBearer()
 
 router = APIRouter(route_class=RouteWithLogging)
+router_v2 = APIRouter(route_class=RouteWithLogging)
 
 bss = initialize_bss_adapter(bss.adapters.__name__, config)
 bss_capabilities = bss.get_capabilities()
@@ -579,6 +578,55 @@ def get_user_contact_list(
     return Contacts(items=[], )
 
 
+@router_v2.get(
+    '/user/contacts',
+    response_model=Contacts,
+    responses={
+        '401': {'model': GetUserContactListUnauthorizedErrorResponse},
+        '404': {'model': GetUserContactListNotFoundErrorResponse},
+        '422': {'model': GetUserContactListUnprocessableEntityErrorResponse},
+        '500': {'model': GetUserContactListInternalServerErrorErrorResponse},
+    },
+    tags=['user'],
+)
+def get_user_contact_list_v2(
+        search: str = None,
+        auth_data: HTTPAuthorizationCredentials = Depends(security),
+        page: Optional[conint(ge=1)] = 1,
+        items_per_page: Optional[conint(ge=1)] = 100,
+        x_webtrit_tenant_id: Optional[str] = Header(None, alias=TENANT_ID_HTTP_HEADER),
+) -> (
+        Union[
+            Contacts,
+            GetUserContactListUnauthorizedErrorResponse,
+            GetUserContactListNotFoundErrorResponse,
+            GetUserContactListUnprocessableEntityErrorResponse,
+            GetUserContactListInternalServerErrorErrorResponse,
+        ]
+):
+    """
+    Get corporate directory (contacts of other users in the same PBX) with pagination
+    """
+    global bss, bss_capabilities
+
+    access_token = auth_data.credentials
+    session = bss.validate_session(access_token)
+    user = ExtendedUserInfo(user_id=safely_extract_scalar_value(session.user_id),
+                            tenant_id=bss.default_id_if_none(x_webtrit_tenant_id))
+
+    if Capabilities.extensions in bss_capabilities:
+        contacts, total = bss.retrieve_contacts_v2(session, user, search, page, items_per_page)
+
+        return Contacts(items=contacts,
+                        pagination=Pagination(
+                            page=page,
+                            items_total=total,
+                            items_per_page=items_per_page)
+                        )
+
+    return Contacts(items=[], pagination=Pagination(page=page, items_total=0, items_per_page=items_per_page))
+
+
 @router.get(
     '/user/contacts/{user_id}',
     response_model=ContactInfo,
@@ -1015,4 +1063,5 @@ def create_user_event(
     return Response(status_code=HTTP_204_NO_CONTENT, headers={'content-type': 'application/json'})
 
 
-app.include_router(router, prefix=API_VERSION_PREFIX)
+app.include_router(router, prefix="/api/v1")
+app.include_router(router_v2, prefix="/api/v2")

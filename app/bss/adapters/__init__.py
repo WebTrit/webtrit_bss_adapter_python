@@ -1,7 +1,7 @@
 import logging
 from abc import ABC, abstractmethod
 from datetime import datetime
-from typing import List, Dict, Optional, Callable, Union, Iterator, Tuple
+from typing import List, Dict, Optional, Callable, Iterator, Tuple
 
 from pydantic import BaseModel
 
@@ -224,7 +224,12 @@ class BSSAdapter(SessionManagement, OTPHandler,
         """Obtain user's voicemail message details information"""
         raise NotImplementedError("Override this method in your sub-class")
 
-    def retrieve_voicemail_message_attachment(self, session: SessionInfo, message_id: str, file_format: str) -> tuple[str, Iterator]:
+    def retrieve_voicemail_message_attachment(
+            self,
+            session: SessionInfo,
+            message_id: str,
+            file_format: str,
+    ) -> tuple[str, Iterator]:
         """Obtain the media file for a user's voicemail message"""
         raise NotImplementedError("Override this method in your sub-class")
 
@@ -236,13 +241,30 @@ class BSSAdapter(SessionManagement, OTPHandler,
     def delete_voicemail_message(self, session: SessionInfo, message_id: str) -> None:
         """Delete an existing user's voicemail message"""
         raise NotImplementedError("Override this method in your sub-class")
-    
-    def create_user_event(self, user: UserInfo, timestamp: datetime, group: UserEventGroup, type: UserEventType, data: Optional[dict] = None) -> None:
+
+    def create_user_event(
+            self,
+            user: UserInfo,
+            timestamp: datetime,
+            group: UserEventGroup,
+            type: UserEventType,
+            data: Optional[dict] = None,
+    ) -> None:
         """Create user's event"""
         raise NotImplementedError("Override this method in your sub-class")
 
     @abstractmethod
     def retrieve_contacts(self, session: SessionInfo, user: UserInfo) -> List[ContactInfo]:
+        """List of other extensions in the PBX"""
+        raise NotImplementedError("Override this method in your sub-class")
+
+    def retrieve_contacts_v2(
+            self, session: SessionInfo,
+            user: UserInfo,
+            search: Optional[str] = None,
+            page: Optional[int] = 1,
+            items_per_page: Optional[int] = 100,
+    ) -> tuple[List[ContactInfo], int]:
         """List of other extensions in the PBX"""
         raise NotImplementedError("Override this method in your sub-class")
 
@@ -294,6 +316,7 @@ class BSSAdapter(SessionManagement, OTPHandler,
     def default_id_if_none(self, tenant_id: str) -> str:
         """Provide a defaut value for tenant ID if none is supplied in HTTP headers"""
         return tenant_id if tenant_id else "default"
+
 
 class BSSAdapterExternalDB(BSSAdapter, SampleOTPHandler):
     """Supply to WebTrit core information about
@@ -398,6 +421,16 @@ class BSSAdapterExternalDB(BSSAdapter, SampleOTPHandler):
 
     @abstractmethod
     def retrieve_contacts(self, session: SessionInfo, user: UserInfo) -> List[ContactInfo]:
+        """List of other extensions in the PBX"""
+        raise NotImplementedError("Override this method in your sub-class")
+
+    def retrieve_contacts_v2(
+            self, session: SessionInfo,
+            user: UserInfo,
+            search: Optional[str] = None,
+            page: Optional[int] = 1,
+            items_per_page: Optional[int] = 100,
+    ) -> tuple[List[ContactInfo], int]:
         """List of other extensions in the PBX"""
         raise NotImplementedError("Override this method in your sub-class")
 
