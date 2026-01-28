@@ -71,6 +71,14 @@ class PortaSwitchSettings(BaseSettings):
         if v is None or (isinstance(v, list) and len(v) == 0):
             return []
 
+        # If it's already a list of dicts, return it as-is
+        if isinstance(v, list) and all(isinstance(item, dict) for item in v):
+            return v
+
+        # If it's a single dict, wrap it in a list
+        if isinstance(v, dict):
+            return [v]
+
         v = str(v)
 
         if not v or not v.strip():
