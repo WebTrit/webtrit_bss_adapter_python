@@ -1292,6 +1292,10 @@ class PortaSwitchAdapter(BSSAdapter):
         """
         allowed_addons = set(self._portaswitch_settings.ALLOWED_ADDONS)
 
+        if account_info.get("i_master_account"):
+            logging.debug("Account is alias, skipping add-on check...")
+            return
+
         assigned_addons = account_info.get("assigned_addons", [])
         assigned_addon_names = {addon.get("name") for addon in assigned_addons if "name" in addon}
 
