@@ -557,6 +557,7 @@ class PortaSwitchAdapter(BSSAdapter):
             self, session: SessionInfo,
             user: UserInfo,
             search: Optional[str] = None,
+            phone_numbers: List[str] = [],
             page: Optional[int] = 1,
             items_per_page: Optional[int] = 100,
     ) -> tuple[List[ContactInfo], int]:
@@ -582,6 +583,46 @@ class PortaSwitchAdapter(BSSAdapter):
             account_info = self._account_api.get_account_info(access_token)["account_info"]
             i_customer = int(account_info["i_customer"])
             i_account = int(account_info["i_account"])
+
+            # Normalize and prepare phone numbers if provided
+            normalized_phone_numbers: set[str] = set[str]()
+            if phone_numbers:
+                for number in phone_numbers:
+                    if not number:
+                        continue
+                    normalized_phone_numbers.add(number.replace("+", "").strip())
+
+            # If phone_numbers search is provided, ignore generic `search` and use a unified implementation
+            if normalized_phone_numbers:
+                contacts: list[ContactInfo] = []
+                for number in normalized_phone_numbers:
+                    try:
+                        # Exact search by main number (id)
+                        result = self._admin_api.get_account_list(i_customer, id=number)
+                        accounts = result.get("account_list", []) or []
+                        for account in accounts:
+                            contacts.append(Serializer.get_contact_info_by_account(account, account["i_account"]))
+                    except Exception as e:
+                        logging.debug(f"Failed to fetch accounts for phone number {number}: {e}")
+                        continue
+
+                # Add matching custom contacts
+                custom_contacts = [
+                    Serializer.get_contact_info_by_custom_entry(entry)
+                    for entry in self._portaswitch_settings.CONTACTS_CUSTOM
+                ]
+
+                for contact in custom_contacts:
+                    number = contact.numbers.main if contact.numbers and contact.numbers.main else ""
+
+                    if number.replace("+", "").strip() in normalized_phone_numbers:
+                        contacts.append(contact)
+
+                total_count = len(contacts)
+                start_idx = (page - 1) * items_per_page
+                end_idx = start_idx + items_per_page
+
+                return contacts[start_idx:end_idx], total_count
 
             contacts = []
             match self._portaswitch_settings.CONTACTS_SELECTING:

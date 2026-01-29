@@ -262,6 +262,7 @@ class BSSAdapter(SessionManagement, OTPHandler,
             self, session: SessionInfo,
             user: UserInfo,
             search: Optional[str] = None,
+            phone_numbers: List[str] = [],
             page: Optional[int] = 1,
             items_per_page: Optional[int] = 100,
     ) -> tuple[List[ContactInfo], int]:
@@ -428,6 +429,7 @@ class BSSAdapterExternalDB(BSSAdapter, SampleOTPHandler):
             self, session: SessionInfo,
             user: UserInfo,
             search: Optional[str] = None,
+            phone_numbers: List[str] = [],
             page: Optional[int] = 1,
             items_per_page: Optional[int] = 100,
     ) -> tuple[List[ContactInfo], int]:

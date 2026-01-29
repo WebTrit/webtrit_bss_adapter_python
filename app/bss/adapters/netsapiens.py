@@ -461,6 +461,7 @@ class NetsapiensAdapter(BSSAdapter):
             session: SessionInfo,
             user: UserInfo,
             search: Optional[str] = None,
+            phone_numbers: List[str] = [],
             page: Optional[int] = 1,
             items_per_page: Optional[int] = 100,
     ) -> tuple[List[ContactInfo], int]:

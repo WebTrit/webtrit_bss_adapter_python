@@ -3,9 +3,9 @@ from __future__ import annotations
 import os
 import sys
 from datetime import datetime
-from typing import Optional, Union
+from typing import Optional, Union, List
 
-from fastapi import FastAPI, APIRouter, Depends, Response, Request, Header, Body
+from fastapi import FastAPI, APIRouter, Depends, Response, Request, Header, Body, Query
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from pydantic import conint
 from starlette.responses import StreamingResponse
@@ -591,6 +591,7 @@ def get_user_contact_list(
 )
 def get_user_contact_list_v2(
         search: str = None,
+        phone_numbers: List[str] = Query(default=[]),
         auth_data: HTTPAuthorizationCredentials = Depends(security),
         page: Optional[conint(ge=1)] = 1,
         items_per_page: Optional[conint(ge=1)] = 100,
@@ -615,7 +616,7 @@ def get_user_contact_list_v2(
                             tenant_id=bss.default_id_if_none(x_webtrit_tenant_id))
 
     if Capabilities.extensions in bss_capabilities:
-        contacts, total = bss.retrieve_contacts_v2(session, user, search, page, items_per_page)
+        contacts, total = bss.retrieve_contacts_v2(session, user, search, phone_numbers, page, items_per_page)
 
         return Contacts(items=contacts,
                         pagination=Pagination(
