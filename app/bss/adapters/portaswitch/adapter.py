@@ -273,8 +273,8 @@ class PortaSwitchAdapter(BSSAdapter):
             if not user_id:
                 raise WebTritErrorException(
                     status_code=401,
-                    error_message="Access token invalid",
-                    code="access_token_invalid",
+                    error_message="Access token expired",
+                    code="access_token_expired",
                 )
 
             return SessionInfo(user_id=UserId(str(user_id)), access_token=AccessToken(access_token))
