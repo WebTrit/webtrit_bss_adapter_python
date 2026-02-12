@@ -1,12 +1,12 @@
-import logging
 from datetime import datetime
 from typing import Final, List, Union, Iterator
 
 import requests
+from jose import jwt
+
 from bss.adapters.portaswitch.config import PortaSwitchSettings
 from bss.adapters.portaswitch.types import PortaSwitchMailboxMessageFlag, PortaSwitchMailboxMessageFlagAction
 from bss.http_api import HTTPAPIConnector, AuthSessionData
-from jose import jwt
 
 DEFAULT_CHUNK_SIZE: Final[int] = 8192
 
@@ -40,7 +40,6 @@ class AccountAPI(HTTPAPIConnector):
             :response (dict): The API method execution result.
 
         """
-        logging.debug(f"Sending Account.API request: {module}/{method}/{params}")
 
         headers = None
         if access_token:
@@ -54,7 +53,6 @@ class AccountAPI(HTTPAPIConnector):
             stream=stream,
         )
 
-        logging.debug(f"Processing the Account.API result: {module}/{method}/{params}: \n {result}")
         return result
 
     def add_auth_info(self, url: str, request_params: dict, auth_session: AuthSessionData) -> dict:
@@ -284,7 +282,8 @@ class AccountAPI(HTTPAPIConnector):
             },
             access_token=access_token)
 
-    def get_phone_directory_info(self, access_token: str, i_ua_config_directory: str, page: int, items_per_page: int) -> dict:
+    def get_phone_directory_info(self, access_token: str, i_ua_config_directory: str, page: int,
+                                 items_per_page: int) -> dict:
         """Return the phone directory info of the account.
 
         Args:

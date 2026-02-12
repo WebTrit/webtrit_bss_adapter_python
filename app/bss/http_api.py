@@ -1,19 +1,15 @@
 import logging
+import threading
+import uuid
 from abc import ABC, abstractmethod
+from datetime import datetime, timedelta
 from typing import Optional
 
-from pydantic import BaseModel, Field
-from datetime import datetime, timedelta
-
 import requests
+from pydantic import BaseModel, Field
 
 from report_error import raise_webtrit_error
-import threading
-from request_trace import get_request_id
-import uuid
-
-
-# from bss.types import SignupExtAPIErrorCode as ExtAPIErrorCode
+from request_trace import get_request_id, truncate_log_message
 
 
 class APIUser(BaseModel):
@@ -124,7 +120,7 @@ class HTTPAPIConnector(ABC):
         try:
             logging.debug(f"Sending {method} request to {url} with parameters {params_final}")
             response = requests.request(method, url, **params_final)
-            clean_text = response.text.replace("\n", " ")
+            clean_text = truncate_log_message(response.text.replace("\n", " "))
             logging.debug(f"Received {response.status_code} {clean_text}")
             response.raise_for_status()
             return self.decode_response(response)
@@ -256,8 +252,8 @@ class HTTPAPIConnectorWithLogin(HTTPAPIConnector):
                 # we do not have an access token, need to log in first
                 if hasattr(user, 'password') and user.password is None:
                     raise_webtrit_error(401,
-                                    error_message="Authentication session is closed, need to re-login",
-                                    extra_error_code="access_token_expired")
+                                        error_message="Authentication session is closed, need to re-login",
+                                        extra_error_code="access_token_expired")
 
                 auth_session = self.login(user)
                 self.store_auth_session(auth_session, user)

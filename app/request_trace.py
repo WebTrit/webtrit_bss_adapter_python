@@ -12,8 +12,20 @@ from starlette.background import BackgroundTask
 from starlette.responses import StreamingResponse
 import traceback
 
+MAX_LOG_MESSAGE_LENGTH = int(os.getenv("LOG_MAX_MESSAGE_LENGTH", "1000"))
+
 # Add context variable for request ID
 current_request_id = contextvars.ContextVar('current_request_id', default="STARTUP")
+
+
+
+def truncate_log_message(message: str, max_length: int = MAX_LOG_MESSAGE_LENGTH) -> str:
+    """Truncate log message to avoid logging excessively large payloads."""
+    if message is None:
+        return ""
+    if len(message) <= max_length:
+        return message
+    return f"{message[:max_length]}... [truncated {len(message) - max_length} chars]"
 
 class AddRequestID(logging.Filter):
     """Logging filter that adds request_id to log records"""
@@ -78,7 +90,7 @@ def log_formatted_json(label: str, text):
     if len(text) == 0:
         logging.info(f"{label}: Empty")
         return
-    logging.info(f"{label}: {text}")
+    logging.info(f"{label}: {truncate_log_message(text)}")
     return
 
 def log_info(req_body, res_body):

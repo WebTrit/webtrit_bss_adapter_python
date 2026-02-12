@@ -183,8 +183,6 @@ class AdminAPI(HTTPAPIConnectorWithLogin):
             :response (object): The API method execution result.
 
         """
-        logging.debug(f"Sending Admin.API request: {module}/{method}/{params}")
-
         try:
             result = self.send_rest_request(
                 method="POST",
@@ -212,5 +210,4 @@ class AdminAPI(HTTPAPIConnectorWithLogin):
             else:
                 raise error
 
-        logging.debug(f"Processing the Admin.API result: {module}/{method}/{params}: \n {result}")
         return result
