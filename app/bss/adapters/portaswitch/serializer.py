@@ -1,3 +1,4 @@
+import re
 from datetime import datetime, timezone
 from typing import Optional
 
@@ -305,7 +306,21 @@ class Serializer:
 
     @staticmethod
     def parse_voicemail_message_sender_user_ref(sender: str) -> str:
-        return sender.split(" ")[1][1:]
+        """
+        Parse sender field from a voicemail message and extract the caller number.
+
+        Expected formats (examples):
+        1. "Caller #1001" -> "1001"
+        2. "Caller #anonymous <anonymous@someserver-50.ops>" -> "anonymous"
+        3. "123 (John Doe) <1001@pbx>" -> "1001"
+        4. "123 <1001@pbx>" -> "1001"
+        """
+        match = re.search(r"<([^@\s]+)@|#(\S+)", sender)
+
+        if match:
+            return match.group(1) or match.group(2)
+
+        return sender
 
     @staticmethod
     def parse_voicemail_message_receiver_user_ref(receiver: str) -> str:
