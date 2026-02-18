@@ -56,6 +56,7 @@ from .exceptions import (
     session_close_error,
     refresh_token_invalid_error,
     addon_required_error,
+    session_upgrade_needed_error,
 )
 from .serializer import Serializer
 from .types import (
@@ -66,7 +67,7 @@ from .types import (
     PortaSwitchMailboxMessageFlagAction,
     PortaSwitchMailboxMessageAttachmentFormat,
 )
-from .utils import generate_otp_id, extract_fault_code
+from .utils import generate_otp_id, extract_fault_code, generate_hash_dictionary
 
 
 class PortaSwitchAdapter(BSSAdapter):
@@ -111,6 +112,7 @@ class PortaSwitchAdapter(BSSAdapter):
 
         self._cached_otp_ids = TiedKeyValue()
         self._cached_capabilities = self.calculate_capabilities()
+        self._hash_dictionary = generate_hash_dictionary() if self._settings.ENABLE_ON_DEMAND_SESSION_MIGRATION else {}
 
     @classmethod
     def name(cls) -> str:
@@ -246,12 +248,11 @@ class PortaSwitchAdapter(BSSAdapter):
 
             self._cached_otp_ids.pop(otp_id)
 
-            # Emulate account login.
-            account_info: dict = self._admin_api.get_account_info(i_account=i_account)["account_info"]
-            session_data: dict = self._account_api.login(account_info["login"], account_info["password"])
+            i_account = str(i_account)
+            session_data = self._emulate_account_login(i_account)
 
             return SessionInfo(
-                user_id=UserId(str(account_info["i_account"])),
+                user_id=UserId(i_account),
                 access_token=session_data["access_token"],
                 refresh_token=session_data["refresh_token"],
                 expires_at=datetime.now() + timedelta(seconds=session_data["expires_in"]),
@@ -284,20 +285,29 @@ class PortaSwitchAdapter(BSSAdapter):
         except ExpiredSignatureError:
             raise access_token_expired_error()
         except JWTError:
+            if self._settings.ENABLE_ON_DEMAND_SESSION_MIGRATION:
+                raise session_upgrade_needed_error()
             raise access_token_invalid_error()
 
     def refresh_session(self, refresh_token: str) -> SessionInfo:
         """Refreshes the PortaSwitch account session.
 
         Parameters:
-            refresh_token (str): The token used to refresh the session.
+            refresh_token (str): The token used to refresh the session or hashed i_account in case of on-demand session migration
 
         Returns:
             (SessionInfo): The object with the obtained session tokens.
 
         """
         try:
-            session_data: dict = self._account_api.refresh(refresh_token=refresh_token)
+
+            if self._settings.ENABLE_ON_DEMAND_SESSION_MIGRATION:
+                # On-demand session migration is enabled. We need to emulate account login to get a new access token
+                i_account = self._hash_dictionary.get(refresh_token, refresh_token)
+                session_data = self._emulate_account_login(str(i_account))
+            else:
+                session_data = self._account_api.refresh(refresh_token)
+
             access_token: str = session_data["access_token"]
             account_info: dict = self._account_api.get_account_info(access_token=access_token)["account_info"]
 
@@ -1242,8 +1252,7 @@ class PortaSwitchAdapter(BSSAdapter):
 
     def _custom_pages(self, user_id: str, data: CustomRequest, lang: str = None) -> CustomResponse:
         _ = get_translation_func(lang)
-        account_info = self._admin_api.get_account_info(i_account=user_id).get("account_info")
-        session_data = self._account_api.login(account_info["login"], account_info["password"])
+        session_data = self._emulate_account_login(user_id)
 
         pages = []
         if self._portaswitch_settings.SELF_CONFIG_PORTAL_URL:
@@ -1260,8 +1269,7 @@ class PortaSwitchAdapter(BSSAdapter):
         return CustomResponse(pages=pages)
 
     def _external_page_access_token(self, user_id: str, data: CustomRequest, lang: str = None) -> CustomResponse:
-        account_info = self._admin_api.get_account_info(i_account=user_id).get("account_info")
-        session_data = self._account_api.login(account_info["login"], account_info["password"])
+        session_data = self._emulate_account_login(user_id)
 
         return CustomResponse(
             access_token=AccessToken(session_data['access_token']),
@@ -1393,3 +1401,9 @@ class PortaSwitchAdapter(BSSAdapter):
             offset += limit
 
         return all_accounts
+
+    def _emulate_account_login(self, i_account: str) -> dict:
+        """Emulate a login for a PortaSwitch account."""
+        account_info = self._admin_api.get_account_info(i_account=i_account).get("account_info")
+
+        return self._account_api.login(account_info["login"], account_info["password"])

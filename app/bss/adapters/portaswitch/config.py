@@ -57,7 +57,7 @@ class PortaSwitchSettings(BaseSettings):
         parts = [x.strip() for x in v.split(';') if x.strip()]
         if not parts:
             return list(PortaSwitchExtensionType)
-        
+
         return [PortaSwitchExtensionType(x) for x in parts]
 
     @field_validator("CONTACTS_SELECTING_CUSTOMER_IDS", mode='before')
@@ -87,7 +87,7 @@ class PortaSwitchSettings(BaseSettings):
         parts = [x.strip() for x in v.split(';') if x.strip()]
         if not parts:
             return []
-        
+
         return [json.loads(x) for x in parts]
 
     @field_validator("ALLOWED_ADDONS", mode='before')
@@ -119,6 +119,7 @@ class OTPSettings(BaseSettings):
 
 class Settings(BaseSettings):
     JANUS_SIP_FORCE_TCP: bool = False
+    ENABLE_ON_DEMAND_SESSION_MIGRATION: bool = False
 
     PORTASWITCH_SETTINGS: PortaSwitchSettings = PortaSwitchSettings()
     OTP_SETTINGS: OTPSettings = OTPSettings()

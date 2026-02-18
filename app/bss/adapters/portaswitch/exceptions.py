@@ -9,6 +9,10 @@ def access_token_expired_error():
     return WebTritErrorException(401, "Access token expired", "access_token_expired")
 
 
+def session_upgrade_needed_error():
+    return WebTritErrorException(401, "Token format is outdated. Migration required.", "session_upgrade_needed")
+
+
 def user_authentication_error():
     return WebTritErrorException(401, "User authentication error")
 

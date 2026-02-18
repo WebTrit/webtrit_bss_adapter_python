@@ -1,3 +1,5 @@
+import base64
+import hashlib
 import uuid
 
 from report_error import WebTritErrorException
@@ -34,3 +36,21 @@ def extract_fault_code(error: WebTritErrorException) -> str:
 def generate_otp_id() -> str:
     """Generate a new unique ID for the session"""
     return str(uuid.uuid1()).replace("-", "") + str(uuid.uuid4()).replace("-", "")
+
+
+def generate_hash(value) -> str:
+    """Generates a SHA256 hash encoded in Base64 without padding."""
+    hash_bytes = hashlib.sha256(str(value).encode("utf-8")).digest()
+
+    return base64.b64encode(hash_bytes).decode("utf-8").rstrip("=")
+
+
+def generate_hash_dictionary(max_value: int = 1_000_000) -> dict[str, int]:
+    """Generates a hash dictionary for a specific range."""
+    hash_dict = {}
+
+    for user_id in range(1, max_value + 1):
+        hash_value = generate_hash(user_id)
+        hash_dict[hash_value] = user_id
+
+    return hash_dict
