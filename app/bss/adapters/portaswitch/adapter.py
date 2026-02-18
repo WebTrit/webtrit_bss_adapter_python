@@ -266,18 +266,10 @@ class PortaSwitchAdapter(BSSAdapter):
             WebTritErrorException: If the token is invalid, expired, or cannot be verified.
         """
         try:
-            self._account_api.decode_and_verify_access_token_expiration(access_token)
-            session_data: dict = self._account_api.ping(access_token=access_token)
-            user_id = session_data["user_id"]
+            data = self._account_api.decode_and_verify_access_token_expiration(access_token)
+            user_id = str(data["i_account"])
 
-            if not user_id:
-                raise WebTritErrorException(
-                    status_code=401,
-                    error_message="Access token expired",
-                    code="access_token_expired",
-                )
-
-            return SessionInfo(user_id=UserId(str(user_id)), access_token=AccessToken(access_token))
+            return SessionInfo(user_id=UserId(user_id), access_token=AccessToken(access_token))
         except ExpiredSignatureError:
             raise WebTritErrorException(
                 status_code=401,
@@ -290,15 +282,6 @@ class PortaSwitchAdapter(BSSAdapter):
                 error_message="Access token invalid",
                 code="access_token_invalid",
             )
-        except WebTritErrorException as error:
-            if extract_fault_code(error) in ("Client.Session.ping.failed_to_process_access_token",):
-                raise WebTritErrorException(
-                    status_code=401,
-                    error_message="Access token invalid",
-                    code="access_token_invalid",
-                )
-
-            raise error
 
     def refresh_session(self, refresh_token: str) -> SessionInfo:
         """Refreshes the PortaSwitch account session.
@@ -331,7 +314,7 @@ class PortaSwitchAdapter(BSSAdapter):
                 raise WebTritErrorException(
                     status_code=422,
                     code="refresh_token_invalid",
-                    error_message=f"Invalid refresh token {refresh_token}",
+                    error_message=f"Invalid refresh token",
                 )
 
             raise error
@@ -355,9 +338,8 @@ class PortaSwitchAdapter(BSSAdapter):
             fault_code = extract_fault_code(error)
             if fault_code in ("Client.Session.logout.failed_to_process_access_token",):
                 raise WebTritErrorException(
-                    status_code=404,
-                    # code = UserAccessErrorCode.session_not_found,
-                    error_message=f"Error closing the session {access_token}",
+                    status_code=422,
+                    error_message=f"Error closing the session",
                 )
 
             raise error
@@ -396,11 +378,10 @@ class PortaSwitchAdapter(BSSAdapter):
         except WebTritErrorException as error:
             fault_code = extract_fault_code(error)
             if fault_code in ("Client.Session.check_auth.failed_to_process_access_token",):
-                # Race condition case, when the session is validated, and then the access_token dies.
                 raise WebTritErrorException(
-                    status_code=404,
-                    # code = UserAccessErrorCode.session_not_found,
-                    error_message="User not found",
+                    status_code=401,
+                    error_message="Access token expired",
+                    code="access_token_expired",
                 )
 
             raise error
@@ -544,11 +525,10 @@ class PortaSwitchAdapter(BSSAdapter):
         except WebTritErrorException as error:
             fault_code = extract_fault_code(error)
             if fault_code in ("Client.Session.check_auth.failed_to_process_access_token",):
-                # Race condition case, when the session is validated, and then the access_token dies.
                 raise WebTritErrorException(
-                    status_code=404,
-                    # code = UserAccessErrorCode.session_not_found,
-                    error_message="User not found",
+                    status_code=401,
+                    error_message="Access token expired",
+                    code="access_token_expired",
                 )
 
             raise error
@@ -928,11 +908,10 @@ class PortaSwitchAdapter(BSSAdapter):
         except WebTritErrorException as error:
             fault_code = extract_fault_code(error)
             if fault_code in ("Client.Session.check_auth.failed_to_process_access_token",):
-                # Race condition case, when the session is validated, and then the access_token dies.
                 raise WebTritErrorException(
-                    status_code=404,
-                    # code = UserAccessErrorCode.session_not_found,
-                    error_message="User not found",
+                    status_code=401,
+                    error_message="Access token expired",
+                    code="access_token_expired",
                 )
 
             raise error
@@ -1001,11 +980,10 @@ class PortaSwitchAdapter(BSSAdapter):
         except WebTritErrorException as error:
             fault_code = extract_fault_code(error)
             if fault_code in ("Client.Session.check_auth.failed_to_process_access_token",):
-                # Race condition case, when the session is validated, and then the access_token dies.
                 raise WebTritErrorException(
-                    status_code=404,
-                    # code = UserNotFoundCode.user_not_found,
-                    error_message="User not found",
+                    status_code=401,
+                    error_message="Access token expired",
+                    code="access_token_expired",
                 )
 
             raise error
@@ -1067,7 +1045,11 @@ class PortaSwitchAdapter(BSSAdapter):
         except WebTritErrorException as error:
             fault_code = extract_fault_code(error)
             if fault_code in ("Client.Session.check_auth.failed_to_process_access_token",):
-                raise WebTritErrorException(status_code=404, error_message="User not found")
+                raise WebTritErrorException(
+                    status_code=401,
+                    error_message="Access token expired",
+                    code="access_token_expired",
+                )
 
             raise error
 
@@ -1097,7 +1079,11 @@ class PortaSwitchAdapter(BSSAdapter):
         except WebTritErrorException as error:
             fault_code = extract_fault_code(error)
             if fault_code in ("Client.Session.check_auth.failed_to_process_access_token",):
-                raise WebTritErrorException(status_code=404, error_message="User not found")
+                raise WebTritErrorException(
+                    status_code=401,
+                    error_message="Access token expired",
+                    code="access_token_expired",
+                )
 
             raise error
 
@@ -1130,7 +1116,11 @@ class PortaSwitchAdapter(BSSAdapter):
         except WebTritErrorException as error:
             fault_code = extract_fault_code(error)
             if fault_code in ("Client.Session.check_auth.failed_to_process_access_token",):
-                raise WebTritErrorException(404, "User not found")
+                raise WebTritErrorException(
+                    401,
+                    error_message="Access token expired",
+                    code="access_token_expired",
+                )
 
             raise error
 
@@ -1165,7 +1155,11 @@ class PortaSwitchAdapter(BSSAdapter):
         except WebTritErrorException as error:
             fault_code = extract_fault_code(error)
             if fault_code in ("Client.Session.check_auth.failed_to_process_access_token",):
-                raise WebTritErrorException(status_code=404, error_message="User not found")
+                raise WebTritErrorException(
+                    401,
+                    error_message="Access token expired",
+                    code="access_token_expired",
+                )
 
             raise error
 
@@ -1185,7 +1179,11 @@ class PortaSwitchAdapter(BSSAdapter):
         except WebTritErrorException as error:
             fault_code = extract_fault_code(error)
             if fault_code in ("Client.Session.check_auth.failed_to_process_access_token",):
-                raise WebTritErrorException(status_code=404, error_message="User not found")
+                raise WebTritErrorException(
+                    401,
+                    error_message="Access token expired",
+                    code="access_token_expired",
+                )
 
             raise error
 
@@ -1247,7 +1245,11 @@ class PortaSwitchAdapter(BSSAdapter):
             )
         except WebTritErrorException as error:
             if extract_fault_code(error) == "Client.Session.check_auth.failed_to_process_access_token":
-                raise WebTritErrorException(status_code=404, error_message="User not found")
+                raise WebTritErrorException(
+                    401,
+                    error_message="Access token expired",
+                    code="access_token_expired",
+                )
 
             raise error
 
