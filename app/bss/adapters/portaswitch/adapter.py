@@ -38,6 +38,25 @@ from localization import get_translation_func
 from report_error import WebTritErrorException
 from .api import AccountAPI, AdminAPI
 from .config import Settings
+from .exceptions import (
+    method_not_found_error,
+    external_api_issue_error,
+    not_found_user_error,
+    not_found_otp_code_error,
+    not_found_contact_error,
+    not_found_recording_error,
+    incorrect_credentials_error,
+    user_authentication_error,
+    delivery_channel_unspecified_error,
+    password_change_required_error,
+    access_token_expired_error,
+    access_token_invalid_error,
+    unsupported_file_format_error,
+    missing_tokens_error,
+    session_close_error,
+    refresh_token_invalid_error,
+    addon_required_error,
+)
 from .serializer import Serializer
 from .types import (
     PortaSwitchSignInCredentialsType,
@@ -132,7 +151,7 @@ class PortaSwitchAdapter(BSSAdapter):
                 account_info = self._admin_api.get_account_info(i_account=master_id).get("account_info")
 
             if not account_info or account_info[password_attr] != password:
-                raise WebTritErrorException(401, "User authentication error", code="incorrect_credentials")
+                raise incorrect_credentials_error()
 
             if self._portaswitch_settings.ALLOWED_ADDONS:
                 self._check_allowed_addons(account_info)
@@ -153,10 +172,7 @@ class PortaSwitchAdapter(BSSAdapter):
                     "Server.Session.cannot_login_brute_force_activity",
                     "Client.Session.check_auth.failed_to_process_access_token",
             ):
-                raise WebTritErrorException(
-                    status_code=401,
-                    error_message="User authentication error",
-                )
+                raise user_authentication_error()
 
             raise error
 
@@ -177,7 +193,7 @@ class PortaSwitchAdapter(BSSAdapter):
         try:
             account_info = self._admin_api.get_account_info(id=user.user_id).get("account_info")
             if not account_info:
-                raise WebTritErrorException(404, f"There is no an account with such id: {user.user_id}")
+                raise not_found_user_error(user.user_id)
 
             if self._portaswitch_settings.ALLOWED_ADDONS:
                 self._check_allowed_addons(account_info)
@@ -185,7 +201,7 @@ class PortaSwitchAdapter(BSSAdapter):
             i_account = account_info.get("i_master_account", account_info["i_account"])
             success: int = self._admin_api.create_otp(i_account, self.OTP_DELIVERY_CHANNEL)["success"]
             if not success:
-                raise WebTritErrorException(500, "Unknown error", code="external_api_issue")
+                raise external_api_issue_error()
 
             otp_id: str = generate_otp_id()
             self._cached_otp_ids[otp_id] = i_account, user.user_id
@@ -199,7 +215,7 @@ class PortaSwitchAdapter(BSSAdapter):
         except WebTritErrorException as error:
             fault_code = extract_fault_code(error)
             if fault_code in ("Server.AccessControl.empty_rec_and_bcc",):
-                raise WebTritErrorException(422, "Delivery channel unspecified", code="delivery_channel_unspecified")
+                raise delivery_channel_unspecified_error()
 
             raise error
 
@@ -222,11 +238,11 @@ class PortaSwitchAdapter(BSSAdapter):
 
             (i_account, user_ref) = self._cached_otp_ids.get(otp_id, (None, None))
             if not i_account:
-                raise WebTritErrorException(status_code=404, error_message=f"Incorrect OTP code: {otp.code}")
+                raise not_found_otp_code_error(otp.code)
 
             data: dict = self._admin_api.verify_otp(otp_token=otp.code)
             if user_ref not in self._otp_settings.IGNORE_ACCOUNTS and not data["success"]:
-                raise WebTritErrorException(status_code=404, error_message=f"Incorrect OTP code: {otp.code}")
+                raise not_found_otp_code_error(otp.code)
 
             self._cached_otp_ids.pop(otp_id)
 
@@ -244,12 +260,7 @@ class PortaSwitchAdapter(BSSAdapter):
         except WebTritErrorException as error:
             fault_code = extract_fault_code(error)
             if fault_code in ("Server.Session.alert_You_must_change_password",):
-                raise WebTritErrorException(
-                    status_code=422,
-                    # code = OTPUserDataErrorCode.validation_error,
-                    error_message="Failed to perform authentication using this account."
-                                  "Try changing this account web-password.",
-                )
+                raise password_change_required_error()
 
             raise error
 
@@ -271,17 +282,9 @@ class PortaSwitchAdapter(BSSAdapter):
 
             return SessionInfo(user_id=UserId(user_id), access_token=AccessToken(access_token))
         except ExpiredSignatureError:
-            raise WebTritErrorException(
-                status_code=401,
-                error_message=f"Access token expired",
-                code="access_token_expired",
-            )
+            raise access_token_expired_error()
         except JWTError:
-            raise WebTritErrorException(
-                status_code=401,
-                error_message="Access token invalid",
-                code="access_token_invalid",
-            )
+            raise access_token_invalid_error()
 
     def refresh_session(self, refresh_token: str) -> SessionInfo:
         """Refreshes the PortaSwitch account session.
@@ -311,11 +314,7 @@ class PortaSwitchAdapter(BSSAdapter):
                     "Server.Session.refresh_access_token.refresh_failed",
                     "Client.Session.check_auth.failed_to_process_access_token",
             ):
-                raise WebTritErrorException(
-                    status_code=422,
-                    code="refresh_token_invalid",
-                    error_message=f"Invalid refresh token",
-                )
+                raise refresh_token_invalid_error()
 
             raise error
 
@@ -337,10 +336,7 @@ class PortaSwitchAdapter(BSSAdapter):
         except WebTritErrorException as error:
             fault_code = extract_fault_code(error)
             if fault_code in ("Client.Session.logout.failed_to_process_access_token",):
-                raise WebTritErrorException(
-                    status_code=422,
-                    error_message=f"Error closing the session",
-                )
+                raise session_close_error()
 
             raise error
 
@@ -378,11 +374,7 @@ class PortaSwitchAdapter(BSSAdapter):
         except WebTritErrorException as error:
             fault_code = extract_fault_code(error)
             if fault_code in ("Client.Session.check_auth.failed_to_process_access_token",):
-                raise WebTritErrorException(
-                    status_code=401,
-                    error_message="Access token expired",
-                    code="access_token_expired",
-                )
+                raise access_token_expired_error()
 
             raise error
 
@@ -525,11 +517,7 @@ class PortaSwitchAdapter(BSSAdapter):
         except WebTritErrorException as error:
             fault_code = extract_fault_code(error)
             if fault_code in ("Client.Session.check_auth.failed_to_process_access_token",):
-                raise WebTritErrorException(
-                    status_code=401,
-                    error_message="Access token expired",
-                    code="access_token_expired",
-                )
+                raise access_token_expired_error()
 
             raise error
 
@@ -908,11 +896,7 @@ class PortaSwitchAdapter(BSSAdapter):
         except WebTritErrorException as error:
             fault_code = extract_fault_code(error)
             if fault_code in ("Client.Session.check_auth.failed_to_process_access_token",):
-                raise WebTritErrorException(
-                    status_code=401,
-                    error_message="Access token expired",
-                    code="access_token_expired",
-                )
+                raise access_token_expired_error()
 
             raise error
 
@@ -932,8 +916,7 @@ class PortaSwitchAdapter(BSSAdapter):
         """
         account_info = self._admin_api.get_account_info(i_account=int(user_id)).get("account_info")
         if not account_info:
-            raise WebTritErrorException(404, f"There is no an account with such id: {user_id}",
-                                        code="contact_not_found")
+            raise not_found_contact_error(user_id)
 
         return Serializer.get_contact_info_by_account(account_info, int(user.user_id))
 
@@ -980,11 +963,7 @@ class PortaSwitchAdapter(BSSAdapter):
         except WebTritErrorException as error:
             fault_code = extract_fault_code(error)
             if fault_code in ("Client.Session.check_auth.failed_to_process_access_token",):
-                raise WebTritErrorException(
-                    status_code=401,
-                    error_message="Access token expired",
-                    code="access_token_expired",
-                )
+                raise access_token_expired_error()
 
             raise error
 
@@ -1002,9 +981,8 @@ class PortaSwitchAdapter(BSSAdapter):
         Raises:
             WebTritErrorException: If the recording is not found or the ID is invalid.
         """
+        recording_id = safely_extract_scalar_value(call_recording)
         try:
-            recording_id = safely_extract_scalar_value(call_recording)
-
             return self._account_api.get_call_recording(
                 access_token=safely_extract_scalar_value(session.access_token), recording_id=recording_id
             )
@@ -1012,10 +990,7 @@ class PortaSwitchAdapter(BSSAdapter):
         except WebTritErrorException as error:
             fault_code = extract_fault_code(error)
             if fault_code in ("Server.CDR.xdr_not_found", "Server.CDR.invalid_call_recording_id",):
-                raise WebTritErrorException(
-                    status_code=404,
-                    error_message="The recording with such a recording_id is not found.",
-                )
+                raise not_found_recording_error(recording_id)
 
             raise error
 
@@ -1045,11 +1020,7 @@ class PortaSwitchAdapter(BSSAdapter):
         except WebTritErrorException as error:
             fault_code = extract_fault_code(error)
             if fault_code in ("Client.Session.check_auth.failed_to_process_access_token",):
-                raise WebTritErrorException(
-                    status_code=401,
-                    error_message="Access token expired",
-                    code="access_token_expired",
-                )
+                raise access_token_expired_error()
 
             raise error
 
@@ -1079,11 +1050,7 @@ class PortaSwitchAdapter(BSSAdapter):
         except WebTritErrorException as error:
             fault_code = extract_fault_code(error)
             if fault_code in ("Client.Session.check_auth.failed_to_process_access_token",):
-                raise WebTritErrorException(
-                    status_code=401,
-                    error_message="Access token expired",
-                    code="access_token_expired",
-                )
+                raise access_token_expired_error()
 
             raise error
 
@@ -1104,7 +1071,7 @@ class PortaSwitchAdapter(BSSAdapter):
 
         file_format = file_format and file_format.lower()
         if file_format and not PortaSwitchMailboxMessageAttachmentFormat.has_value(file_format):
-            raise WebTritErrorException(422, "Not supported file format", code="unsupported_file_format")
+            raise unsupported_file_format_error()
 
         try:
             return self._account_api.get_mailbox_message_attachment(
@@ -1116,11 +1083,7 @@ class PortaSwitchAdapter(BSSAdapter):
         except WebTritErrorException as error:
             fault_code = extract_fault_code(error)
             if fault_code in ("Client.Session.check_auth.failed_to_process_access_token",):
-                raise WebTritErrorException(
-                    401,
-                    error_message="Access token expired",
-                    code="access_token_expired",
-                )
+                raise access_token_expired_error()
 
             raise error
 
@@ -1155,11 +1118,7 @@ class PortaSwitchAdapter(BSSAdapter):
         except WebTritErrorException as error:
             fault_code = extract_fault_code(error)
             if fault_code in ("Client.Session.check_auth.failed_to_process_access_token",):
-                raise WebTritErrorException(
-                    401,
-                    error_message="Access token expired",
-                    code="access_token_expired",
-                )
+                raise access_token_expired_error()
 
             raise error
 
@@ -1179,11 +1138,7 @@ class PortaSwitchAdapter(BSSAdapter):
         except WebTritErrorException as error:
             fault_code = extract_fault_code(error)
             if fault_code in ("Client.Session.check_auth.failed_to_process_access_token",):
-                raise WebTritErrorException(
-                    401,
-                    error_message="Access token expired",
-                    code="access_token_expired",
-                )
+                raise access_token_expired_error()
 
             raise error
 
@@ -1233,7 +1188,7 @@ class PortaSwitchAdapter(BSSAdapter):
         refresh_token = user_data.get("refresh_token")
 
         if not access_token or not refresh_token:
-            raise WebTritErrorException(422, "Missing required access or refresh token parameters")
+            raise missing_tokens_error()
 
         try:
             account_info = self._account_api.get_account_info(access_token=access_token)["account_info"]
@@ -1245,11 +1200,7 @@ class PortaSwitchAdapter(BSSAdapter):
             )
         except WebTritErrorException as error:
             if extract_fault_code(error) == "Client.Session.check_auth.failed_to_process_access_token":
-                raise WebTritErrorException(
-                    401,
-                    error_message="Access token expired",
-                    code="access_token_expired",
-                )
+                raise access_token_expired_error()
 
             raise error
 
@@ -1267,9 +1218,7 @@ class PortaSwitchAdapter(BSSAdapter):
 
             return method(data=data, lang=lang)
         else:
-            raise WebTritErrorException(
-                status_code=404, error_message=f"Method '{method_name}' not found", code="method_not_found"
-            )
+            raise method_not_found_error(method_name)
 
     def custom_method_private(
             self,
@@ -1287,9 +1236,7 @@ class PortaSwitchAdapter(BSSAdapter):
 
             return method(user_id=user_id, data=data, lang=lang)
         else:
-            raise WebTritErrorException(
-                status_code=404, error_message=f"Method '{method_name}' not found", code="method_not_found"
-            )
+            raise method_not_found_error(method_name)
 
     # region custom methods handlers
 
@@ -1345,7 +1292,7 @@ class PortaSwitchAdapter(BSSAdapter):
         logging.info(f"Check add-ons {assigned_addon_names} for access. Allowed add-ons: {allowed_addons}")
 
         if not allowed_addons.intersection(assigned_addon_names):
-            raise WebTritErrorException(403, "Access denied: required add-on not assigned", code="addon_required")
+            raise addon_required_error()
 
     def _get_number_to_customer_accounts_map_for_numbers(self, target_numbers: set[str]) -> dict[str, dict]:
         """Return a mapping of phone numbers to customer accounts, optimized for specific numbers.
