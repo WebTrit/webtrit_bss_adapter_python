@@ -301,9 +301,10 @@ class PortaSwitchAdapter(BSSAdapter):
         """
         try:
 
-            if self._settings.ENABLE_ON_DEMAND_SESSION_MIGRATION:
+            if self._settings.ENABLE_ON_DEMAND_SESSION_MIGRATION and refresh_token.isdigit():
                 # On-demand session migration is enabled. We need to emulate account login to get a new access token
                 i_account = self._hash_dictionary.get(refresh_token, refresh_token)
+                logging.info(f"On-demand session migration is enabled. Trying to emulate {i_account} account login")
                 session_data = self._emulate_account_login(str(i_account))
             else:
                 session_data = self._account_api.refresh(refresh_token)
