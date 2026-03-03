@@ -112,7 +112,7 @@ class AccountAPI(HTTPAPIConnector):
 
         """
         return self.__send_request(
-            module="Session", method="login", params={"login": login, "password": password, "token": password}
+            module="Session", method="login", params={"login": login, "password": password}
         )
 
     def logout(self, access_token: str) -> dict:
