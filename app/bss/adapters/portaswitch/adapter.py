@@ -70,7 +70,7 @@ from .types import (
 )
 from .utils import generate_otp_id, extract_fault_code, generate_hash_dictionary
 
-PORTASWITCH_VERSION_WITH_TOKEN: Final[str] = "128"
+PORTASWITCH_VERSION_WITH_TOKEN: Final[str] = "MR128"
 
 
 class PortaSwitchAdapter(BSSAdapter):
@@ -168,7 +168,7 @@ class PortaSwitchAdapter(BSSAdapter):
 
             token = account_info["password"]
             session_data = self._account_api.login(account_info["login"], account_info["password"],
-                                                   token if actual_portaswitch_mr <= expected_portaswitch_mr_with_token_support else None)
+                                                   token if actual_portaswitch_mr < expected_portaswitch_mr_with_token_support else None)
 
             return SessionInfo(
                 user_id=UserId(str(account_info["i_account"])),

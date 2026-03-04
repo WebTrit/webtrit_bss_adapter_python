@@ -117,7 +117,7 @@ class AccountAPI(HTTPAPIConnector):
         if token:
             params["token"] = token
 
-        return self.__send_request(**params)
+        return self.__send_request(module="Session", method="login", params=params)
 
     def logout(self, access_token: str) -> dict:
         """Performs an account logout.
