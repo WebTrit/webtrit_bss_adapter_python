@@ -1,4 +1,5 @@
 import logging
+from typing import Optional
 
 from bss.adapters.portaswitch.config import PortaSwitchSettings
 from bss.adapters.portaswitch.types import PortaSwitchAdminUser
@@ -167,6 +168,15 @@ class AdminAPI(HTTPAPIConnectorWithLogin):
         response = self._send_request(module="Env", method="get_env_info", params={})
 
         return response.get("env_info", dict())
+
+    def get_version(self) -> Optional[str]:
+        """Returns PortaSwitch version.
+        Returns:
+            str: The API method execution result that contains a PortaSwitch version.
+        """
+        response = self._send_request(module="Generic", method="get_version", params={})
+
+        return response.get("version")
 
     def _send_request(self, module: str, method: str, params: dict, turn_off_login: bool = False):
         """Sends the Porta-Billing API method by means of HTTP POST request.

@@ -100,20 +100,24 @@ class AccountAPI(HTTPAPIConnector):
 
         raise ValueError("Not expected response")
 
-    def login(self, login: str, password: str) -> dict:
+    def login(self, login: str, password: str, token: str = None) -> dict:
         """Performs an account login by its login and password.
 
         Parameters:
             :login (str): The login of the account.
             :password (str): The password of the account.
+            :token (str): The token of the account.
 
         Returns:
             :(dict): The API method execution result.
 
         """
-        return self.__send_request(
-            module="Session", method="login", params={"login": login, "password": password}
-        )
+        params = {"login": login, "password": password}
+
+        if token:
+            params["token"] = token
+
+        return self.__send_request(**params)
 
     def logout(self, access_token: str) -> dict:
         """Performs an account logout.
