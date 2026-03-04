@@ -74,3 +74,7 @@ def missing_tokens_error():
 
 def unsupported_file_format_error():
     return WebTritErrorException(422, "Not supported file format", "unsupported_file_format")
+
+
+def voicemail_not_configured():
+    return WebTritErrorException(422, "Voicemail is not configured", "voicemail_not_configured")

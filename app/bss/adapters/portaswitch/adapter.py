@@ -58,6 +58,7 @@ from .exceptions import (
     refresh_token_invalid_error,
     addon_required_error,
     session_upgrade_needed_error,
+    voicemail_not_configured,
 )
 from .serializer import Serializer
 from .types import (
@@ -1042,6 +1043,8 @@ class PortaSwitchAdapter(BSSAdapter):
             fault_code = extract_fault_code(error)
             if fault_code in ("Client.Session.check_auth.failed_to_process_access_token",):
                 raise access_token_expired_error()
+            elif fault_code in ("Server.Account.unified_messaging_disabled",):
+                raise voicemail_not_configured()
 
             raise error
 
@@ -1072,6 +1075,8 @@ class PortaSwitchAdapter(BSSAdapter):
             fault_code = extract_fault_code(error)
             if fault_code in ("Client.Session.check_auth.failed_to_process_access_token",):
                 raise access_token_expired_error()
+            elif fault_code in ("Server.Account.unified_messaging_disabled",):
+                raise voicemail_not_configured()
 
             raise error
 
@@ -1105,6 +1110,8 @@ class PortaSwitchAdapter(BSSAdapter):
             fault_code = extract_fault_code(error)
             if fault_code in ("Client.Session.check_auth.failed_to_process_access_token",):
                 raise access_token_expired_error()
+            elif fault_code in ("Server.Account.unified_messaging_disabled",):
+                raise voicemail_not_configured()
 
             raise error
 
@@ -1140,6 +1147,8 @@ class PortaSwitchAdapter(BSSAdapter):
             fault_code = extract_fault_code(error)
             if fault_code in ("Client.Session.check_auth.failed_to_process_access_token",):
                 raise access_token_expired_error()
+            elif fault_code in ("Server.Account.unified_messaging_disabled",):
+                raise voicemail_not_configured()
 
             raise error
 
@@ -1160,6 +1169,8 @@ class PortaSwitchAdapter(BSSAdapter):
             fault_code = extract_fault_code(error)
             if fault_code in ("Client.Session.check_auth.failed_to_process_access_token",):
                 raise access_token_expired_error()
+            elif fault_code in ("Server.Account.unified_messaging_disabled",):
+                raise voicemail_not_configured()
 
             raise error
 
