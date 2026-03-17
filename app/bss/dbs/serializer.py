@@ -186,13 +186,13 @@ class SerializerPydantic(SerializerBase):
                 val = getattr(obj, field_name)
                 if cls.is_scalar(val):
                     obj_data[field_name] = val
-                elif isinstance(val, Serialiazable):
+                elif isinstance(val, BaseModel):
                     # Recursively pack nested objects
                     obj_data[field_name] = cls.pack(val)
                 elif isinstance(val, list):
                     # Handle lists of objects
                     obj_data[field_name] = [
-                        cls.pack(item) if isinstance(item, Serialiazable) else item
+                        cls.pack(item) if isinstance(item, BaseModel) else item
                         for item in val
                     ]
                 else:
@@ -248,7 +248,7 @@ class SerializerPydanticLight(SerializerBase):
                 val = getattr(obj, field_name)
                 if cls.is_scalar(val):
                     obj_data[field_name] = val
-                elif isinstance(val, Serialiazable):
+                elif isinstance(val, BaseModel):
                     # For nested Pydantic objects, always use light serializer to maintain consistency
                     # This ensures we don't get the _*json*_ field and maintain the "light" approach
                     obj_data[field_name] = cls.pack(val)
@@ -256,7 +256,7 @@ class SerializerPydanticLight(SerializerBase):
                     # Handle lists of objects
                     obj_data[field_name] = []
                     for item in val:
-                        if isinstance(item, Serialiazable):
+                        if isinstance(item, BaseModel):
                             # Always use light serializer for nested objects to maintain consistency
                             obj_data[field_name].append(cls.pack(item))
                         else:
