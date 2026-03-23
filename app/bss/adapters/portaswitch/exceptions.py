@@ -61,7 +61,7 @@ def password_change_required_error():
 
 
 def refresh_token_invalid_error():
-    return WebTritErrorException(422, "refresh_token_invalid", "Invalid refresh token")
+    return WebTritErrorException(422, "Invalid refresh token", "refresh_token_invalid")
 
 
 def session_close_error():

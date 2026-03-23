@@ -1005,6 +1005,8 @@ class PortaSwitchAdapter(BSSAdapter):
 
         except WebTritErrorException as error:
             fault_code = extract_fault_code(error)
+            if fault_code in ("Client.Session.check_auth.failed_to_process_access_token",):
+                raise access_token_expired_error()
             if fault_code in ("Server.CDR.xdr_not_found", "Server.CDR.invalid_call_recording_id",):
                 raise not_found_recording_error(recording_id)
 
