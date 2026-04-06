@@ -156,8 +156,30 @@ class AdminAPI(HTTPAPIConnectorWithLogin):
             params={
                 "without_service_features": 1,
                 "detailed_info": 1,
+                "get_auth_info": 1,
                 **params
             }
+        )
+
+    def update_account(self, i_account: int, **account_info_fields) -> dict:
+        """Updates account fields for the given i_account.
+
+        Parameters:
+            i_account (int): The internal PortaSwitch account identifier.
+            **account_info_fields: Fields to update inside account_info (e.g. api_token="...").
+
+        Returns:
+            dict: The API method execution result.
+        """
+        return self._send_request(
+            module="Account",
+            method="update_account",
+            params={
+                "account_info": {
+                    "i_account": i_account,
+                    **account_info_fields,
+                },
+            },
         )
 
     def get_env_info(self) -> dict:

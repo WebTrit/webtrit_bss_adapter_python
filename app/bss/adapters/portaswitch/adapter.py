@@ -1,5 +1,6 @@
 import logging
 import re
+import uuid
 from datetime import datetime, timedelta, UTC
 from typing import Final, Iterator, Optional, Dict, List
 
@@ -162,8 +163,11 @@ class PortaSwitchAdapter(BSSAdapter):
             if self._portaswitch_settings.ALLOWED_ADDONS:
                 self._check_allowed_addons(account_info)
 
-            token = account_info["password"] if self._is_portaswitch_version_with_token() else None
-            session_data = self._account_api.login(account_info["login"], account_info["password"], token)
+            if self._is_portaswitch_version_with_token():
+                token = self._get_or_create_api_token(account_info)
+                session_data = self._account_api.login(account_info["login"], token=token)
+            else:
+                session_data = self._account_api.login(account_info["login"], account_info["password"], token=account_info["password"])
 
             return SessionInfo(
                 user_id=UserId(str(account_info["i_account"])),
@@ -1420,12 +1424,24 @@ class PortaSwitchAdapter(BSSAdapter):
 
         return all_accounts
 
+    def _get_or_create_api_token(self, account_info: dict) -> str:
+        """Return the account's api_token, creating and persisting one if absent."""
+        api_token = account_info.get("api_token")
+        if not api_token:
+            api_token = str(uuid.uuid4())
+            self._admin_api.update_account(account_info["i_account"], api_token=api_token)
+            logging.info(f"Created new api_token for i_account={account_info['i_account']}")
+        return api_token
+
     def _emulate_account_login(self, i_account: str) -> dict:
         """Emulate a login for a PortaSwitch account."""
         account_info = self._admin_api.get_account_info(i_account=i_account).get("account_info")
 
-        token = account_info["password"] if self._is_portaswitch_version_with_token() else None
-        return self._account_api.login(account_info["login"], account_info["password"], token)
+        if self._is_portaswitch_version_with_token():
+            token = self._get_or_create_api_token(account_info)
+            return self._account_api.login(account_info["login"], token=token)
+        else:
+            return self._account_api.login(account_info["login"], account_info["password"], token=account_info["password"])
 
     def _is_portaswitch_version_with_token(self) -> bool:
         """Check if the actual version of PortaSwitch is a version with token support."""
@@ -1434,4 +1450,4 @@ class PortaSwitchAdapter(BSSAdapter):
         expected_portaswitch_mr_with_token_support = [int(d) for d in
                                                       re.findall(r'\d+', PORTASWITCH_VERSION_WITH_TOKEN)]
 
-        return actual_portaswitch_mr < expected_portaswitch_mr_with_token_support
+        return actual_portaswitch_mr >= expected_portaswitch_mr_with_token_support
