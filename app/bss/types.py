@@ -263,11 +263,12 @@ def safely_extract_scalar_value(obj: object):
      actual value for a scalar"""
     if is_scalar(obj):
         return obj
-    if hasattr(obj, "__root__"):
-        return obj.__root__
-    elif hasattr(obj, "root"):
+    if hasattr(obj, "root"):
         # pydantic 2.x
         return obj.root
+    elif hasattr(obj, "__root__"):
+        # pydantic 1.x (legacy fallback)
+        return obj.__root__
 
     raise ValueError(f"Cannot extract scalar value from {type(obj)} {obj}")
 
