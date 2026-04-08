@@ -225,7 +225,7 @@ class CustomPage(BaseModel):
 
 
 class SessionCreateRequest(BaseModel):
-    user_ref: Optional[UserRef]
+    user_ref: Optional[UserRef] = Field(None, description="User's `login` on the **Adaptee**.")
     login: Optional[str] = Field(None, description="User's `login` on the **Adaptee**.")
     password: str = Field(..., description="User's `password` on the **Adaptee**.")
 
