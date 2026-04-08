@@ -84,21 +84,43 @@ class AdminAPI(HTTPAPIConnectorWithLogin):
             params=params,
         )
 
-    def get_extensions_list(self, i_customer: int) -> dict:
-        """Returns information about extensions related to the input i_customer.
+    def get_customer_info(self, i_customer: int) -> dict:
+        """Returns information about the customer, including office type and hierarchy.
+
         Parameters:
-            i_customer: int: The identifier of a customer which accounts to be returned.
+            i_customer (int): The identifier of the customer.
+
         Returns:
-            extensions_list: dict: The API method execution result that contains info about accounts.
+            dict: The API method execution result containing customer_info with i_office_type
+                  (1=none, 2=branch_office, 3=main_office) and i_main_office for branch offices.
         """
         return self._send_request(
             module="Customer",
+            method="get_customer_info",
+            params={"i_customer": i_customer},
+        )
+
+    def get_extensions_list(self, i_customer: int, get_main_office_extensions: bool = False) -> dict:
+        """Returns information about extensions related to the input i_customer.
+        Parameters:
+            i_customer: int: The identifier of a customer which accounts to be returned.
+            get_main_office_extensions: bool: When True, includes extensions from all branch offices
+                (used when i_customer is the main office) or returns main office extensions
+                (used when i_customer is a branch office via its main office ID).
+        Returns:
+            extensions_list: dict: The API method execution result that contains info about accounts.
+        """
+        params = {
+            "i_customer": i_customer,
+            "detailed_info": 1,
+            "limit_alias_did_number_list": 100,
+        }
+        if get_main_office_extensions:
+            params["get_main_office_extensions"] = 1
+        return self._send_request(
+            module="Customer",
             method="get_extensions_list",
-            params={
-                "i_customer": i_customer,
-                "detailed_info": 1,
-                "limit_alias_did_number_list": 100,
-            },
+            params=params,
         )
 
     def create_otp(self, user_ref: str, delivery_channel: DeliveryChannel) -> dict:
