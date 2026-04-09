@@ -4,6 +4,7 @@ import uuid
 from datetime import datetime, timedelta, UTC
 from typing import Final, Iterator, Optional, Dict, List
 
+from docusign_esign.client.api_exception import ArgumentException
 from jose.exceptions import ExpiredSignatureError, JWTError
 
 from app_config import AppConfig
@@ -165,7 +166,10 @@ class PortaSwitchAdapter(BSSAdapter):
 
             if self._is_portaswitch_version_with_token():
                 token = self._get_or_create_api_token(account_info)
-                session_data = self._account_api.login(account_info["login"], token=token)
+                if token:
+                    session_data = self._account_api.login(account_info["login"], token=token)
+                else:
+                    session_data = self._account_api.login(account_info["login"], account_info["password"])
             else:
                 session_data = self._account_api.login(account_info["login"], account_info["password"], token=account_info["password"])
 
@@ -1470,13 +1474,17 @@ class PortaSwitchAdapter(BSSAdapter):
 
         return all_accounts
 
-    def _get_or_create_api_token(self, account_info: dict) -> str:
+    def _get_or_create_api_token(self, account_info: dict) -> Optional[str]:
         """Return the account's api_token, creating and persisting one if absent."""
         api_token = account_info.get("api_token")
         if not api_token:
             api_token = str(uuid.uuid4())
-            self._admin_api.update_account(account_info["i_account"], api_token=api_token)
-            logging.info(f"Created new api_token for i_account={account_info['i_account']}")
+            try:
+                self._admin_api.update_account(account_info["i_account"], api_token=api_token)
+                logging.info(f"Created new api_token for i_account={account_info['i_account']}")
+            except Exception as e:
+                logging.warning(f"Failed to create new api_token for i_account={account_info['i_account']}: {e}")
+                return None
         return api_token
 
     def _emulate_account_login(self, i_account: str) -> dict:
@@ -1485,7 +1493,10 @@ class PortaSwitchAdapter(BSSAdapter):
 
         if self._is_portaswitch_version_with_token():
             token = self._get_or_create_api_token(account_info)
-            return self._account_api.login(account_info["login"], token=token)
+            if token:
+                return self._account_api.login(account_info["login"], token=token)
+            else:
+                return self._account_api.login(account_info["login"], account_info["password"])
         else:
             return self._account_api.login(account_info["login"], account_info["password"], token=account_info["password"])
 
