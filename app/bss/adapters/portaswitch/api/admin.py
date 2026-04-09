@@ -100,21 +100,6 @@ class AdminAPI(HTTPAPIConnectorWithLogin):
             params={"i_customer": i_customer},
         )
 
-    def get_customer_list(self, i_main_office: int) -> dict:
-        """Returns the list of branch customers under a main office customer.
-
-        Parameters:
-            i_main_office (int): The i_customer of the main office whose branch offices to retrieve.
-
-        Returns:
-            dict: The API method execution result containing customer_list with branch office records.
-        """
-        return self._send_request(
-            module="Customer",
-            method="get_customer_list",
-            params={"i_main_office": i_main_office},
-        )
-
     def get_extensions_list(self, i_customer: int, get_main_office_extensions: bool = False) -> dict:
         """Returns information about extensions related to the input i_customer.
         Parameters:
