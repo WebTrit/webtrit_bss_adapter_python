@@ -419,7 +419,8 @@ class PortaSwitchAdapter(BSSAdapter):
             account_info = self._account_api.get_account_info(access_token)["account_info"]
             i_customer = int(account_info["i_customer"])
             i_account = int(account_info["i_account"])
-            effective_i_customer, get_main_office_extensions = self._resolve_office_customer_id(i_customer)
+            main_i_customer, all_i_customers = self._get_office_customer_ids(i_customer)
+            is_hierarchy = len(all_i_customers) > 1
 
             contacts = []
             match self._portaswitch_settings.CONTACTS_SELECTING:
@@ -428,10 +429,12 @@ class PortaSwitchAdapter(BSSAdapter):
                         type.value for type in
                         self._portaswitch_settings.CONTACTS_SELECTING_EXTENSION_TYPES
                     }
-                    accounts = self._get_all_accounts_by_customer(effective_i_customer)
+                    accounts = []
+                    for cust_id in all_i_customers:
+                        accounts.extend(self._get_all_accounts_by_customer(cust_id))
                     account_to_aliases = {account["i_account"]: account.get("alias_list", []) for account in accounts}
                     extensions = self._admin_api.get_extensions_list(
-                        effective_i_customer, get_main_office_extensions=get_main_office_extensions
+                        main_i_customer, get_main_office_extensions=is_hierarchy
                     )["extensions_list"]
 
                     for ext in extensions:
@@ -439,15 +442,30 @@ class PortaSwitchAdapter(BSSAdapter):
                             aliases = account_to_aliases.get(ext.get("i_account"), [])
                             contacts.append(Serializer.get_contact_info_by_extension(ext, aliases, i_account))
                 case PortaSwitchContactsSelectingMode.ACCOUNTS:
-                    accounts = self._get_all_accounts_by_customer(effective_i_customer)
+                    # Fetch accounts from all offices in the hierarchy
+                    accounts = []
+                    for cust_id in all_i_customers:
+                        accounts.extend(self._get_all_accounts_by_customer(cust_id))
+
+                    # When filtering by extension and in a hierarchy, use the unified extensions list
+                    # (get_main_office_extensions returns extensions across all offices) as the filter
+                    extension_i_accounts: set[int] = set()
+                    if self._portaswitch_settings.CONTACTS_SKIP_WITHOUT_EXTENSION and is_hierarchy:
+                        ext_list = self._admin_api.get_extensions_list(
+                            main_i_customer, get_main_office_extensions=True
+                        )["extensions_list"]
+                        extension_i_accounts = {ext["i_account"] for ext in ext_list if ext.get("i_account")}
 
                     for account in accounts:
                         if (status := account.get("status")) and status == "blocked":
                             continue
                         dual_version_system = PortaSwitchDualVersionSystem(account.get("dual_version_system"))
                         if dual_version_system != PortaSwitchDualVersionSystem.SOURCE:
-                            if (not self._portaswitch_settings.CONTACTS_SKIP_WITHOUT_EXTENSION or account.get(
-                                    "extension_id")) and account["i_account"] != i_account:
+                            has_extension = account.get("extension_id") or (
+                                is_hierarchy and account["i_account"] in extension_i_accounts
+                            )
+                            if (not self._portaswitch_settings.CONTACTS_SKIP_WITHOUT_EXTENSION or has_extension) \
+                                    and account["i_account"] != i_account:
                                 contacts.append(Serializer.get_contact_info_by_account(account, i_account))
                 case PortaSwitchContactsSelectingMode.PHONEBOOK:
                     phonebook = self._account_api.get_phonebook_list(access_token, 1, 100)['phonebook_rec_list']
@@ -574,7 +592,8 @@ class PortaSwitchAdapter(BSSAdapter):
             account_info = self._account_api.get_account_info(access_token)["account_info"]
             i_customer = int(account_info["i_customer"])
             i_account = int(account_info["i_account"])
-            effective_i_customer, get_main_office_extensions = self._resolve_office_customer_id(i_customer)
+            main_i_customer, all_i_customers = self._get_office_customer_ids(i_customer)
+            is_hierarchy = len(all_i_customers) > 1
 
             # Normalize and prepare phone numbers if provided
             normalized_phone_numbers: set[str] = set[str]()
@@ -588,15 +607,16 @@ class PortaSwitchAdapter(BSSAdapter):
             if normalized_phone_numbers:
                 contacts: list[ContactInfo] = []
                 for number in normalized_phone_numbers:
-                    try:
-                        # Exact search by main number (id)
-                        result = self._admin_api.get_account_list(effective_i_customer, id=number)
-                        accounts = result.get("account_list", []) or []
-                        for account in accounts:
-                            contacts.append(Serializer.get_contact_info_by_account(account, account["i_account"]))
-                    except Exception as e:
-                        logging.debug(f"Failed to fetch accounts for phone number {number}: {e}")
-                        continue
+                    for cust_id in all_i_customers:
+                        try:
+                            # Exact search by main number (id)
+                            result = self._admin_api.get_account_list(cust_id, id=number)
+                            accounts = result.get("account_list", []) or []
+                            for account in accounts:
+                                contacts.append(Serializer.get_contact_info_by_account(account, account["i_account"]))
+                        except Exception as e:
+                            logging.debug(f"Failed to fetch accounts for phone number {number} in customer {cust_id}: {e}")
+                            continue
 
                 # Add matching custom contacts
                 custom_contacts = [
@@ -626,7 +646,7 @@ class PortaSwitchAdapter(BSSAdapter):
 
                     # For EXTENSIONS mode, we need to get extensions first
                     extensions = self._admin_api.get_extensions_list(
-                        effective_i_customer, get_main_office_extensions=get_main_office_extensions
+                        main_i_customer, get_main_office_extensions=is_hierarchy
                     )["extensions_list"]
 
                     # Filter extensions by allowed types and exclude current user
@@ -644,8 +664,10 @@ class PortaSwitchAdapter(BSSAdapter):
                             if any(search.lower() in ext.get(field, "").lower() for field in search_fields)
                         ]
 
-                    # Get accounts for these extension account IDs
-                    all_accounts = self._get_all_accounts_by_customer(effective_i_customer)
+                    # Get accounts for alias resolution across all offices in the hierarchy
+                    all_accounts = []
+                    for cust_id in all_i_customers:
+                        all_accounts.extend(self._get_all_accounts_by_customer(cust_id))
                     account_to_aliases = {account["i_account"]: account.get("alias_list", []) for account in
                                           all_accounts}
 
@@ -681,58 +703,50 @@ class PortaSwitchAdapter(BSSAdapter):
                                        self._portaswitch_settings.CONTACTS_CUSTOM]
                     custom_contacts_count = len(custom_contacts)
 
+                    # When filtering by extension and in a hierarchy, use the unified extensions list
+                    # (get_main_office_extensions returns extensions across all offices) as the filter
+                    extension_i_accounts: set[int] = set()
+                    if self._portaswitch_settings.CONTACTS_SKIP_WITHOUT_EXTENSION and is_hierarchy:
+                        ext_list = self._admin_api.get_extensions_list(
+                            main_i_customer, get_main_office_extensions=True
+                        )["extensions_list"]
+                        extension_i_accounts = {ext["i_account"] for ext in ext_list if ext.get("i_account")}
+
                     if search:
-                        # Search mode: call get_account_list 4 times with different search parameters
+                        # Search mode: query each customer and deduplicate results
                         search_pattern = f"%{search}%"
                         accounts_dict = {}  # Use dict to store unique accounts by i_account
 
-                        # Search by main number
-                        result_main_number = self._admin_api.get_account_list(effective_i_customer, id=search_pattern)
-                        accounts_main_number = result_main_number.get("account_list", [])
-                        for account in accounts_main_number:
-                            accounts_dict[account["i_account"]] = account
+                        for cust_id in all_i_customers:
+                            for param, value in [
+                                ("id", search_pattern),
+                                ("firstname", search_pattern),
+                                ("lastname", search_pattern),
+                                ("extension_name", search_pattern),
+                                ("email", search_pattern),
+                            ]:
+                                result = self._admin_api.get_account_list(cust_id, **{param: value})
+                                for account in result.get("account_list", []):
+                                    accounts_dict[account["i_account"]] = account
 
-                        # Search by firstname
-                        result_firstname = self._admin_api.get_account_list(effective_i_customer, firstname=search_pattern)
-                        accounts_firstname = result_firstname.get("account_list", [])
-                        for account in accounts_firstname:
-                            accounts_dict[account["i_account"]] = account
-
-                        # Search by lastname
-                        result_lastname = self._admin_api.get_account_list(effective_i_customer, lastname=search_pattern)
-                        accounts_lastname = result_lastname.get("account_list", [])
-                        for account in accounts_lastname:
-                            accounts_dict[account["i_account"]] = account
-
-                        # Search by extension_name
-                        result_extension = self._admin_api.get_account_list(effective_i_customer, extension_name=search_pattern)
-                        accounts_extension = result_extension.get("account_list", [])
-                        for account in accounts_extension:
-                            accounts_dict[account["i_account"]] = account
-
-                        # Search by email
-                        result_email = self._admin_api.get_account_list(effective_i_customer, email=search_pattern)
-                        accounts_email = result_email.get("account_list", [])
-                        for account in accounts_email:
-                            accounts_dict[account["i_account"]] = account
-
-                        # Use accounts directly from search results
                         accounts = list(accounts_dict.values())
+                    elif is_hierarchy:
+                        # Multi-customer: fetch all accounts from every office and paginate in-memory
+                        accounts = []
+                        for cust_id in all_i_customers:
+                            accounts.extend(self._get_all_accounts_by_customer(cust_id))
                     else:
-                        # Calculate pagination parameters
+                        # Single customer: use API-level pagination for efficiency
                         if page == 1 and custom_contacts_count > 0:
-                            # On first page, request fewer accounts to account for custom contacts
                             api_limit = max(1, items_per_page - custom_contacts_count)
                             offset = 0
                         else:
-                            # On other pages, account for custom contacts that were on first page
                             api_limit = items_per_page
                             offset = (page - 1) * items_per_page - custom_contacts_count
-                            offset = max(0, offset)  # Ensure offset is not negative
+                            offset = max(0, offset)
 
-                        # Get accounts from API with pagination
                         result = self._admin_api.get_account_list(
-                            effective_i_customer,
+                            main_i_customer,
                             limit=api_limit,
                             offset=offset
                         )
@@ -746,8 +760,11 @@ class PortaSwitchAdapter(BSSAdapter):
                             continue
                         dual_version_system = PortaSwitchDualVersionSystem(account.get("dual_version_system"))
                         if dual_version_system != PortaSwitchDualVersionSystem.SOURCE:
-                            if (not self._portaswitch_settings.CONTACTS_SKIP_WITHOUT_EXTENSION or account.get(
-                                    "extension_id")) and account["i_account"] != i_account:
+                            has_extension = account.get("extension_id") or (
+                                is_hierarchy and account["i_account"] in extension_i_accounts
+                            )
+                            if (not self._portaswitch_settings.CONTACTS_SKIP_WITHOUT_EXTENSION or has_extension) \
+                                    and account["i_account"] != i_account:
                                 filtered_accounts.append(account)
 
                     # Build contacts from accounts
@@ -767,22 +784,20 @@ class PortaSwitchAdapter(BSSAdapter):
                                 search_lower in (contact.numbers.main or "").lower())
                         ]
 
-                    # Add custom contacts (only on first page for non-search mode)
-                    if search or page == 1:
+                    # Add custom contacts (only on first page for non-search / hierarchy modes)
+                    if search or is_hierarchy or page == 1:
                         account_contacts.extend(custom_contacts)
 
                     # Apply pagination
-                    if search:
-                        # For search mode, apply manual pagination after filtering
+                    if search or is_hierarchy:
+                        # In-memory pagination for search results and multi-customer hierarchy
                         total_count = len(account_contacts)
                         start_idx = (page - 1) * items_per_page
                         end_idx = start_idx + items_per_page
                         contacts = account_contacts[start_idx:end_idx]
                     else:
-                        # For non-search mode, pagination is already applied through API
-                        # But we need to limit to items_per_page in case custom_contacts made it exceed
+                        # For single-customer non-search mode, pagination already applied via API
                         contacts = account_contacts[:items_per_page]
-                        # Total count from API plus custom contacts (only count them once)
                         total_count = total_count_from_api + (len(custom_contacts) if page == 1 else 0)
 
                 case PortaSwitchContactsSelectingMode.PHONEBOOK:
@@ -1400,8 +1415,8 @@ class PortaSwitchAdapter(BSSAdapter):
         logging.debug(f"Found {len(number_to_accounts)} accounts out of {len(target_numbers)} target numbers")
         return number_to_accounts
 
-    def _resolve_office_customer_id(self, i_customer: int) -> tuple[int, bool]:
-        """Resolves the effective customer ID for fetching extensions/accounts in an office hierarchy.
+    def _get_office_customer_ids(self, i_customer: int) -> tuple[int, list[int]]:
+        """Resolves the main office customer ID and the full list of customer IDs in the hierarchy.
 
         PortaSwitch supports a hierarchy where a main office manages extensions for all its branch
         offices. Branch offices cannot create their own extensions.
@@ -1415,30 +1430,55 @@ class PortaSwitchAdapter(BSSAdapter):
             i_customer (int): The customer ID of the currently authenticated user.
 
         Returns:
-            tuple[int, bool]: A tuple of (effective_i_customer, get_main_office_extensions) where:
-                - effective_i_customer: the i_customer to use for API calls (main office ID for
-                  branch office users, unchanged otherwise)
-                - get_main_office_extensions: True when extensions list should include all offices
-                  (i.e., when the customer is part of a main/branch hierarchy)
+            tuple[int, list[int]]: A tuple of (main_i_customer, all_i_customers) where:
+                - main_i_customer: the main office's i_customer — used for get_extensions_list
+                  (with get_main_office_extensions=True) to get extensions across all offices
+                - all_i_customers: list of all customer IDs (main + branches) — used to fetch
+                  accounts from every office. Contains only [i_customer] when not in a hierarchy.
         """
         try:
             customer_info = self._admin_api.get_customer_info(i_customer).get("customer_info", {})
             i_office_type = customer_info.get("i_office_type")
 
-            if i_office_type == 2:  # branch_office: use main office's i_customer
+            if i_office_type == 2:  # branch_office: delegate to main office's hierarchy
                 i_main_office = customer_info.get("i_main_office")
                 if i_main_office:
+                    main_id = int(i_main_office)
                     logging.debug(
-                        f"Customer {i_customer} is a branch office; using main office {i_main_office} for contacts"
+                        f"Customer {i_customer} is a branch office; resolving via main office {main_id}"
                     )
-                    return int(i_main_office), True
-            elif i_office_type == 3:  # main_office: keep same i_customer, include branch extensions
-                logging.debug(f"Customer {i_customer} is a main office; including all branch office extensions")
-                return i_customer, True
+                    return self._get_all_office_customers_for_main(main_id)
+            elif i_office_type == 3:  # main_office: collect main + all branches
+                logging.debug(f"Customer {i_customer} is a main office; collecting all branch customers")
+                return self._get_all_office_customers_for_main(i_customer)
         except Exception as e:
             logging.warning(f"Failed to resolve office type for i_customer={i_customer}: {e}")
 
-        return i_customer, False
+        return i_customer, [i_customer]
+
+    def _get_all_office_customers_for_main(self, main_i_customer: int) -> tuple[int, list[int]]:
+        """Returns (main_i_customer, [main_i_customer] + all branch i_customers).
+
+        Parameters:
+            main_i_customer (int): The i_customer of the main office.
+
+        Returns:
+            tuple[int, list[int]]: The main office customer ID and the full list of customer IDs
+                (main + all branch offices).
+        """
+        try:
+            result = self._admin_api.get_customer_list(main_i_customer)
+            branch_ids = [
+                int(c["i_customer"])
+                for c in result.get("customer_list", [])
+                if c.get("i_customer")
+            ]
+            all_ids = [main_i_customer] + branch_ids
+            logging.debug(f"Main office {main_i_customer} has branch offices: {branch_ids}")
+            return main_i_customer, all_ids
+        except Exception as e:
+            logging.warning(f"Failed to get branch customers for main office {main_i_customer}: {e}")
+            return main_i_customer, [main_i_customer]
 
     def _get_all_accounts_by_customer(self, i_customer: int) -> list[dict]:
         """Fetch all accounts for a customer using pagination.
