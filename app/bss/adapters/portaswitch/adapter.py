@@ -4,7 +4,6 @@ import uuid
 from datetime import datetime, timedelta, UTC
 from typing import Final, Iterator, Optional, Dict, List
 
-from docusign_esign.client.api_exception import ArgumentException
 from jose.exceptions import ExpiredSignatureError, JWTError
 
 from app_config import AppConfig
