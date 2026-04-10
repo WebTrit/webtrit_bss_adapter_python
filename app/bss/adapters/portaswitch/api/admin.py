@@ -112,7 +112,7 @@ class AdminAPI(HTTPAPIConnectorWithLogin):
         return self._send_request(
             module="Customer",
             method="get_customer_list",
-            params={"i_main_office": i_main_office},
+            params={"i_main_office": i_main_office, "i_office_type": 2},
         )
 
     def get_extensions_list(self, i_customer: int, get_main_office_extensions: bool = False) -> dict:
