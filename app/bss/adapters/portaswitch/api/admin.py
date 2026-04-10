@@ -112,7 +112,15 @@ class AdminAPI(HTTPAPIConnectorWithLogin):
         return self._send_request(
             module="Customer",
             method="get_customer_list",
-            params={"i_main_office": i_main_office, "i_office_type": 2},
+            params={
+                "skip_exported": 1,
+                "check_usage": 0,
+                "with_credit_limit_warnings": 0,
+                "with_commission_plan": 0,
+                "with_bp_charge_cc": 0,
+                "i_main_customer": i_main_office,
+                "i_office_type": 2
+            },
         )
 
     def get_extensions_list(self, i_customer: int, get_main_office_extensions: bool = False) -> dict:
