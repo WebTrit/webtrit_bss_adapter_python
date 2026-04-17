@@ -592,6 +592,7 @@ class SupportedEnum(Enum):
     notifications = "notifications"
     notifications_push = "notificationsPush"
     sip_presence = "sipPresence"
+    sip_dialogs = "sipDialogs"
 
 
 class SystemInfoShowResponse(BaseModel):
