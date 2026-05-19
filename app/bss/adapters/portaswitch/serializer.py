@@ -37,6 +37,13 @@ class Serializer:
     """Converts PortaSwitch API objects to WebTrit ones."""
 
     @staticmethod
+    def _first_email(value: Optional[str]) -> Optional[str]:
+        """Return the first email from a potentially comma-separated string."""
+        if not value:
+            return None
+        return value.split(",")[0].strip() or None
+
+    @staticmethod
     def get_end_user(
             account_info: dict, aliases: list, sip_server: SIPServer, hide_balance: bool, force_tcp: bool
     ) -> EndUser:
@@ -63,7 +70,7 @@ class Serializer:
                 )
             ),
             company_name=account_info.get("customer_name"),
-            email=account_info.get("email"),
+            email=Serializer._first_email(account_info.get("email")),
             first_name=account_info.get("firstname"),
             last_name=account_info.get("lastname"),
             numbers=Numbers(
@@ -104,7 +111,7 @@ class Serializer:
             is_current_user=account_info["i_account"] == current_user,
             alias_name=account_info.get("extension_name"),
             company_name=account_info.get("companyname", ""),
-            email=account_info.get("email", None),
+            email=Serializer._first_email(account_info.get("email")),
             first_name=account_info.get("firstname", ""),
             last_name=account_info.get("lastname", ""),
             numbers=Numbers(
