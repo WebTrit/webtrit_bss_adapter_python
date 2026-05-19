@@ -2200,6 +2200,7 @@
           "declined",
           "missed",
           "failed",
+          "completed_elsewhere",
           "error"
         ],
         "title": "ConnectStatus"

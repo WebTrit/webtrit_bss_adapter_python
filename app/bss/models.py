@@ -490,6 +490,7 @@ class ConnectStatus(Enum):
     declined = "declined"
     missed = "missed"
     failed = "failed"
+    completed_elsewhere = "completed_elsewhere"
     error = "error"
 
 

@@ -346,7 +346,7 @@ class Serializer:
         """
         Determines call status based on CDR data.
         
-        Returns: 'accepted', 'declined', 'missed', 'failed', or 'error'
+        Returns: 'accepted', 'declined', 'missed', 'failed', 'completed_elsewhere', or 'error'
         """
         disconnect_cause = cdr["disconnect_cause"]
         if isinstance(disconnect_cause, (int, float)):
@@ -378,7 +378,7 @@ class Serializer:
             disconnect_cause: Numeric disconnect cause code
             direction: Call direction (incoming, outgoing, forwarded, unknown)
         
-        Returns: 'accepted', 'declined', 'missed', 'failed', or 'error'
+        Returns: 'accepted', 'declined', 'missed', 'failed', 'completed_elsewhere', or 'error'
         """
         if failed and direction == Direction.outgoing and disconnect_cause == 1:
             return ConnectStatus.failed
@@ -386,6 +386,8 @@ class Serializer:
             return ConnectStatus.declined
         elif failed and disconnect_cause == 19:
             return ConnectStatus.missed
+        elif failed and disconnect_cause == 13:
+            return ConnectStatus.completed_elsewhere
         elif not failed and disconnect_cause == 16:
             return ConnectStatus.accepted
         else:
