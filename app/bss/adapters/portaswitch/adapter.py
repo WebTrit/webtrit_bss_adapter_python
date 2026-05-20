@@ -8,7 +8,6 @@ from jose.exceptions import ExpiredSignatureError, JWTError
 
 from app_config import AppConfig
 from bss.adapters import BSSAdapter
-from bss.dbs import TiedKeyValue
 from bss.models import (
     DeliveryChannel,
     SipServer,
@@ -70,6 +69,7 @@ from .types import (
     PortaSwitchMailboxMessageFlagAction,
     PortaSwitchMailboxMessageAttachmentFormat,
 )
+from .otp_storage import configure_otp_storage
 from .utils import generate_otp_id, extract_fault_code, generate_hash_dictionary
 
 PORTASWITCH_VERSION_WITH_TOKEN: Final[str] = "MR128"
@@ -116,7 +116,7 @@ class PortaSwitchAdapter(BSSAdapter):
             host=self._portaswitch_settings.SIP_SERVER_HOST, port=self._portaswitch_settings.SIP_SERVER_PORT
         )
 
-        self._cached_otp_ids = TiedKeyValue()
+        self._otp_storage = configure_otp_storage(self._otp_settings)
         self._cached_capabilities = self.calculate_capabilities()
         self._hash_dictionary = generate_hash_dictionary() if self._settings.ENABLE_ON_DEMAND_SESSION_MIGRATION else {}
 
@@ -219,7 +219,7 @@ class PortaSwitchAdapter(BSSAdapter):
                 raise external_api_issue_error()
 
             otp_id: str = generate_otp_id()
-            self._cached_otp_ids[otp_id] = i_account, user.user_id
+            self._otp_storage.store(otp_id, i_account, user.user_id)
 
             env_info = self._admin_api.get_env_info()
 
@@ -251,7 +251,7 @@ class PortaSwitchAdapter(BSSAdapter):
             # We need the otp_id only for storing the i_account.
             otp_id = safely_extract_scalar_value(otp.otp_id)
 
-            (i_account, user_ref) = self._cached_otp_ids.get(otp_id, (None, None))
+            i_account, user_ref = self._otp_storage.retrieve(otp_id)
             if not i_account:
                 raise not_found_otp_code_error(otp.code)
 
@@ -259,7 +259,7 @@ class PortaSwitchAdapter(BSSAdapter):
             if user_ref not in self._otp_settings.IGNORE_ACCOUNTS and not data["success"]:
                 raise not_found_otp_code_error(otp.code)
 
-            self._cached_otp_ids.pop(otp_id)
+            self._otp_storage.delete(otp_id)
 
             i_account = str(i_account)
             session_data = self._emulate_account_login(i_account)

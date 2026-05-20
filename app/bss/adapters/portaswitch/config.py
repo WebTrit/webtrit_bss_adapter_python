@@ -104,6 +104,8 @@ class PortaSwitchSettings(BaseSettings):
 
 class OTPSettings(BaseSettings):
     IGNORE_ACCOUNTS: Union[List[str], str] = []
+    STORAGE_COLLECTION: Optional[str] = None
+    STORAGE_TTL_MINUTES: int = 30
 
     @field_validator("IGNORE_ACCOUNTS", mode='before')
     @classmethod
