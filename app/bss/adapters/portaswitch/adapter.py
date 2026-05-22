@@ -1261,6 +1261,11 @@ class PortaSwitchAdapter(BSSAdapter):
 
             raise error
 
+    def delete_user(self, user: UserInfo):
+        # Session invalidation is handled by close_session in the controller;
+        # PortaSwitch accounts cannot be deleted via the Adapter.
+        pass
+
     def custom_method_public(
             self,
             method_name: str,

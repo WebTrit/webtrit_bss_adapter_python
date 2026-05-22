@@ -519,8 +519,6 @@ def delete_user(
     """
     global bss
 
-    is_method_allowed(Capabilities.signup)
-
     access_token = auth_data.credentials
     session = bss.validate_session(access_token)
     user = ExtendedUserInfo(
