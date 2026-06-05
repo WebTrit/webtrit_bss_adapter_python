@@ -61,7 +61,7 @@ class Serializer:
             alias_name=account_info.get("extension_name"),
             balance=(
                 None
-                if hide_balance
+                if hide_balance or account_info.get("i_account_balance_control_type") == 3
                 else Balance(
                     amount=account_info["balance"],
                     balance_type=BILLING_MODEL_MAP.get(account_info["billing_model"], BalanceType.unknown),
