@@ -810,29 +810,32 @@ class PortaSwitchAdapter(BSSAdapter):
                             accounts.extend(self._get_all_accounts_by_customer(cust_id))
                     else:
                         # Single customer: use API-level pagination for efficiency.
-                        # Cap to avoid PortaBilling returning HTTP 500 on very large limits.
-                        # Fetch a small extra buffer so adapter-side filtering (blocked accounts,
-                        # current user exclusion) doesn't leave the page short.
+                        # When items_per_page exceeds PortaBilling's safe limit, fall back to
+                        # chunked fetching (same as hierarchy/search) to avoid HTTP 500.
                         MAX_API_LIMIT = 1000
-                        FILTER_BUFFER = 10
 
-                        if page == 1 and custom_contacts_count > 0:
-                            api_limit = max(1, items_per_page - custom_contacts_count + FILTER_BUFFER)
-                            offset = 0
+                        if items_per_page > MAX_API_LIMIT:
+                            # Large page: fetch all accounts in chunks and paginate in-memory
+                            accounts = self._get_all_accounts_by_customer(main_i_customer)
                         else:
-                            api_limit = items_per_page + FILTER_BUFFER
-                            offset = (page - 1) * items_per_page - custom_contacts_count
-                            offset = max(0, offset)
+                            # Normal page: single API call with a small buffer to compensate
+                            # for adapter-side filtering (blocked accounts, current user).
+                            FILTER_BUFFER = 10
+                            if page == 1 and custom_contacts_count > 0:
+                                api_limit = max(1, items_per_page - custom_contacts_count + FILTER_BUFFER)
+                                offset = 0
+                            else:
+                                api_limit = min(items_per_page + FILTER_BUFFER, MAX_API_LIMIT)
+                                offset = (page - 1) * items_per_page - custom_contacts_count
+                                offset = max(0, offset)
 
-                        api_limit = min(api_limit, MAX_API_LIMIT)
-
-                        result = self._admin_api.get_account_list(
-                            main_i_customer,
-                            limit=api_limit,
-                            offset=offset
-                        )
-                        accounts = result.get("account_list", [])
-                        total_count_from_api = result.get("total", 0)
+                            result = self._admin_api.get_account_list(
+                                main_i_customer,
+                                limit=api_limit,
+                                offset=offset
+                            )
+                            accounts = result.get("account_list", [])
+                            total_count_from_api = result.get("total", 0)
 
                     # Filter accounts
                     filtered_accounts = []
@@ -870,8 +873,8 @@ class PortaSwitchAdapter(BSSAdapter):
                         account_contacts.extend(custom_contacts)
 
                     # Apply pagination
-                    if search or is_hierarchy:
-                        # In-memory pagination for search results and multi-customer hierarchy
+                    if search or is_hierarchy or items_per_page > MAX_API_LIMIT:
+                        # In-memory pagination for search, multi-customer hierarchy, and large pages
                         total_count = len(account_contacts)
                         start_idx = (page - 1) * items_per_page
                         end_idx = start_idx + items_per_page
