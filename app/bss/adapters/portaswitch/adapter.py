@@ -764,7 +764,9 @@ class PortaSwitchAdapter(BSSAdapter):
                         extension_i_accounts = {ext["i_account"] for ext in ext_list if ext.get("i_account")}
 
                     if search:
-                        # Search mode: query each customer and deduplicate results
+                        # Search mode: query each customer and deduplicate results.
+                        # Use _get_all_accounts_by_customer with search params to paginate through
+                        # all matching records — PortaBilling defaults to ~50 without an explicit limit.
                         search_pattern = f"%{search}%"
                         accounts_dict = {}  # Use dict to store unique accounts by i_account
 
@@ -776,8 +778,7 @@ class PortaSwitchAdapter(BSSAdapter):
                                 ("extension_name", search_pattern),
                                 ("email", search_pattern),
                             ]:
-                                result = self._admin_api.get_account_list(cust_id, **{param: value})
-                                for account in result.get("account_list", []):
+                                for account in self._get_all_accounts_by_customer(cust_id, **{param: value}):
                                     accounts_dict[account["i_account"]] = account
 
                         # Also search by extension number (short dial / extension_id)
@@ -808,14 +809,22 @@ class PortaSwitchAdapter(BSSAdapter):
                         for cust_id in all_i_customers:
                             accounts.extend(self._get_all_accounts_by_customer(cust_id))
                     else:
-                        # Single customer: use API-level pagination for efficiency
+                        # Single customer: use API-level pagination for efficiency.
+                        # Cap to avoid PortaBilling returning HTTP 500 on very large limits.
+                        # Fetch a small extra buffer so adapter-side filtering (blocked accounts,
+                        # current user exclusion) doesn't leave the page short.
+                        MAX_API_LIMIT = 1000
+                        FILTER_BUFFER = 10
+
                         if page == 1 and custom_contacts_count > 0:
-                            api_limit = max(1, items_per_page - custom_contacts_count)
+                            api_limit = max(1, items_per_page - custom_contacts_count + FILTER_BUFFER)
                             offset = 0
                         else:
-                            api_limit = items_per_page
+                            api_limit = items_per_page + FILTER_BUFFER
                             offset = (page - 1) * items_per_page - custom_contacts_count
                             offset = max(0, offset)
+
+                        api_limit = min(api_limit, MAX_API_LIMIT)
 
                         result = self._admin_api.get_account_list(
                             main_i_customer,
@@ -1569,11 +1578,13 @@ class PortaSwitchAdapter(BSSAdapter):
             logging.warning(f"Failed to get branch customers for main office {main_i_customer}: {e}")
             return main_i_customer, [main_i_customer]
 
-    def _get_all_accounts_by_customer(self, i_customer: int) -> list[dict]:
+    def _get_all_accounts_by_customer(self, i_customer: int, **search_params) -> list[dict]:
         """Fetch all accounts for a customer using pagination.
 
         Parameters:
             i_customer (int): The unique identifier of the customer.
+            **search_params: Optional search parameters forwarded to get_account_list
+                (e.g. firstname="%john%", id="%555%").
 
         Returns:
             list[dict]: List of all account records for the specified customer.
@@ -1583,7 +1594,7 @@ class PortaSwitchAdapter(BSSAdapter):
         limit = 1000
 
         while True:
-            resp = self._admin_api.get_account_list(i_customer, limit=limit, offset=offset)
+            resp = self._admin_api.get_account_list(i_customer, limit=limit, offset=offset, **search_params)
             page = resp.get("account_list", []) if isinstance(resp, dict) else []
             total = resp.get("total") if isinstance(resp, dict) else None
 
