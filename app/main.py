@@ -592,7 +592,7 @@ def get_user_contact_list_v2(
         phone_numbers: List[str] = Query(default=[]),
         auth_data: HTTPAuthorizationCredentials = Depends(security),
         page: Optional[conint(ge=1)] = 1,
-        items_per_page: Optional[conint(ge=1)] = 100,
+        items_per_page: Optional[conint(ge=1, le=1000)] = 100,
         x_webtrit_tenant_id: Optional[str] = Header(None, alias=TENANT_ID_HTTP_HEADER),
 ) -> (
         Union[

@@ -810,12 +810,14 @@ class PortaSwitchAdapter(BSSAdapter):
                             accounts.extend(self._get_all_accounts_by_customer(cust_id))
                     else:
                         # Single customer: use API-level pagination for efficiency.
-                        # When items_per_page exceeds PortaBilling's safe limit, fall back to
-                        # chunked fetching (same as hierarchy/search) to avoid HTTP 500.
+                        # PortaBilling's documented per-call maximum is 1000; requesting more silently
+                        # returns at most 1000 records. When items_per_page >= 1000, use chunked
+                        # fetching to guarantee correct in-memory pagination across the full dataset.
                         MAX_API_LIMIT = 1000
 
-                        if items_per_page > MAX_API_LIMIT:
-                            # Large page: fetch all accounts in chunks and paginate in-memory
+                        if items_per_page >= MAX_API_LIMIT:
+                            # Page size at or above PortaBilling's per-request maximum: fetch all accounts
+                            # in chunks of 1000 and paginate in-memory.
                             accounts = self._get_all_accounts_by_customer(main_i_customer)
                         else:
                             # Normal page: single API call with a small buffer to compensate
@@ -880,7 +882,10 @@ class PortaSwitchAdapter(BSSAdapter):
                         end_idx = start_idx + items_per_page
                         contacts = account_contacts[start_idx:end_idx]
                     else:
-                        # For single-customer non-search mode, pagination already applied via API
+                        # For single-customer non-search mode, pagination is applied via API.
+                        # items_total comes from PortaBilling and may be slightly higher than the
+                        # actual retrievable count (e.g. current user and blocked accounts are
+                        # filtered out adapter-side but counted by PortaBilling).
                         contacts = account_contacts[:items_per_page]
                         total_count = total_count_from_api + (len(custom_contacts) if page == 1 else 0)
 
