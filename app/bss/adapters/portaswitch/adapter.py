@@ -609,30 +609,77 @@ class PortaSwitchAdapter(BSSAdapter):
 
             # If phone_numbers search is provided, ignore generic `search` and use a unified implementation
             if normalized_phone_numbers:
-                contacts: list[ContactInfo] = []
+                # Build extension number → i_account index once for all customers
+                ext_number_to_i_account: dict[str, int] = {}
+                try:
+                    extensions = self._admin_api.get_extensions_list(
+                        main_i_customer, get_main_office_extensions=is_hierarchy
+                    )["extensions_list"]
+                    ext_number_to_i_account = {
+                        ext["id"]: int(ext["i_account"])
+                        for ext in extensions
+                        if ext.get("id") and ext.get("i_account")
+                    }
+                except Exception as e:
+                    logging.debug(f"Failed to fetch extensions for phone_numbers lookup: {e}")
+
+                found_accounts: dict[int, dict] = {}  # keyed by i_account to deduplicate
+
                 for number in normalized_phone_numbers:
+                    # 1. Search by main number
                     for cust_id in all_i_customers:
                         try:
-                            # Exact search by main number (id)
                             result = self._admin_api.get_account_list(cust_id, id=number)
-                            accounts = result.get("account_list", []) or []
-                            for account in accounts:
-                                contacts.append(Serializer.get_contact_info_by_account(account, account["i_account"]))
+                            for account in (result.get("account_list", []) or []):
+                                found_accounts[int(account["i_account"])] = account
                         except Exception as e:
                             logging.debug(f"Failed to fetch accounts for phone number {number} in customer {cust_id}: {e}")
-                            continue
 
-                # Add matching custom contacts
+                    # 2. Search by extension number (short dial)
+                    if number in ext_number_to_i_account:
+                        ext_i_account = ext_number_to_i_account[number]
+                        if ext_i_account not in found_accounts:
+                            try:
+                                account = self._admin_api.get_account_info(i_account=ext_i_account).get("account_info")
+                                if account:
+                                    found_accounts[int(account["i_account"])] = account
+                            except Exception as e:
+                                logging.debug(f"Failed to fetch account for extension number {number}: {e}")
+
+                # 3. For alias/additional numbers not yet matched, try a direct account info lookup
+                found_numbers: set[str] = set()
+                for account in found_accounts.values():
+                    found_numbers.add(account.get("id", ""))
+                    for alias in account.get("alias_list", []):
+                        found_numbers.add(alias.get("id", ""))
+
+                for number in normalized_phone_numbers - found_numbers:
+                    try:
+                        account = self._admin_api.get_account_info(id=number).get("account_info")
+                        if account:
+                            found_accounts[int(account["i_account"])] = account
+                    except Exception as e:
+                        logging.debug(f"Account not found for alias/additional number {number}: {e}")
+
+                contacts: list[ContactInfo] = [
+                    Serializer.get_contact_info_by_account(account, i_account)
+                    for account in found_accounts.values()
+                ]
+
+                # Add matching custom contacts (check main, ext, and additional numbers)
                 custom_contacts = [
                     Serializer.get_contact_info_by_custom_entry(entry)
                     for entry in self._portaswitch_settings.CONTACTS_CUSTOM
                 ]
-
                 for contact in custom_contacts:
-                    number = contact.numbers.main if contact.numbers and contact.numbers.main else ""
-
-                    if number.replace("+", "").strip() in normalized_phone_numbers:
-                        contacts.append(contact)
+                    if contact.numbers:
+                        contact_numbers = {
+                            (contact.numbers.main or "").replace("+", "").strip(),
+                            (contact.numbers.ext or "").replace("+", "").strip(),
+                            *((n or "").replace("+", "").strip() for n in (contact.numbers.additional or [])),
+                        } - {""}
+                        if contact_numbers & normalized_phone_numbers:
+                            contacts.append(contact)
 
                 total_count = len(contacts)
                 start_idx = (page - 1) * items_per_page
@@ -732,6 +779,27 @@ class PortaSwitchAdapter(BSSAdapter):
                                 result = self._admin_api.get_account_list(cust_id, **{param: value})
                                 for account in result.get("account_list", []):
                                     accounts_dict[account["i_account"]] = account
+
+                        # Also search by extension number (short dial / extension_id)
+                        try:
+                            extensions = self._admin_api.get_extensions_list(
+                                main_i_customer, get_main_office_extensions=is_hierarchy
+                            )["extensions_list"]
+                            search_lower = search.lower()
+                            for ext in extensions:
+                                if search_lower in ext.get("id", "").lower() and ext.get("i_account"):
+                                    ext_i_account = int(ext["i_account"])
+                                    if ext_i_account not in accounts_dict:
+                                        try:
+                                            account = self._admin_api.get_account_info(
+                                                i_account=ext_i_account
+                                            ).get("account_info")
+                                            if account:
+                                                accounts_dict[int(account["i_account"])] = account
+                                        except Exception as e:
+                                            logging.debug(f"Failed to fetch account for extension {ext['id']}: {e}")
+                        except Exception as e:
+                            logging.debug(f"Failed to fetch extensions for search: {e}")
 
                         accounts = list(accounts_dict.values())
                     elif is_hierarchy:
@@ -848,11 +916,17 @@ class PortaSwitchAdapter(BSSAdapter):
                             contact for contact in contacts
                             if any(search_lower in str(value or "").lower() for value in [
                                 contact.numbers.main if contact.numbers else None,
+                                contact.numbers.ext if contact.numbers else None,
                                 contact.first_name,
                                 contact.last_name,
                                 contact.alias_name,
-                                contact.email
-                            ])
+                                contact.email,
+                            ]) or (
+                                contact.numbers and any(
+                                    search_lower in str(n or "").lower()
+                                    for n in (contact.numbers.additional or [])
+                                )
+                            )
                         ]
 
                     # Apply pagination
@@ -923,11 +997,17 @@ class PortaSwitchAdapter(BSSAdapter):
                             contact for contact in contacts
                             if any(search_lower in str(value or "").lower() for value in [
                                 contact.numbers.main if contact.numbers else None,
+                                contact.numbers.ext if contact.numbers else None,
                                 contact.first_name,
                                 contact.last_name,
                                 contact.alias_name,
-                                contact.email
-                            ])
+                                contact.email,
+                            ]) or (
+                                contact.numbers and any(
+                                    search_lower in str(n or "").lower()
+                                    for n in (contact.numbers.additional or [])
+                                )
+                            )
                         ]
 
                     # Apply pagination
