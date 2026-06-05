@@ -250,7 +250,9 @@ class Serializer:
             sender=Serializer.parse_voicemail_message_sender_user_ref(mailbox_message_details["from"]),
             receiver=Serializer.parse_voicemail_message_receiver_user_ref(mailbox_message_details["to"]),
             attachments=[
-                Serializer.get_voicemail_message_attachment(att) for att in mailbox_message_details["body_structures"]
+                Serializer.get_voicemail_message_attachment(att)
+                for att in mailbox_message_details["body_structures"]
+                if "file_name" in att
             ],
         )
 
