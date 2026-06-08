@@ -1,6 +1,7 @@
 import logging
 import re
 import uuid
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timedelta, UTC
 from typing import Final, Iterator, Optional, Dict, List
 
@@ -625,26 +626,35 @@ class PortaSwitchAdapter(BSSAdapter):
 
                 found_accounts: dict[int, dict] = {}  # keyed by i_account to deduplicate
 
-                for number in normalized_phone_numbers:
+                def _lookup_number(number: str) -> dict[int, dict]:
+                    result: dict[int, dict] = {}
                     # 1. Search by main number
                     for cust_id in all_i_customers:
                         try:
-                            result = self._admin_api.get_account_list(cust_id, id=number)
-                            for account in (result.get("account_list", []) or []):
-                                found_accounts[int(account["i_account"])] = account
+                            accounts = self._admin_api.get_account_list(cust_id, id=number)
+                            for account in (accounts.get("account_list", []) or []):
+                                result[int(account["i_account"])] = account
                         except Exception as e:
                             logging.debug(f"Failed to fetch accounts for phone number {number} in customer {cust_id}: {e}")
-
                     # 2. Search by extension number (short dial)
                     if number in ext_number_to_i_account:
                         ext_i_account = ext_number_to_i_account[number]
-                        if ext_i_account not in found_accounts:
+                        if ext_i_account not in result:
                             try:
                                 account = self._admin_api.get_account_info(i_account=ext_i_account).get("account_info")
                                 if account:
-                                    found_accounts[int(account["i_account"])] = account
+                                    result[int(account["i_account"])] = account
                             except Exception as e:
                                 logging.debug(f"Failed to fetch account for extension number {number}: {e}")
+                    return result
+
+                with ThreadPoolExecutor(max_workers=min(10, len(normalized_phone_numbers))) as executor:
+                    futures = {executor.submit(_lookup_number, n): n for n in normalized_phone_numbers}
+                    for future in as_completed(futures):
+                        try:
+                            found_accounts.update(future.result())
+                        except Exception as e:
+                            logging.debug(f"Parallel number lookup error for {futures[future]}: {e}")
 
                 # 3. For alias/additional numbers not yet matched, try a direct account info lookup
                 found_numbers: set[str] = set()
@@ -653,13 +663,25 @@ class PortaSwitchAdapter(BSSAdapter):
                     for alias in account.get("alias_list", []):
                         found_numbers.add(alias.get("id", ""))
 
-                for number in normalized_phone_numbers - found_numbers:
+                def _lookup_alias(number: str) -> tuple[int, dict] | None:
                     try:
                         account = self._admin_api.get_account_info(id=number).get("account_info")
                         if account:
-                            found_accounts[int(account["i_account"])] = account
+                            return int(account["i_account"]), account
                     except Exception as e:
                         logging.debug(f"Account not found for alias/additional number {number}: {e}")
+                    return None
+
+                remaining = normalized_phone_numbers - found_numbers
+                if remaining:
+                    with ThreadPoolExecutor(max_workers=min(10, len(remaining))) as executor:
+                        for res in as_completed({executor.submit(_lookup_alias, n): n for n in remaining}):
+                            try:
+                                pair = res.result()
+                                if pair is not None:
+                                    found_accounts[pair[0]] = pair[1]
+                            except Exception as e:
+                                logging.debug(f"Alias lookup error: {e}")
 
                 contacts: list[ContactInfo] = [
                     Serializer.get_contact_info_by_account(account, i_account)
