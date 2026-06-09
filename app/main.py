@@ -157,7 +157,7 @@ def is_method_allowed(method: Capabilities) -> Response:
     "/api/health-check",
     response_model=Health,
 )
-def health_check() -> Health:
+async def health_check() -> Health:
     """
     Confirm the service is running
     """
