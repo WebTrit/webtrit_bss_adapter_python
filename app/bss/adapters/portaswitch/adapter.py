@@ -626,6 +626,16 @@ class PortaSwitchAdapter(BSSAdapter):
 
                 found_accounts: dict[int, dict] = {}  # keyed by i_account to deduplicate
 
+                def _resolve_master(account: dict) -> dict:
+                    if master_id := account.get("i_master_account"):
+                        try:
+                            master = self._admin_api.get_account_info(i_account=master_id).get("account_info")
+                            if master:
+                                return master
+                        except Exception as e:
+                            logging.debug(f"Failed to resolve master account {master_id}: {e}")
+                    return account
+
                 def _lookup_number(number: str) -> dict[int, dict]:
                     result: dict[int, dict] = {}
                     # 1. Search by main number
@@ -633,7 +643,8 @@ class PortaSwitchAdapter(BSSAdapter):
                         try:
                             accounts = self._admin_api.get_account_list(cust_id, id=number)
                             for account in (accounts.get("account_list", []) or []):
-                                result[int(account["i_account"])] = account
+                                resolved = _resolve_master(account)
+                                result[int(resolved["i_account"])] = resolved
                         except Exception as e:
                             logging.debug(f"Failed to fetch accounts for phone number {number} in customer {cust_id}: {e}")
                     # 2. Search by extension number (short dial)
@@ -667,7 +678,8 @@ class PortaSwitchAdapter(BSSAdapter):
                     try:
                         account = self._admin_api.get_account_info(id=number).get("account_info")
                         if account:
-                            return int(account["i_account"]), account
+                            resolved = _resolve_master(account)
+                            return int(resolved["i_account"]), resolved
                     except Exception as e:
                         logging.debug(f"Account not found for alias/additional number {number}: {e}")
                     return None
