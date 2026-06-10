@@ -778,17 +778,26 @@ class PortaSwitchAdapter(BSSAdapter):
                             if any(search.lower() in ext.get(field, "").lower() for field in search_fields)
                         ]
 
-                    # Get accounts for alias resolution across all offices in the hierarchy
-                    all_accounts = []
-                    for cust_id in all_i_customers:
-                        all_accounts.extend(self._get_all_accounts_by_customer(cust_id))
-                    account_to_aliases = {account["i_account"]: account.get("alias_list", []) for account in
-                                          all_accounts}
+                    # Fetch aliases only for extensions that survived filtering
+                    def _get_aliases_for_ext(ext):
+                        i_acc = ext.get("i_account")
+                        if not i_acc:
+                            return []
+                        try:
+                            account = self._admin_api.get_account_info(
+                                i_account=int(i_acc)
+                            ).get("account_info")
+                            if account:
+                                return _enrich_with_aliases(account).get("alias_list", [])
+                        except Exception as e:
+                            logging.debug(f"Failed to fetch aliases for extension {ext.get('id')}: {e}")
+                        return []
 
-                    # Build contacts from filtered extensions
-                    for ext in filtered_extensions:
-                        aliases = account_to_aliases.get(ext.get("i_account"), [])
-                        contacts.append(Serializer.get_contact_info_by_extension(ext, aliases, i_account))
+                    if filtered_extensions:
+                        with ThreadPoolExecutor(max_workers=min(10, len(filtered_extensions))) as executor:
+                            aliases_per_ext = list(executor.map(_get_aliases_for_ext, filtered_extensions))
+                        for ext, aliases in zip(filtered_extensions, aliases_per_ext):
+                            contacts.append(Serializer.get_contact_info_by_extension(ext, aliases, i_account))
 
                     # Add custom contacts before pagination
                     custom_contacts = [Serializer.get_contact_info_by_custom_entry(entry) for entry in
@@ -826,23 +835,62 @@ class PortaSwitchAdapter(BSSAdapter):
                         )["extensions_list"]
                         extension_i_accounts = {ext["i_account"] for ext in ext_list if ext.get("i_account")}
 
-                    if search:
-                        # Search mode: query each customer and deduplicate results.
-                        # Use _get_all_accounts_by_customer with search params to paginate through
-                        # all matching records — PortaBilling defaults to ~50 without an explicit limit.
-                        search_pattern = f"%{search}%"
-                        accounts_dict = {}  # Use dict to store unique accounts by i_account
+                    MAX_API_LIMIT = 1000
+                    FILTER_BUFFER = 10
 
-                        for cust_id in all_i_customers:
+                    def _passes_filter(account: dict) -> bool:
+                        if (status := account.get("status")) and status == "blocked":
+                            return False
+                        if PortaSwitchDualVersionSystem(account.get("dual_version_system")) == PortaSwitchDualVersionSystem.SOURCE:
+                            return False
+                        has_extension = account.get("extension_id") or (
+                            is_hierarchy and account["i_account"] in extension_i_accounts
+                        )
+                        if self._portaswitch_settings.CONTACTS_SKIP_WITHOUT_EXTENSION and not has_extension:
+                            return False
+                        return account["i_account"] != i_account
+
+                    if search:
+                        # Search mode: run all (customer × field) combinations in parallel.
+                        # Fetch only enough records per field to support in-memory pagination up
+                        # to the current page. Without this cap, _get_all_accounts_by_customer
+                        # paginates through every matching record — O(matches/1000) sequential
+                        # API calls per field — which times out on broad queries against large
+                        # accounts (e.g. 7000 matches × 5 fields = 35 sequential API calls).
+                        # With this cap, cost is always O(5) parallel API calls regardless of
+                        # total match count, matching the WT-1595 pattern.
+                        search_fetch_limit = min(page * items_per_page + FILTER_BUFFER, MAX_API_LIMIT)
+                        search_pattern = f"%{search}%"
+                        accounts_dict: dict[int, dict] = {}
+                        search_total_from_api = 0
+
+                        search_tasks = [
+                            (cust_id, param, value)
+                            for cust_id in all_i_customers
                             for param, value in [
                                 ("id", search_pattern),
                                 ("firstname", search_pattern),
                                 ("lastname", search_pattern),
                                 ("extension_name", search_pattern),
                                 ("email", search_pattern),
-                            ]:
-                                for account in self._get_all_accounts_by_customer(cust_id, **{param: value}):
+                            ]
+                        ]
+
+                        def _fetch_field(task):
+                            cust_id, param, value = task
+                            resp = self._admin_api.get_account_list(
+                                cust_id, limit=search_fetch_limit, offset=0, **{param: value}
+                            )
+                            if isinstance(resp, dict):
+                                return resp.get("account_list") or [], resp.get("total", 0)
+                            return [], 0
+
+                        with ThreadPoolExecutor(max_workers=len(search_tasks)) as executor:
+                            for accs, field_total in executor.map(_fetch_field, search_tasks):
+                                for account in accs:
                                     accounts_dict[account["i_account"]] = account
+                                if field_total > search_total_from_api:
+                                    search_total_from_api = field_total
 
                         # Also search by extension number (short dial / extension_id)
                         try:
@@ -850,19 +898,30 @@ class PortaSwitchAdapter(BSSAdapter):
                                 main_i_customer, get_main_office_extensions=is_hierarchy
                             )["extensions_list"]
                             search_lower = search.lower()
-                            for ext in extensions:
-                                if search_lower in ext.get("id", "").lower() and ext.get("i_account"):
-                                    ext_i_account = int(ext["i_account"])
-                                    if ext_i_account not in accounts_dict:
-                                        try:
-                                            account = self._admin_api.get_account_info(
-                                                i_account=ext_i_account
-                                            ).get("account_info")
-                                            if account:
-                                                account = _enrich_with_aliases(account)
-                                                accounts_dict[int(account["i_account"])] = account
-                                        except Exception as e:
-                                            logging.debug(f"Failed to fetch account for extension {ext['id']}: {e}")
+                            missing_ext_i_accounts = [
+                                int(ext["i_account"])
+                                for ext in extensions
+                                if search_lower in ext.get("id", "").lower()
+                                and ext.get("i_account")
+                                and int(ext["i_account"]) not in accounts_dict
+                            ]
+
+                            def _fetch_ext_account(i_acc):
+                                try:
+                                    account = self._admin_api.get_account_info(
+                                        i_account=i_acc
+                                    ).get("account_info")
+                                    if account:
+                                        return _enrich_with_aliases(account)
+                                except Exception as e:
+                                    logging.debug(f"Failed to fetch account for extension i_account={i_acc}: {e}")
+                                return None
+
+                            if missing_ext_i_accounts:
+                                with ThreadPoolExecutor(max_workers=min(10, len(missing_ext_i_accounts))) as executor:
+                                    for account in executor.map(_fetch_ext_account, missing_ext_i_accounts):
+                                        if account:
+                                            accounts_dict[int(account["i_account"])] = account
                         except Exception as e:
                             logging.debug(f"Failed to fetch extensions for search: {e}")
 
@@ -884,54 +943,62 @@ class PortaSwitchAdapter(BSSAdapter):
 
                         accounts = list(accounts_dict.values())
                     elif is_hierarchy:
-                        # Multi-customer: fetch all accounts from every office and paginate in-memory
-                        accounts = []
-                        for cust_id in all_i_customers:
-                            accounts.extend(self._get_all_accounts_by_customer(cust_id))
+                        # Multi-customer: fetch all offices in parallel and paginate in-memory
+                        def _fetch_customer_accounts(cust_id):
+                            return self._get_all_accounts_by_customer(cust_id)
+
+                        with ThreadPoolExecutor(max_workers=len(all_i_customers)) as executor:
+                            accounts = [
+                                acc
+                                for accs in executor.map(_fetch_customer_accounts, all_i_customers)
+                                for acc in accs
+                            ]
                     else:
                         # Single customer: use API-level pagination for efficiency.
                         # PortaBilling's documented per-call maximum is 1000; requesting more silently
                         # returns at most 1000 records. When items_per_page >= 1000, use chunked
                         # fetching to guarantee correct in-memory pagination across the full dataset.
-                        MAX_API_LIMIT = 1000
-
                         if items_per_page >= MAX_API_LIMIT:
                             # Page size at or above PortaBilling's per-request maximum: fetch all accounts
                             # in chunks of 1000 and paginate in-memory.
                             accounts = self._get_all_accounts_by_customer(main_i_customer)
+                            total_count_from_api = 0
                         else:
-                            # Normal page: single API call with a small buffer to compensate
-                            # for adapter-side filtering (blocked accounts, current user).
-                            FILTER_BUFFER = 10
+                            # Normal page: loop until we have exactly `target` filtered accounts.
+                            # A single fetch with a fixed buffer is insufficient when many accounts
+                            # are filtered (blocked, current user, no extension): the buffer may be
+                            # exhausted before we reach `target` filtered results.
                             if page == 1 and custom_contacts_count > 0:
-                                api_limit = max(1, items_per_page - custom_contacts_count + FILTER_BUFFER)
-                                offset = 0
+                                target = items_per_page - custom_contacts_count
+                                fetch_offset = 0
                             else:
-                                api_limit = min(items_per_page + FILTER_BUFFER, MAX_API_LIMIT)
-                                offset = (page - 1) * items_per_page - custom_contacts_count
-                                offset = max(0, offset)
+                                target = items_per_page
+                                fetch_offset = max(0, (page - 1) * items_per_page - custom_contacts_count)
 
-                            result = self._admin_api.get_account_list(
-                                main_i_customer,
-                                limit=api_limit,
-                                offset=offset
-                            )
-                            accounts = result.get("account_list", [])
-                            total_count_from_api = result.get("total", 0)
+                            accounts = []
+                            total_count_from_api = 0
+                            while len(accounts) < target:
+                                needed = target - len(accounts)
+                                result = self._admin_api.get_account_list(
+                                    main_i_customer,
+                                    limit=min(needed + FILTER_BUFFER, MAX_API_LIMIT),
+                                    offset=fetch_offset,
+                                )
+                                total_count_from_api = result.get("total", 0)
+                                batch = result.get("account_list") or []
+                                if not batch:
+                                    break
+                                for account in batch:
+                                    if _passes_filter(account):
+                                        accounts.append(account)
+                                        if len(accounts) >= target:
+                                            break
+                                if len(batch) < needed + FILTER_BUFFER:
+                                    break  # PortaBilling has no more records
+                                fetch_offset += len(batch)
 
-                    # Filter accounts
-                    filtered_accounts = []
-                    for account in accounts:
-                        if (status := account.get("status")) and status == "blocked":
-                            continue
-                        dual_version_system = PortaSwitchDualVersionSystem(account.get("dual_version_system"))
-                        if dual_version_system != PortaSwitchDualVersionSystem.SOURCE:
-                            has_extension = account.get("extension_id") or (
-                                is_hierarchy and account["i_account"] in extension_i_accounts
-                            )
-                            if (not self._portaswitch_settings.CONTACTS_SKIP_WITHOUT_EXTENSION or has_extension) \
-                                    and account["i_account"] != i_account:
-                                filtered_accounts.append(account)
+                    # Filter accounts (for search/hierarchy paths; single-customer loop pre-filters)
+                    filtered_accounts = [a for a in accounts if _passes_filter(a)]
 
                     # Build contacts from accounts
                     account_contacts = []
@@ -956,8 +1023,14 @@ class PortaSwitchAdapter(BSSAdapter):
 
                     # Apply pagination
                     if search or is_hierarchy or items_per_page > MAX_API_LIMIT:
-                        # In-memory pagination for search, multi-customer hierarchy, and large pages
-                        total_count = len(account_contacts)
+                        # In-memory pagination for search, multi-customer hierarchy, and large pages.
+                        # In search mode: use the API-reported total (max across fields) as total_count
+                        # rather than len(account_contacts), because the bounded fetch only retrieves
+                        # enough records for the current page — len() would severely undercount.
+                        if search:
+                            total_count = max(search_total_from_api, len(account_contacts))
+                        else:
+                            total_count = len(account_contacts)
                         start_idx = (page - 1) * items_per_page
                         end_idx = start_idx + items_per_page
                         contacts = account_contacts[start_idx:end_idx]
@@ -970,81 +1043,104 @@ class PortaSwitchAdapter(BSSAdapter):
                         total_count = total_count_from_api + (len(custom_contacts) if page == 1 else 0)
 
                 case PortaSwitchContactsSelectingMode.PHONEBOOK:
-                    phonebook = self._account_api.get_phonebook_list(access_token, 1, 100)['phonebook_rec_list']
-
-                    # Extract phone numbers from phonebook records
-                    phonebook_numbers = set()
-                    for record in phonebook:
-                        phone_number = record.get("phone_number", "").replace("+", "")
-                        if phone_number:
-                            phonebook_numbers.add(phone_number)
-
-                    # Get account mapping only for phonebook numbers (on-demand)
-                    number_to_accounts = self._get_number_to_customer_accounts_map_for_numbers(phonebook_numbers)
-
-                    for record in phonebook:
-                        # Normalize phone number by removing the '+' prefix
-                        phonebook_record_number = record.get("phone_number").replace("+", "")
-                        phonebook_contact_info = Serializer.get_contact_info_by_phonebook_record(record)
-
-                        if account := number_to_accounts.get(phonebook_record_number):
-                            # If we found a matching account, use its contact info but update with phonebook data
-                            contact = Serializer.get_contact_info_by_account(account, i_account)
-                            contact.alias_name = phonebook_contact_info.alias_name
-                            contact.numbers.main = phonebook_record_number
-                        else:
-                            # No matching account found, use phonebook contact info as is
-                            contact = phonebook_contact_info
-                            if contact.numbers.main:
-                                contact.numbers.main = contact.numbers.main.replace("+", "")
-
-                        if contact.is_current_user is not True:
-                            contacts.append(contact)
-
-                    # Add custom contacts before filtering and pagination
                     custom_contacts = [Serializer.get_contact_info_by_custom_entry(entry) for entry in
                                        self._portaswitch_settings.CONTACTS_CUSTOM]
-                    contacts.extend(custom_contacts)
+                    custom_contacts_count = len(custom_contacts)
 
-                    # If search is provided, filter extensions
+                    def _build_phonebook_contacts(phonebook_records):
+                        pb_numbers = {
+                            r.get("phone_number", "").replace("+", "")
+                            for r in phonebook_records if r.get("phone_number")
+                        }
+                        num_to_acc = self._get_number_to_customer_accounts_map_for_numbers(pb_numbers)
+                        result = []
+                        for record in phonebook_records:
+                            pb_number = record.get("phone_number").replace("+", "")
+                            pb_contact = Serializer.get_contact_info_by_phonebook_record(record)
+                            if account := num_to_acc.get(pb_number):
+                                contact = Serializer.get_contact_info_by_account(account, i_account)
+                                contact.alias_name = pb_contact.alias_name
+                                contact.numbers.main = pb_number
+                            else:
+                                contact = pb_contact
+                                if contact.numbers.main:
+                                    contact.numbers.main = contact.numbers.main.replace("+", "")
+                            if contact.is_current_user is not True:
+                                result.append(contact)
+                        return result
+
                     if search:
-                        search_lower = search.lower()
-                        contacts = [
-                            contact for contact in contacts
-                            if any(search_lower in str(value or "").lower() for value in [
-                                contact.numbers.main if contact.numbers else None,
-                                contact.numbers.ext if contact.numbers else None,
-                                contact.first_name,
-                                contact.last_name,
-                                contact.alias_name,
-                                contact.email,
-                            ]) or (
-                                contact.numbers and any(
-                                    search_lower in str(n or "").lower()
-                                    for n in (contact.numbers.additional or [])
-                                )
-                            )
-                        ]
+                        # Fetch all phonebook records for in-memory search
+                        phonebook = []
+                        pb_page = 1
+                        PHONEBOOK_BATCH = 1000
+                        while True:
+                            batch = self._account_api.get_phonebook_list(
+                                access_token, pb_page, PHONEBOOK_BATCH
+                            ).get('phonebook_rec_list', [])
+                            phonebook.extend(batch)
+                            if len(batch) < PHONEBOOK_BATCH:
+                                break
+                            pb_page += 1
 
-                    # Apply pagination
-                    total_count = len(contacts)
-                    start_idx = (page - 1) * items_per_page
-                    end_idx = start_idx + items_per_page
-                    contacts = contacts[start_idx:end_idx]
+                        contacts = _build_phonebook_contacts(phonebook)
+                        search_lower = search.lower()
+                        filtered_custom = [
+                            c for c in custom_contacts
+                            if any(search_lower in str(v or "").lower() for v in [
+                                c.numbers.main if c.numbers else None,
+                                c.numbers.ext if c.numbers else None,
+                                c.first_name, c.last_name, c.alias_name, c.email,
+                            ]) or (c.numbers and any(
+                                search_lower in str(n or "").lower()
+                                for n in (c.numbers.additional or [])
+                            ))
+                        ]
+                        contacts.extend(filtered_custom)
+                        total_count = len(contacts)
+                        start_idx = (page - 1) * items_per_page
+                        end_idx = start_idx + items_per_page
+                        contacts = contacts[start_idx:end_idx]
+                    else:
+                        # API-level pagination: resolve accounts only for the current page.
+                        # Custom contacts occupy the first custom_contacts_count slots on page 1,
+                        # so the phonebook offset and limit must be adjusted accordingly:
+                        #   page 1: offset=0,                    limit=items_per_page-cc
+                        #   page N: offset=(N-1)*ipp - cc,       limit=items_per_page
+                        if custom_contacts_count > 0:
+                            if page == 1:
+                                pb_offset = 0
+                                pb_limit = max(1, items_per_page - custom_contacts_count)
+                            else:
+                                pb_offset = (page - 1) * items_per_page - custom_contacts_count
+                                pb_limit = items_per_page
+                            pb_result = self._account_api.get_phonebook_list(
+                                access_token, page, items_per_page,
+                                offset=pb_offset, limit=pb_limit,
+                            )
+                        else:
+                            pb_result = self._account_api.get_phonebook_list(access_token, page, items_per_page)
+                        phonebook = pb_result.get('phonebook_rec_list', [])
+                        pb_total = pb_result.get('total', 0)
+
+                        contacts = _build_phonebook_contacts(phonebook)
+                        if page == 1:
+                            contacts = custom_contacts + contacts
+                        total_count = pb_total + custom_contacts_count
 
                 case PortaSwitchContactsSelectingMode.PHONE_DIRECTORY:
                     phone_directories = self._account_api.get_phone_directory_list(access_token, 1, 100)[
                         'phone_directory_list']
 
-                    # Extract phone numbers from phone directory records
+                    # Single pass: collect numbers and cache directory infos to avoid double-fetching
                     phone_directory_numbers = set()
+                    directory_infos = {}
                     for directory in phone_directories:
+                        dir_id = directory['i_ua_config_directory']
                         directory_info = self._account_api.get_phone_directory_info(
-                            access_token,
-                            directory['i_ua_config_directory'],
-                            1,
-                            10_000
+                            access_token, dir_id, 1, 10_000
                         )['phone_directory_info']
+                        directory_infos[dir_id] = directory_info
                         for record in directory_info['directory_records']:
                             office_number = record.get("office_number", "").replace("+", "")
                             if office_number:
@@ -1053,28 +1149,21 @@ class PortaSwitchAdapter(BSSAdapter):
                     # Get account mapping only for phone directory numbers (on-demand)
                     number_to_accounts = self._get_number_to_customer_accounts_map_for_numbers(phone_directory_numbers)
 
+                    # Build contacts using cached directory infos — no second API call
                     for directory in phone_directories:
-                        directory_info = self._account_api.get_phone_directory_info(
-                            access_token,
-                            directory['i_ua_config_directory'],
-                            1,
-                            10_000
-                        )['phone_directory_info']
+                        directory_info = directory_infos[directory['i_ua_config_directory']]
                         for record in directory_info['directory_records']:
-                            # Normalize phone number by removing the '+' prefix
                             phone_directory_record_number = record.get("office_number").replace("+", "")
-                            phone_directory_contact_info = Serializer.get_contact_info_by_phone_directory_record(record,
-                                                                                                                 directory_info[
-                                                                                                                     'name'])
+                            phone_directory_contact_info = Serializer.get_contact_info_by_phone_directory_record(
+                                record, directory_info['name']
+                            )
 
                             if account := number_to_accounts.get(phone_directory_record_number):
-                                # If we found a matching account, use its contact info but update with phone directory data
                                 contact = Serializer.get_contact_info_by_account(account, i_account)
                                 contact.first_name = phone_directory_contact_info.first_name
                                 contact.last_name = phone_directory_contact_info.last_name
                                 contact.numbers.main = phone_directory_record_number
                             else:
-                                # No matching account found, use phone directory contact info as is
                                 contact = phone_directory_contact_info
                                 if contact.numbers.main:
                                     contact.numbers.main = contact.numbers.main.replace("+", "")

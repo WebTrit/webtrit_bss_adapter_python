@@ -247,13 +247,16 @@ class AccountAPI(HTTPAPIConnector):
             access_token=access_token,
         )
 
-    def get_phonebook_list(self, access_token: str, page: int, items_per_page: int) -> dict:
+    def get_phonebook_list(self, access_token: str, page: int, items_per_page: int,
+                           *, offset: int = None, limit: int = None) -> dict:
         """Return the phonebook list of the account.
 
         Args:
             access_token (str): Token that authenticates the API user in the PortaBilling API using the account realm.
             page (int): Shows what page of the phonebook to return.
             items_per_page (int): Shows the number of items to return.
+            offset (int, optional): Raw offset override. Overrides page-based offset when provided.
+            limit (int, optional): Raw limit override. Overrides items_per_page when provided.
 
         Returns:
             dict: API method execution result containing phonebook items.
@@ -263,8 +266,8 @@ class AccountAPI(HTTPAPIConnector):
             method="get_phonebook_list",
             params={
                 "get_total": 1,
-                "limit": items_per_page,
-                "offset": items_per_page * (page - 1),
+                "limit": limit if limit is not None else items_per_page,
+                "offset": offset if offset is not None else items_per_page * (page - 1),
             },
             access_token=access_token)
 
