@@ -608,6 +608,31 @@ class PortaSwitchAdapter(BSSAdapter):
                         continue
                     normalized_phone_numbers.add(number.replace("+", "").strip())
 
+            def _enrich_with_aliases(account: dict) -> dict:
+                """Re-fetch account via get_account_list to populate alias_list (additional numbers).
+                get_account_info omits alias_list; get_account_list includes it via with_aliases=1."""
+                if account.get("id") and account.get("i_customer"):
+                    try:
+                        enriched = self._admin_api.get_account_list(
+                            int(account["i_customer"]), id=account["id"]
+                        ).get("account_list", [])
+                        if enriched:
+                            return enriched[0]
+                    except Exception as e:
+                        logging.debug(f"Failed to enrich account {account.get('i_account')} with aliases: {e}")
+                return account
+
+            def _resolve_master(account: dict) -> dict:
+                """Follow i_master_account to the real owner account, enriched with alias_list."""
+                if master_id := account.get("i_master_account"):
+                    try:
+                        master = self._admin_api.get_account_info(i_account=master_id).get("account_info")
+                        if master:
+                            return _enrich_with_aliases(master)
+                    except Exception as e:
+                        logging.debug(f"Failed to resolve master account {master_id}: {e}")
+                return account
+
             # If phone_numbers search is provided, ignore generic `search` and use a unified implementation
             if normalized_phone_numbers:
                 # Build extension number → i_account index once for all customers
@@ -625,16 +650,6 @@ class PortaSwitchAdapter(BSSAdapter):
                     logging.debug(f"Failed to fetch extensions for phone_numbers lookup: {e}")
 
                 found_accounts: dict[int, dict] = {}  # keyed by i_account to deduplicate
-
-                def _resolve_master(account: dict) -> dict:
-                    if master_id := account.get("i_master_account"):
-                        try:
-                            master = self._admin_api.get_account_info(i_account=master_id).get("account_info")
-                            if master:
-                                return master
-                        except Exception as e:
-                            logging.debug(f"Failed to resolve master account {master_id}: {e}")
-                    return account
 
                 def _lookup_number(number: str) -> dict[int, dict]:
                     result: dict[int, dict] = {}
@@ -654,6 +669,7 @@ class PortaSwitchAdapter(BSSAdapter):
                             try:
                                 account = self._admin_api.get_account_info(i_account=ext_i_account).get("account_info")
                                 if account:
+                                    account = _enrich_with_aliases(account)
                                     result[int(account["i_account"])] = account
                             except Exception as e:
                                 logging.debug(f"Failed to fetch account for extension number {number}: {e}")
@@ -830,11 +846,28 @@ class PortaSwitchAdapter(BSSAdapter):
                                                 i_account=ext_i_account
                                             ).get("account_info")
                                             if account:
+                                                account = _enrich_with_aliases(account)
                                                 accounts_dict[int(account["i_account"])] = account
                                         except Exception as e:
                                             logging.debug(f"Failed to fetch account for extension {ext['id']}: {e}")
                         except Exception as e:
                             logging.debug(f"Failed to fetch extensions for search: {e}")
+
+                        # Also search by alias/additional DID (exact match only —
+                        # substring scan would require fetching all accounts)
+                        search_stripped = search.replace("+", "").strip()
+                        if search_stripped:
+                            try:
+                                alias_account = self._admin_api.get_account_info(
+                                    id=search_stripped
+                                ).get("account_info")
+                                if alias_account and alias_account.get("i_master_account"):
+                                    resolved = _resolve_master(alias_account)
+                                    i_acc = int(resolved["i_account"])
+                                    if i_acc not in accounts_dict:
+                                        accounts_dict[i_acc] = resolved
+                            except Exception as e:
+                                logging.debug(f"Failed to search by alias DID {search_stripped}: {e}")
 
                         accounts = list(accounts_dict.values())
                     elif is_hierarchy:
