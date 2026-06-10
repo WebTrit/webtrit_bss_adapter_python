@@ -434,9 +434,12 @@ class PortaSwitchAdapter(BSSAdapter):
                         type.value for type in
                         self._portaswitch_settings.CONTACTS_SELECTING_EXTENSION_TYPES
                     }
-                    accounts = []
-                    for cust_id in all_i_customers:
-                        accounts.extend(self._get_all_accounts_by_customer(cust_id))
+                    with ThreadPoolExecutor(max_workers=min(10, len(all_i_customers))) as executor:
+                        accounts = [
+                            acc
+                            for accs in executor.map(self._get_all_accounts_by_customer, all_i_customers)
+                            for acc in accs
+                        ]
                     account_to_aliases = {account["i_account"]: account.get("alias_list", []) for account in accounts}
                     extensions = self._admin_api.get_extensions_list(
                         main_i_customer, get_main_office_extensions=is_hierarchy
@@ -448,9 +451,12 @@ class PortaSwitchAdapter(BSSAdapter):
                             contacts.append(Serializer.get_contact_info_by_extension(ext, aliases, i_account))
                 case PortaSwitchContactsSelectingMode.ACCOUNTS:
                     # Fetch accounts from all offices in the hierarchy
-                    accounts = []
-                    for cust_id in all_i_customers:
-                        accounts.extend(self._get_all_accounts_by_customer(cust_id))
+                    with ThreadPoolExecutor(max_workers=min(10, len(all_i_customers))) as executor:
+                        accounts = [
+                            acc
+                            for accs in executor.map(self._get_all_accounts_by_customer, all_i_customers)
+                            for acc in accs
+                        ]
 
                     # When filtering by extension and in a hierarchy, use the unified extensions list
                     # (get_main_office_extensions returns extensions across all offices) as the filter
@@ -473,7 +479,17 @@ class PortaSwitchAdapter(BSSAdapter):
                                     and account["i_account"] != i_account:
                                 contacts.append(Serializer.get_contact_info_by_account(account, i_account))
                 case PortaSwitchContactsSelectingMode.PHONEBOOK:
-                    phonebook = self._account_api.get_phonebook_list(access_token, 1, 100)['phonebook_rec_list']
+                    phonebook = []
+                    pb_page = 1
+                    PHONEBOOK_BATCH = 1000
+                    while True:
+                        batch = self._account_api.get_phonebook_list(
+                            access_token, pb_page, PHONEBOOK_BATCH
+                        ).get('phonebook_rec_list', [])
+                        phonebook.extend(batch)
+                        if len(batch) < PHONEBOOK_BATCH:
+                            break
+                        pb_page += 1
 
                     # Extract phone numbers from phonebook records
                     phonebook_numbers = set()
@@ -508,8 +524,9 @@ class PortaSwitchAdapter(BSSAdapter):
                     phone_directories = self._account_api.get_phone_directory_list(access_token, 1, 100)[
                         'phone_directory_list']
 
-                    # Extract phone numbers from phone directory records
+                    # Fetch each directory once, collect phone numbers and cache results
                     phone_directory_numbers = set()
+                    fetched_directory_infos = {}
                     for directory in phone_directories:
                         directory_info = self._account_api.get_phone_directory_info(
                             access_token,
@@ -517,6 +534,7 @@ class PortaSwitchAdapter(BSSAdapter):
                             1,
                             10_000
                         )['phone_directory_info']
+                        fetched_directory_infos[directory['i_ua_config_directory']] = directory_info
                         for record in directory_info['directory_records']:
                             office_number = record.get("office_number", "").replace("+", "")
                             if office_number:
@@ -526,12 +544,7 @@ class PortaSwitchAdapter(BSSAdapter):
                     number_to_accounts = self._get_number_to_customer_accounts_map_for_numbers(phone_directory_numbers)
 
                     for directory in phone_directories:
-                        directory_info = self._account_api.get_phone_directory_info(
-                            access_token,
-                            directory['i_ua_config_directory'],
-                            1,
-                            10_000
-                        )['phone_directory_info']
+                        directory_info = fetched_directory_infos[directory['i_ua_config_directory']]
                         for record in directory_info['directory_records']:
                             # Normalize phone number by removing the '+' prefix
                             phone_directory_record_number = record.get("office_number").replace("+", "")
