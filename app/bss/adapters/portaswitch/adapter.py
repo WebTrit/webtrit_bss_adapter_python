@@ -1756,7 +1756,7 @@ class PortaSwitchAdapter(BSSAdapter):
             return main_i_customer, [main_i_customer]
 
     def _get_all_accounts_by_customer(self, i_customer: int, **search_params) -> list[dict]:
-        """Fetch all accounts for a customer using pagination.
+        """Fetch all accounts for a customer using parallel pagination.
 
         Parameters:
             i_customer (int): The unique identifier of the customer.
@@ -1766,26 +1766,25 @@ class PortaSwitchAdapter(BSSAdapter):
         Returns:
             list[dict]: List of all account records for the specified customer.
         """
-        all_accounts: list[dict] = []
-        offset = 0
         limit = 1000
 
-        while True:
-            resp = self._admin_api.get_account_list(i_customer, limit=limit, offset=offset, **search_params)
-            page = resp.get("account_list", []) if isinstance(resp, dict) else []
-            total = resp.get("total") if isinstance(resp, dict) else None
+        resp = self._admin_api.get_account_list(i_customer, limit=limit, offset=0, **search_params)
+        first_page = resp.get("account_list", []) if isinstance(resp, dict) else []
+        total = int(resp["total"]) if isinstance(resp, dict) and resp.get("total") else None
 
-            all_accounts.extend(page)
+        if not first_page or len(first_page) < limit or total is None or len(first_page) >= total:
+            return first_page
 
-            # Stop if we've reached the total or the page is shorter than the limit
-            if total is not None and len(all_accounts) >= int(total):
-                break
-            if len(page) < limit:
-                break
+        remaining_offsets = range(limit, total, limit)
 
-            offset += limit
+        def _fetch_page(offset):
+            r = self._admin_api.get_account_list(i_customer, limit=limit, offset=offset, **search_params)
+            return r.get("account_list", []) if isinstance(r, dict) else []
 
-        return all_accounts
+        with ThreadPoolExecutor(max_workers=min(10, len(remaining_offsets))) as executor:
+            remaining_pages = list(executor.map(_fetch_page, remaining_offsets))
+
+        return first_page + [acc for page in remaining_pages for acc in page]
 
     def _get_or_create_api_token(self, account_info: dict) -> Optional[str]:
         """Return the account's api_token, creating and persisting one if absent."""
