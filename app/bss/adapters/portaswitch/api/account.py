@@ -94,11 +94,24 @@ class AccountAPI(HTTPAPIConnector):
 
         if "attachment" in headers.get("Content-Disposition", ""):
             if "chunked" in headers.get("Transfer-Encoding", ""):
-                return content_type, response.iter_content(DEFAULT_CHUNK_SIZE)
+                return content_type, self._iter_and_close(response)
             else:
                 return content_type, response.content
 
+        # Unexpected shape: nothing will read the body, so release the
+        # connection explicitly (matters for stream=True, which holds it open).
+        response.close()
         raise ValueError("Not expected response")
+
+    @staticmethod
+    def _iter_and_close(response: requests.models.Response) -> Iterator[bytes]:
+        """Stream the response body in chunks, releasing the underlying
+        connection when iteration completes, is aborted (client disconnect),
+        or errors out mid-stream (e.g. a read timeout)."""
+        try:
+            yield from response.iter_content(DEFAULT_CHUNK_SIZE)
+        finally:
+            response.close()
 
     def login(self, login: str, password: str = None, token: str = None) -> dict:
         """Performs an account login by its login, password and/or token.

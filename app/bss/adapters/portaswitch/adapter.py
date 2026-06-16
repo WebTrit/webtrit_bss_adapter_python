@@ -885,7 +885,7 @@ class PortaSwitchAdapter(BSSAdapter):
                                 return resp.get("account_list") or [], resp.get("total", 0)
                             return [], 0
 
-                        with ThreadPoolExecutor(max_workers=len(search_tasks)) as executor:
+                        with ThreadPoolExecutor(max_workers=min(10, len(search_tasks))) as executor:
                             for accs, field_total in executor.map(_fetch_field, search_tasks):
                                 for account in accs:
                                     accounts_dict[account["i_account"]] = account
@@ -947,7 +947,7 @@ class PortaSwitchAdapter(BSSAdapter):
                         def _fetch_customer_accounts(cust_id):
                             return self._get_all_accounts_by_customer(cust_id)
 
-                        with ThreadPoolExecutor(max_workers=len(all_i_customers)) as executor:
+                        with ThreadPoolExecutor(max_workers=min(10, len(all_i_customers))) as executor:
                             accounts = [
                                 acc
                                 for accs in executor.map(_fetch_customer_accounts, all_i_customers)

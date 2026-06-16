@@ -34,6 +34,13 @@ class OAuthSessionData(AuthSessionData):
 class HTTPAPIConnector(ABC):
     """Extract data from a remote server via REST/GRAPHQL or other HTTP-based API"""
 
+    #: (connect, read) timeout in seconds for outgoing requests. Without it
+    #: requests waits forever, so a stalled BSS/VoIP backend would pin a worker
+    #: thread indefinitely and eventually exhaust the pool. The read timeout is
+    #: kept below the Cloud Run request timeout so we fail with a handled error
+    #: instead of an opaque 504.
+    DEFAULT_REQUEST_TIMEOUT = (5, 25)
+
     def __init__(self, api_server: str):
         """Create a new API connector object.
 
@@ -119,9 +126,15 @@ class HTTPAPIConnector(ABC):
 
         try:
             logging.debug(f"Sending {method} request to {url} with parameters {params_final}")
-            response = requests.request(method, url, **params_final)
-            clean_text = truncate_log_message(response.text.replace("\n", " "))
-            logging.debug(f"Received {response.status_code} {clean_text}")
+            response = requests.request(method, url, timeout=self.DEFAULT_REQUEST_TIMEOUT, **params_final)
+            if stream:
+                # Do not read response.text here: it would eagerly pull the whole
+                # body into memory and defeat streaming (e.g. recording/voicemail
+                # downloads). The body is consumed lazily by decode_response/caller.
+                logging.debug(f"Received {response.status_code} (streamed, body not logged)")
+            else:
+                clean_text = truncate_log_message(response.text.replace("\n", " "))
+                logging.debug(f"Received {response.status_code} {clean_text}")
             response.raise_for_status()
             return self.decode_response(response)
 
