@@ -4,7 +4,7 @@ from typing import Optional
 from bss.adapters.portaswitch.config import PortaSwitchSettings
 from bss.adapters.portaswitch.types import PortaSwitchAdminUser
 from bss.adapters.portaswitch.utils import extract_fault_code
-from bss.http_api import HTTPAPIConnectorWithLogin
+from bss.http_api import AuthSessionData, HTTPAPIConnectorWithLogin
 from bss.models import DeliveryChannel
 from report_error import WebTritErrorException
 
@@ -20,9 +20,23 @@ class AdminAPI(HTTPAPIConnectorWithLogin):
         """
         super().__init__(portaswitch_settings.ADMIN_API_URL)
 
+        self._verify_https = portaswitch_settings.VERIFY_HTTPS
         self._api_user = PortaSwitchAdminUser(
             user_id=portaswitch_settings.ADMIN_API_LOGIN, token=portaswitch_settings.ADMIN_API_TOKEN
         )
+
+    def add_auth_info(self, url: str, request_params: dict, auth_session: AuthSessionData) -> dict:
+        """Add authentication info and honor the VERIFY_HTTPS setting.
+
+        Extends the base implementation (which injects the Bearer token) so that
+        admin API requests respect the PORTASWITCH_VERIFY_HTTPS option, just like
+        AccountAPI does. Without this, requests default to verify=True and fail
+        against PortaBilling instances with a self-signed certificate.
+        """
+        request_params = super().add_auth_info(url, request_params, auth_session)
+        request_params["verify"] = self._verify_https
+
+        return request_params
 
     def login(self, user: PortaSwitchAdminUser = None):
         """Performs a PortaBilling API user login.
