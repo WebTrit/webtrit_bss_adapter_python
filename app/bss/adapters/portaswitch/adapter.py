@@ -5,6 +5,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timedelta, UTC
 from typing import Final, Iterator, Optional, Dict, List
 
+import urllib3
 from jose.exceptions import ExpiredSignatureError, JWTError
 
 from app_config import AppConfig
@@ -110,6 +111,11 @@ class PortaSwitchAdapter(BSSAdapter):
         self._settings = Settings()
         self._portaswitch_settings = self._settings.PORTASWITCH_SETTINGS
         self._otp_settings = self._settings.OTP_SETTINGS
+
+        if not self._portaswitch_settings.VERIFY_HTTPS:
+            # HTTPS verification is intentionally disabled (e.g. self-signed PortaBilling
+            # cert); silence urllib3's per-request InsecureRequestWarning to avoid log spam.
+            urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
         self._admin_api = AdminAPI(self._portaswitch_settings)
         self._account_api = AccountAPI(self._portaswitch_settings)
