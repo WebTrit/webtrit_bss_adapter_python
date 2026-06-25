@@ -41,6 +41,7 @@ from localization import get_translation_func
 from report_error import WebTritErrorException
 from .api import AccountAPI, AdminAPI
 from .config import Settings
+from .failover import SiteState
 from .exceptions import (
     method_not_found_error,
     external_api_issue_error,
@@ -117,8 +118,18 @@ class PortaSwitchAdapter(BSSAdapter):
             # cert); silence urllib3's per-request InsecureRequestWarning to avoid log spam.
             urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
-        self._admin_api = AdminAPI(self._portaswitch_settings)
-        self._account_api = AccountAPI(self._portaswitch_settings)
+        # Disaster-recovery failover: a single active-site tracker shared by both
+        # connectors (both sites fail and recover together). Created only when a
+        # standby URL is configured, otherwise failover stays disabled.
+        site_state = None
+        if self._portaswitch_settings.ADMIN_API_URL_STANDBY or self._portaswitch_settings.ACCOUNT_API_URL_STANDBY:
+            site_state = SiteState(
+                recheck_interval=self._portaswitch_settings.SITE_RECHECK_INTERVAL,
+                switch_back_threshold=self._portaswitch_settings.SITE_SWITCH_BACK_THRESHOLD,
+            )
+
+        self._admin_api = AdminAPI(self._portaswitch_settings, site_state=site_state)
+        self._account_api = AccountAPI(self._portaswitch_settings, site_state=site_state)
         self._sip_server = SipServer(
             host=self._portaswitch_settings.SIP_SERVER_HOST, port=self._portaswitch_settings.SIP_SERVER_PORT
         )

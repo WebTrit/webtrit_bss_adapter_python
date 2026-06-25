@@ -2,6 +2,8 @@ import logging
 from typing import Optional
 
 from bss.adapters.portaswitch.config import PortaSwitchSettings
+from bss.adapters.portaswitch.exceptions import service_read_only_error
+from bss.adapters.portaswitch.failover import READ_ONLY_FAULTS
 from bss.adapters.portaswitch.types import PortaSwitchAdminUser
 from bss.adapters.portaswitch.utils import extract_fault_code
 from bss.http_api import AuthSessionData, HTTPAPIConnectorWithLogin
@@ -12,13 +14,19 @@ from report_error import WebTritErrorException
 class AdminAPI(HTTPAPIConnectorWithLogin):
     """Provides an access to Admin realm of the PortaSwitch API."""
 
-    def __init__(self, portaswitch_settings: PortaSwitchSettings) -> None:
+    def __init__(self, portaswitch_settings: PortaSwitchSettings, site_state=None) -> None:
         """The class constructor.
 
         Parameters:
             :config (app_config.AppConfig): The instance with all the service config options.
+            :site_state: Optional shared active-site tracker enabling DR failover.
         """
-        super().__init__(portaswitch_settings.ADMIN_API_URL)
+        super().__init__(
+            portaswitch_settings.ADMIN_API_URL,
+            request_timeout=(portaswitch_settings.API_CONNECT_TIMEOUT, portaswitch_settings.API_READ_TIMEOUT),
+            site_state=site_state,
+            standby_server=portaswitch_settings.ADMIN_API_URL_STANDBY,
+        )
 
         self._verify_https = portaswitch_settings.VERIFY_HTTPS
         self._api_user = PortaSwitchAdminUser(
@@ -298,6 +306,12 @@ class AdminAPI(HTTPAPIConnectorWithLogin):
                     turn_off_login=turn_off_login,
                     user=self._api_user,
                 )
+            elif fault_code in READ_ONLY_FAULTS:
+                # The (secondary/standalone) site cannot service this write/update
+                # in its current read-only mode. Surface a clear domain error
+                # instead of a generic 500.
+                logging.warning(f"PortaSwitch site is read-only ({fault_code}); method {module}/{method} unavailable")
+                raise service_read_only_error()
             else:
                 raise error
 

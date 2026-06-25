@@ -5,8 +5,12 @@ import requests
 from jose import jwt
 
 from bss.adapters.portaswitch.config import PortaSwitchSettings
+from bss.adapters.portaswitch.exceptions import service_read_only_error
+from bss.adapters.portaswitch.failover import READ_ONLY_FAULTS
 from bss.adapters.portaswitch.types import PortaSwitchMailboxMessageFlag, PortaSwitchMailboxMessageFlagAction
+from bss.adapters.portaswitch.utils import extract_fault_code
 from bss.http_api import HTTPAPIConnector, AuthSessionData
+from report_error import WebTritErrorException
 
 DEFAULT_CHUNK_SIZE: Final[int] = 8192
 
@@ -14,14 +18,20 @@ DEFAULT_CHUNK_SIZE: Final[int] = 8192
 class AccountAPI(HTTPAPIConnector):
     """Provides access to Admin realm of the PortaSwitch API."""
 
-    def __init__(self, portaswitch_settings: PortaSwitchSettings):
+    def __init__(self, portaswitch_settings: PortaSwitchSettings, site_state=None):
         """The class constructor.
 
         Parameters:
             :config (app_config.AppConfig): The instance with all the service config options.
+            :site_state: Optional shared active-site tracker enabling DR failover.
 
         """
-        super().__init__(portaswitch_settings.ACCOUNT_API_URL)
+        super().__init__(
+            portaswitch_settings.ACCOUNT_API_URL,
+            request_timeout=(portaswitch_settings.API_CONNECT_TIMEOUT, portaswitch_settings.API_READ_TIMEOUT),
+            site_state=site_state,
+            standby_server=portaswitch_settings.ACCOUNT_API_URL_STANDBY,
+        )
 
         self._verify_https = portaswitch_settings.VERIFY_HTTPS
 
@@ -45,13 +55,20 @@ class AccountAPI(HTTPAPIConnector):
         if access_token:
             headers = {"Authorization": f"Bearer {access_token}"}
 
-        result = self.send_rest_request(
-            method="POST",
-            path=f"/rest/{module}/{method}",
-            json={"params": params},
-            headers=headers,
-            stream=stream,
-        )
+        try:
+            result = self.send_rest_request(
+                method="POST",
+                path=f"/rest/{module}/{method}",
+                json={"params": params},
+                headers=headers,
+                stream=stream,
+            )
+        except WebTritErrorException as error:
+            # A read-only (secondary/standalone) site rejects writes/updates with
+            # a specific fault; surface a clear domain error instead of a 500.
+            if extract_fault_code(error) in READ_ONLY_FAULTS:
+                raise service_read_only_error()
+            raise error
 
         return result
 

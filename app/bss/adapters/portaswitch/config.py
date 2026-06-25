@@ -27,6 +27,20 @@ class PortaSwitchSettings(BaseSettings):
     ADMIN_API_LOGIN: str
     ADMIN_API_TOKEN: str
     ACCOUNT_API_URL: str
+    # Outgoing API request (connect, read) timeout in seconds. The read timeout
+    # must clear the slower standalone-site latency (~30s) AND stay below the
+    # Cloud Run request timeout; raise both together.
+    API_CONNECT_TIMEOUT: int = 5
+    API_READ_TIMEOUT: int = 25
+    # Disaster-recovery (geographically dispersed installation) failover. When a
+    # standby URL is unset, DR failover is disabled and behavior is unchanged.
+    ADMIN_API_URL_STANDBY: Optional[str] = None
+    ACCOUNT_API_URL_STANDBY: Optional[str] = None
+    # Seconds to wait before re-probing the main site while running on standby.
+    SITE_RECHECK_INTERVAL: int = 60
+    # Consecutive successful main-site responses required to switch back
+    # (hysteresis to avoid flapping between sites).
+    SITE_SWITCH_BACK_THRESHOLD: int = 2
     SIP_SERVER_HOST: str = "127.0.0.1"
     SIP_SERVER_PORT: int = 5060
     VERIFY_HTTPS: Optional[bool] = True
