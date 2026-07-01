@@ -72,7 +72,7 @@ from .types import (
     PortaSwitchMailboxMessageAttachmentFormat,
 )
 from .otp_storage import configure_otp_storage
-from .utils import generate_otp_id, extract_fault_code, generate_hash_dictionary
+from .utils import generate_otp_id, extract_fault_code, generate_hash_dictionary, encrypt_secret, decrypt_secret
 
 PORTASWITCH_VERSION_WITH_TOKEN: Final[str] = "MR128"
 
@@ -226,7 +226,13 @@ class PortaSwitchAdapter(BSSAdapter):
                 raise external_api_issue_error()
 
             otp_id: str = generate_otp_id()
-            self._otp_storage.store(otp_id, i_account, user.user_id)
+            # WT-1686: remember the admin session that created this OTP so that
+            # verification can run under the same PortaSwitch session even when a
+            # different adapter replica handles otp-verify. The session token is
+            # encrypted at rest (key derived from ADMIN_API_TOKEN).
+            bss_token = self._admin_api.current_access_token()
+            stored_token = encrypt_secret(bss_token, self._portaswitch_settings.ADMIN_API_TOKEN) if bss_token else None
+            self._otp_storage.store(otp_id, i_account, user.user_id, stored_token)
 
             env_info = self._admin_api.get_env_info()
 
@@ -258,11 +264,15 @@ class PortaSwitchAdapter(BSSAdapter):
             # We need the otp_id only for storing the i_account.
             otp_id = safely_extract_scalar_value(otp.otp_id)
 
-            i_account, user_ref = self._otp_storage.retrieve(otp_id)
+            i_account, user_ref, stored_token = self._otp_storage.retrieve(otp_id)
             if not i_account:
                 raise not_found_otp_code_error(otp.code)
 
-            data: dict = self._admin_api.verify_otp(otp_token=otp.code)
+            # WT-1686: verify under the same PortaSwitch admin session that
+            # created the OTP (decrypted from storage), so verification succeeds
+            # regardless of which replica handles this request.
+            bss_token = decrypt_secret(stored_token, self._portaswitch_settings.ADMIN_API_TOKEN) if stored_token else None
+            data: dict = self._admin_api.verify_otp(otp_token=otp.code, bss_token=bss_token)
             if user_ref not in self._otp_settings.IGNORE_ACCOUNTS and not data["success"]:
                 raise not_found_otp_code_error(otp.code)
 

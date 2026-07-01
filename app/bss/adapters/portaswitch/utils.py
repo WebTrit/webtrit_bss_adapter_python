@@ -1,8 +1,37 @@
 import base64
 import hashlib
+import logging
 import uuid
+from typing import Optional
+
+from cryptography.fernet import Fernet, InvalidToken
 
 from report_error import WebTritErrorException
+
+
+def _fernet_from_secret(secret: str) -> Fernet:
+    """Derive a Fernet cipher from an arbitrary secret string.
+
+    The 32-byte key is the SHA-256 of the secret, url-safe base64 encoded, so
+    every adapter replica sharing the same secret derives the same key.
+    """
+    key = base64.urlsafe_b64encode(hashlib.sha256(secret.encode("utf-8")).digest())
+    return Fernet(key)
+
+
+def encrypt_secret(plaintext: str, secret: str) -> str:
+    """Encrypt a short secret (e.g. an admin session token) for storage at rest."""
+    return _fernet_from_secret(secret).encrypt(plaintext.encode("utf-8")).decode("utf-8")
+
+
+def decrypt_secret(ciphertext: str, secret: str) -> Optional[str]:
+    """Decrypt a value produced by encrypt_secret. Returns None on any failure
+    (e.g. wrong/rotated key or a legacy plaintext record) so callers can fall back."""
+    try:
+        return _fernet_from_secret(secret).decrypt(ciphertext.encode("utf-8")).decode("utf-8")
+    except (InvalidToken, ValueError, TypeError):
+        logging.warning("Could not decrypt stored secret; ignoring it")
+        return None
 
 
 def extract_fault_code(error: WebTritErrorException) -> str:

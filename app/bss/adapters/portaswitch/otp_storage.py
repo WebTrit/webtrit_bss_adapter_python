@@ -9,11 +9,11 @@ from bss.dbs import TiedKeyValue
 class OtpStorage(ABC):
 
     @abstractmethod
-    def store(self, otp_id: str, i_account: Any, user_id: str) -> None:
+    def store(self, otp_id: str, i_account: Any, user_id: str, bss_token: Optional[str] = None) -> None:
         pass
 
     @abstractmethod
-    def retrieve(self, otp_id: str) -> Tuple[Any, Optional[str]]:
+    def retrieve(self, otp_id: str) -> Tuple[Any, Optional[str], Optional[str]]:
         pass
 
     @abstractmethod
@@ -27,11 +27,11 @@ class OtpStorageInMemory(OtpStorage):
         self._db = TiedKeyValue()
         logging.warning("OTP storage: in-process memory (not safe for multi-instance deployments)")
 
-    def store(self, otp_id: str, i_account: Any, user_id: str) -> None:
-        self._db[otp_id] = (i_account, user_id)
+    def store(self, otp_id: str, i_account: Any, user_id: str, bss_token: Optional[str] = None) -> None:
+        self._db[otp_id] = (i_account, user_id, bss_token)
 
-    def retrieve(self, otp_id: str) -> Tuple[Any, Optional[str]]:
-        return self._db.get(otp_id, (None, None))
+    def retrieve(self, otp_id: str) -> Tuple[Any, Optional[str], Optional[str]]:
+        return self._db.get(otp_id, (None, None, None))
 
     def delete(self, otp_id: str) -> None:
         self._db.pop(otp_id, None)
@@ -55,18 +55,19 @@ class OtpStorageFirestore(OtpStorage):
         self._ttl_minutes = ttl_minutes
         logging.info(f"OTP storage: Firestore collection '{collection_name}'")
 
-    def store(self, otp_id: str, i_account: Any, user_id: str) -> None:
+    def store(self, otp_id: str, i_account: Any, user_id: str, bss_token: Optional[str] = None) -> None:
         self._db[otp_id] = {
             "i_account": i_account,
             "user_id": user_id,
+            "bss_token": bss_token,
             "expires_at": datetime.now(UTC) + timedelta(minutes=self._ttl_minutes),
         }
 
-    def retrieve(self, otp_id: str) -> Tuple[Any, Optional[str]]:
+    def retrieve(self, otp_id: str) -> Tuple[Any, Optional[str], Optional[str]]:
         record = self._db.get(otp_id)
         if not record:
-            return None, None
-        return record.get("i_account"), record.get("user_id")
+            return None, None, None
+        return record.get("i_account"), record.get("user_id"), record.get("bss_token")
 
     def delete(self, otp_id: str) -> None:
         self._db.pop(otp_id, None)
