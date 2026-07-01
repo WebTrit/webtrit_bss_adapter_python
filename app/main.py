@@ -393,7 +393,7 @@ def verify_session_otp(
     responses={'500': {'model': GetSystemInfoInternalServerErrorErrorResponse}},
     tags=['general'],
 )
-def get_system_info(
+async def get_system_info(
         request: Request,
 ) -> (
         Union[GeneralSystemInfoResponse, GetSystemInfoInternalServerErrorErrorResponse]
