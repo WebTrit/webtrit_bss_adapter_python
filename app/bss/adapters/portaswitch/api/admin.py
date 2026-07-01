@@ -4,7 +4,7 @@ from typing import Optional
 from bss.adapters.portaswitch.config import PortaSwitchSettings
 from bss.adapters.portaswitch.types import PortaSwitchAdminUser
 from bss.adapters.portaswitch.utils import extract_fault_code
-from bss.http_api import AuthSessionData, HTTPAPIConnectorWithLogin
+from bss.http_api import AuthSessionData, HTTPAPIConnector, HTTPAPIConnectorWithLogin, OAuthSessionData
 from bss.models import DeliveryChannel
 from report_error import WebTritErrorException
 
@@ -182,22 +182,49 @@ class AdminAPI(HTTPAPIConnectorWithLogin):
             },
         )
 
-    def verify_otp(self, otp_token: str) -> dict:
+    def current_access_token(self) -> Optional[str]:
+        """Return the bearer token of the current admin API session, or None.
+
+        Used to pin OTP verification to the exact PortaSwitch admin session that
+        issued the OTP (see WT-1686): verify_otp only validates a code within its
+        creating session, and with multiple adapter replicas otp-create and
+        otp-verify may be handled by different replicas (different sessions).
+        """
+        session = self.get_auth_session(self._api_user)
+        return session.access_token if session else None
+
+    def verify_otp(self, otp_token: str, bss_token: Optional[str] = None) -> dict:
         """Requests PortaSwitch to verify the OTP token.
 
         Parameters:
             :otp_token (str): The OTP token to be vefiried.
+            :bss_token (str|None): The admin session bearer token under which the
+                OTP was created. PortaSwitch verify_otp only validates a code
+                within its creating session, so when provided we perform this
+                single call under that exact session instead of this replica's
+                own session (WT-1686). The token is applied per-request only —
+                SHARED_TOKENS is not mutated — so concurrent verifications on the
+                same replica do not race.
 
         Returns:
             dict: The API method execution result.
         """
+        params = {
+            "one_time_password": otp_token,
+            "operation": "General",
+        }
+        if bss_token:
+            return HTTPAPIConnector.send_rest_request(
+                self,
+                method="POST",
+                path="/rest/AccessControl/verify_otp",
+                json={"params": params},
+                auth_session=OAuthSessionData(access_token=bss_token),
+            )
         return self._send_request(
             module="AccessControl",
             method="verify_otp",
-            params={
-                "one_time_password": otp_token,
-                "operation": "General",
-            },
+            params=params,
         )
 
     def get_account_info(self, **params) -> dict:
