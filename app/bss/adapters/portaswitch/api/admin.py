@@ -12,6 +12,12 @@ from report_error import WebTritErrorException
 class AdminAPI(HTTPAPIConnectorWithLogin):
     """Provides an access to Admin realm of the PortaSwitch API."""
 
+    # Disable proactive token refresh: PortaSwitch may issue tokens with a TTL
+    # equal to the default 15-minute threshold, turning every admin call into a
+    # new Session/login. Expiry is still handled by the expired-token check in
+    # session_in_progress() and the auth_failed retry in _send_request().
+    REFRESH_TOKEN_IN_ADVANCE = 0
+
     def __init__(self, portaswitch_settings: PortaSwitchSettings) -> None:
         """The class constructor.
 
