@@ -30,6 +30,11 @@ class PortaSwitchSettings(BaseSettings):
     SIP_SERVER_HOST: str = "127.0.0.1"
     SIP_SERVER_PORT: int = 5060
     VERIFY_HTTPS: Optional[bool] = True
+    # Per-request timeout (seconds) for outbound PortaSwitch/PortaBilling API calls.
+    # Overrides HTTPAPIConnector.DEFAULT_REQUEST_TIMEOUT for PortaSwitch only, so a
+    # slow/unresponsive switch can't pin worker threads indefinitely (WT-1717).
+    # Configurable via PORTASWITCH_API_TIMEOUT; set empty to keep the base default.
+    API_TIMEOUT: Optional[float] = 25
     SIGNIN_CREDENTIALS: PortaSwitchSignInCredentialsType = PortaSwitchSignInCredentialsType.SELF_CARE
     CONTACTS_SELECTING: PortaSwitchContactsSelectingMode = PortaSwitchContactsSelectingMode.ACCOUNTS
     CONTACTS_SELECTING_EXTENSION_TYPES: Union[List[PortaSwitchExtensionType], str] = list(PortaSwitchExtensionType)
@@ -39,6 +44,21 @@ class PortaSwitchSettings(BaseSettings):
     HIDE_BALANCE_IN_USER_INFO: Optional[bool] = False
     SELF_CONFIG_PORTAL_URL: Optional[str] = None
     ALLOWED_ADDONS: Union[List[str], str] = []
+
+    @field_validator("API_TIMEOUT", mode='before')
+    @classmethod
+    def decode_api_timeout(cls, v: Union[str, float, int, None]) -> Optional[float]:
+        # Treat an empty/blank or non-positive value as "unset" so operators can
+        # fall back to the base HTTPAPIConnector.DEFAULT_REQUEST_TIMEOUT (e.g.
+        # PORTASWITCH_API_TIMEOUT="") and can't accidentally set a 0/negative
+        # timeout, which requests treats as fail-immediately rather than "no limit".
+        if v is None or (isinstance(v, str) and not v.strip()):
+            return None
+        try:
+            v = float(v)
+        except (TypeError, ValueError):
+            return None
+        return v if v > 0 else None
 
     @field_validator("CONTACTS_SELECTING_EXTENSION_TYPES", mode='before')
     @classmethod

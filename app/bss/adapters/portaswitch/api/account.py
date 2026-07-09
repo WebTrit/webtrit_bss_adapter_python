@@ -24,6 +24,8 @@ class AccountAPI(HTTPAPIConnector):
         super().__init__(portaswitch_settings.ACCOUNT_API_URL)
 
         self._verify_https = portaswitch_settings.VERIFY_HTTPS
+        if portaswitch_settings.API_TIMEOUT is not None:
+            self.DEFAULT_REQUEST_TIMEOUT = portaswitch_settings.API_TIMEOUT
 
     def __send_request(
             self, module: str, method: str, params: dict, stream: bool | None = None, access_token: str | None = None
