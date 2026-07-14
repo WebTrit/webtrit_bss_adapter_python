@@ -4,13 +4,13 @@ from typing import Optional
 from bss.adapters.portaswitch.config import PortaSwitchSettings
 from bss.adapters.portaswitch.types import PortaSwitchAdminUser
 from bss.adapters.portaswitch.utils import extract_fault_code
-from bss.http_api import AuthSessionData, HTTPAPIConnector, HTTPAPIConnectorWithLogin, OAuthSessionData
+from bss.async_http_api import AsyncHTTPAPIConnector, AsyncHTTPAPIConnectorWithLogin, OAuthSessionData
 from bss.models import DeliveryChannel
 from report_error import WebTritErrorException
 
 
-class AdminAPI(HTTPAPIConnectorWithLogin):
-    """Provides an access to Admin realm of the PortaSwitch API."""
+class AdminAPI(AsyncHTTPAPIConnectorWithLogin):
+    """Provides an access to Admin realm of the PortaSwitch API (async, WT-1720)."""
 
     # Disable proactive token refresh: PortaSwitch may issue tokens with a TTL
     # equal to the default 15-minute threshold, turning every admin call into a
@@ -26,6 +26,8 @@ class AdminAPI(HTTPAPIConnectorWithLogin):
         """
         super().__init__(portaswitch_settings.ADMIN_API_URL)
 
+        # TLS verification is applied at shared-client construction (httpx
+        # verify is client-level, not per-request); see AsyncHTTPAPIConnector.
         self._verify_https = portaswitch_settings.VERIFY_HTTPS
         if portaswitch_settings.API_TIMEOUT is not None:
             self.DEFAULT_REQUEST_TIMEOUT = portaswitch_settings.API_TIMEOUT
@@ -33,20 +35,7 @@ class AdminAPI(HTTPAPIConnectorWithLogin):
             user_id=portaswitch_settings.ADMIN_API_LOGIN, token=portaswitch_settings.ADMIN_API_TOKEN
         )
 
-    def add_auth_info(self, url: str, request_params: dict, auth_session: AuthSessionData) -> dict:
-        """Add authentication info and honor the VERIFY_HTTPS setting.
-
-        Extends the base implementation (which injects the Bearer token) so that
-        admin API requests respect the PORTASWITCH_VERIFY_HTTPS option, just like
-        AccountAPI does. Without this, requests default to verify=True and fail
-        against PortaBilling instances with a self-signed certificate.
-        """
-        request_params = super().add_auth_info(url, request_params, auth_session)
-        request_params["verify"] = self._verify_https
-
-        return request_params
-
-    def login(self, user: PortaSwitchAdminUser = None):
+    async def login(self, user: PortaSwitchAdminUser = None):
         """Performs a PortaBilling API user login.
 
         Parameters:
@@ -60,7 +49,7 @@ class AdminAPI(HTTPAPIConnectorWithLogin):
         """
         user = user or self._api_user
 
-        response = self._send_request(
+        response = await self._send_request(
             module="Session", method="login", params=dict(login=user.user_id, token=user.token), turn_off_login=True
         )
 
@@ -70,13 +59,13 @@ class AdminAPI(HTTPAPIConnectorWithLogin):
         logging.debug(f"Could not find an access token in the response {response}")
         raise ValueError("Could not find an access token in the response")
 
-    def refresh(self, user=None, auth_session=None):
+    async def refresh(self, user=None, auth_session=None):
         """Refreshes access token."""
-        session = self.login(self._api_user)
+        session = await self.login(self._api_user)
         self.store_auth_session(session, self._api_user)
         return session
 
-    def get_account_list(self, i_customer: int, **search_params):
+    async def get_account_list(self, i_customer: int, **search_params):
         """Returns information about accounts related to the input i_customer.
 
         Parameters:
@@ -100,13 +89,13 @@ class AdminAPI(HTTPAPIConnectorWithLogin):
         }
         params.update(search_params)
 
-        return self._send_request(
+        return await self._send_request(
             module="Account",
             method="get_account_list",
             params=params,
         )
 
-    def get_customer_info(self, i_customer: int) -> dict:
+    async def get_customer_info(self, i_customer: int) -> dict:
         """Returns information about the customer, including office type and hierarchy.
 
         Parameters:
@@ -116,13 +105,13 @@ class AdminAPI(HTTPAPIConnectorWithLogin):
             dict: The API method execution result containing customer_info with i_office_type
                   (1=none, 2=branch_office, 3=main_office) and i_main_office for branch offices.
         """
-        return self._send_request(
+        return await self._send_request(
             module="Customer",
             method="get_customer_info",
             params={"i_customer": i_customer},
         )
 
-    def get_customer_list(self, i_main_office: int) -> dict:
+    async def get_customer_list(self, i_main_office: int) -> dict:
         """Returns the list of branch customers under a main office customer.
 
         Parameters:
@@ -131,7 +120,7 @@ class AdminAPI(HTTPAPIConnectorWithLogin):
         Returns:
             dict: The API method execution result containing customer_list with branch office records.
         """
-        return self._send_request(
+        return await self._send_request(
             module="Customer",
             method="get_customer_list",
             params={
@@ -145,7 +134,7 @@ class AdminAPI(HTTPAPIConnectorWithLogin):
             },
         )
 
-    def get_extensions_list(self, i_customer: int, get_main_office_extensions: bool = False) -> dict:
+    async def get_extensions_list(self, i_customer: int, get_main_office_extensions: bool = False) -> dict:
         """Returns information about extensions related to the input i_customer.
         Parameters:
             i_customer: int: The identifier of a customer which accounts to be returned.
@@ -162,13 +151,13 @@ class AdminAPI(HTTPAPIConnectorWithLogin):
         }
         if get_main_office_extensions:
             params["get_main_office_extensions"] = 1
-        return self._send_request(
+        return await self._send_request(
             module="Customer",
             method="get_extensions_list",
             params=params,
         )
 
-    def create_otp(self, user_ref: str, delivery_channel: DeliveryChannel) -> dict:
+    async def create_otp(self, user_ref: str, delivery_channel: DeliveryChannel) -> dict:
         """Requests PortaSwitch to generate an OTP token.
 
         Parameters:
@@ -179,7 +168,7 @@ class AdminAPI(HTTPAPIConnectorWithLogin):
             :(dict): The API method execution result.
 
         """
-        return self._send_request(
+        return await self._send_request(
             module="AccessControl",
             method="create_otp",
             params={
@@ -201,7 +190,7 @@ class AdminAPI(HTTPAPIConnectorWithLogin):
         session = self.get_auth_session(self._api_user)
         return session.access_token if session else None
 
-    def verify_otp(self, otp_token: str, bss_token: Optional[str] = None) -> dict:
+    async def verify_otp(self, otp_token: str, bss_token: Optional[str] = None) -> dict:
         """Requests PortaSwitch to verify the OTP token.
 
         Parameters:
@@ -222,20 +211,22 @@ class AdminAPI(HTTPAPIConnectorWithLogin):
             "operation": "General",
         }
         if bss_token:
-            return HTTPAPIConnector.send_rest_request(
+            # Bypass the login flow and issue a single call under the supplied
+            # session by calling the base connector's send_rest_request directly.
+            return await AsyncHTTPAPIConnector.send_rest_request(
                 self,
                 method="POST",
                 path="/rest/AccessControl/verify_otp",
                 json={"params": params},
                 auth_session=OAuthSessionData(access_token=bss_token),
             )
-        return self._send_request(
+        return await self._send_request(
             module="AccessControl",
             method="verify_otp",
             params=params,
         )
 
-    def get_account_info(self, **params) -> dict:
+    async def get_account_info(self, **params) -> dict:
         """Returns the account_info by i_account.
 
         Parameters:
@@ -244,7 +235,7 @@ class AdminAPI(HTTPAPIConnectorWithLogin):
         Returns:
             dict: The API method execution result that contains an account info.
         """
-        return self._send_request(
+        return await self._send_request(
             module="Account",
             method="get_account_info",
             params={
@@ -255,7 +246,7 @@ class AdminAPI(HTTPAPIConnectorWithLogin):
             }
         )
 
-    def update_account(self, i_account: int, **account_info_fields) -> dict:
+    async def update_account(self, i_account: int, **account_info_fields) -> dict:
         """Updates account fields for the given i_account.
 
         Parameters:
@@ -265,7 +256,7 @@ class AdminAPI(HTTPAPIConnectorWithLogin):
         Returns:
             dict: The API method execution result.
         """
-        return self._send_request(
+        return await self._send_request(
             module="Account",
             method="update_account",
             params={
@@ -276,25 +267,25 @@ class AdminAPI(HTTPAPIConnectorWithLogin):
             },
         )
 
-    def get_env_info(self) -> dict:
+    async def get_env_info(self) -> dict:
         """Returns PortaSwitch environment info.
         Returns:
             dict: The API method execution result that contains an env info.
         """
-        response = self._send_request(module="Env", method="get_env_info", params={})
+        response = await self._send_request(module="Env", method="get_env_info", params={})
 
         return response.get("env_info", dict())
 
-    def get_version(self) -> Optional[str]:
+    async def get_version(self) -> Optional[str]:
         """Returns PortaSwitch version.
         Returns:
             str: The API method execution result that contains a PortaSwitch version.
         """
-        response = self._send_request(module="Generic", method="get_version", params={})
+        response = await self._send_request(module="Generic", method="get_version", params={})
 
         return response.get("version")
 
-    def _send_request(self, module: str, method: str, params: dict, turn_off_login: bool = False):
+    async def _send_request(self, module: str, method: str, params: dict, turn_off_login: bool = False):
         """Sends the Porta-Billing API method by means of HTTP POST request.
 
         Parameters:
@@ -310,7 +301,7 @@ class AdminAPI(HTTPAPIConnectorWithLogin):
 
         """
         try:
-            result = self.send_rest_request(
+            result = await self.send_rest_request(
                 method="POST",
                 path=f"/rest/{module}/{method}",
                 json={"params": params},
@@ -324,9 +315,9 @@ class AdminAPI(HTTPAPIConnectorWithLogin):
                     'Client.Session.check_auth.failed_to_process_access_token',
             ):
                 logging.warning(f"Unexpected session error from PBX: {error}. Trying to refresh access token...")
-                self.refresh()
+                await self.refresh()
 
-                result = self.send_rest_request(
+                result = await self.send_rest_request(
                     method="POST",
                     path=f"/rest/{module}/{method}",
                     json={"params": params},

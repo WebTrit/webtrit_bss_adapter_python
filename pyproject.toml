@@ -1,2 +1,6 @@
 [tool.black]
 line-length = 119
+
+[tool.pytest.ini_options]
+# pytest-asyncio: async unit tests use explicit @pytest.mark.asyncio markers (WT-1720)
+asyncio_mode = "strict"

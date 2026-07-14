@@ -1,9 +1,10 @@
+import asyncio
 import logging
 import re
 import uuid
-from concurrent.futures import ThreadPoolExecutor, as_completed
+from inspect import isawaitable
 from datetime import datetime, timedelta, UTC
-from typing import Final, Iterator, Optional, Dict, List
+from typing import AsyncIterator, Awaitable, Callable, Final, Optional, Dict, List
 
 import urllib3
 from jose.exceptions import ExpiredSignatureError, JWTError
@@ -76,6 +77,31 @@ from .utils import generate_otp_id, extract_fault_code, generate_hash_dictionary
 
 PORTASWITCH_VERSION_WITH_TOKEN: Final[str] = "MR128"
 
+#: Default fan-out concurrency for parallel PortaSwitch API calls (replaces the
+#: former ThreadPoolExecutor(max_workers=10) pools). WT-1720.
+FANOUT_LIMIT: Final[int] = 10
+
+
+async def _gather_limited(coros: List[Awaitable], limit: int = FANOUT_LIMIT,
+                          return_exceptions: bool = False) -> list:
+    """Run the given coroutines concurrently, capped at `limit` in flight.
+
+    Async replacement for ThreadPoolExecutor(max_workers=limit) + executor.map.
+    A FRESH semaphore is created per call, so nested fan-outs (e.g.
+    _get_all_accounts_by_customer invoked inside another fan-out) each get their
+    own budget and cannot dead-lock each other on a shared global semaphore.
+    Result order matches input order (like executor.map / asyncio.gather).
+    """
+    if not coros:
+        return []
+    sem = asyncio.Semaphore(limit)
+
+    async def _guard(coro: Awaitable):
+        async with sem:
+            return await coro
+
+    return await asyncio.gather(*(_guard(c) for c in coros), return_exceptions=return_exceptions)
+
 
 class PortaSwitchAdapter(BSSAdapter):
     """Bridges WebTrit Core with PortaSwitch APIs.
@@ -141,7 +167,7 @@ class PortaSwitchAdapter(BSSAdapter):
         """Returns the capabilities of this API adapter."""
         return self._cached_capabilities
 
-    def authenticate(self, user: UserInfo, password: str = None) -> SessionInfo:
+    async def authenticate(self, user: UserInfo, password: str = None) -> SessionInfo:
         """Authenticate a PortaSwitch account with login and password.
 
         Parameters:
@@ -159,11 +185,11 @@ class PortaSwitchAdapter(BSSAdapter):
             login_attr = "id" if is_sip_credentials else "login"
             password_attr = "h323_password" if is_sip_credentials else "password"
 
-            account_info = self._admin_api.get_account_info(**{login_attr: user.login}).get("account_info")
+            account_info = (await self._admin_api.get_account_info(**{login_attr: user.login})).get("account_info")
 
             # If the provided identifier refers to an alias, resolve to the master account
             if account_info and (master_id := account_info.get("i_master_account")):
-                account_info = self._admin_api.get_account_info(i_account=master_id).get("account_info")
+                account_info = (await self._admin_api.get_account_info(i_account=master_id)).get("account_info")
 
             if not account_info or account_info[password_attr] != password:
                 raise incorrect_credentials_error()
@@ -171,14 +197,14 @@ class PortaSwitchAdapter(BSSAdapter):
             if self._portaswitch_settings.ALLOWED_ADDONS:
                 self._check_allowed_addons(account_info)
 
-            if self._is_portaswitch_version_with_token():
-                token = self._get_or_create_api_token(account_info)
+            if await self._is_portaswitch_version_with_token():
+                token = await self._get_or_create_api_token(account_info)
                 if token:
-                    session_data = self._account_api.login(account_info["login"], token=token)
+                    session_data = await self._account_api.login(account_info["login"], token=token)
                 else:
-                    session_data = self._account_api.login(account_info["login"], account_info["password"])
+                    session_data = await self._account_api.login(account_info["login"], account_info["password"])
             else:
-                session_data = self._account_api.login(account_info["login"], account_info["password"], token=account_info["password"])
+                session_data = await self._account_api.login(account_info["login"], account_info["password"], token=account_info["password"])
 
             return SessionInfo(
                 user_id=UserId(str(account_info["i_account"])),
@@ -198,7 +224,7 @@ class PortaSwitchAdapter(BSSAdapter):
 
             raise error
 
-    def generate_otp(self, user: UserInfo) -> OTPCreateResponse:
+    async def generate_otp(self, user: UserInfo) -> OTPCreateResponse:
         """Requests PortaSwitch to generate and send an OTP code to the user.
 
         Parameters:
@@ -213,7 +239,7 @@ class PortaSwitchAdapter(BSSAdapter):
                 or OTP generation fails.
         """
         try:
-            account_info = self._admin_api.get_account_info(id=user.user_id).get("account_info")
+            account_info = (await self._admin_api.get_account_info(id=user.user_id)).get("account_info")
             if not account_info:
                 raise not_found_user_error(user.user_id)
 
@@ -221,7 +247,7 @@ class PortaSwitchAdapter(BSSAdapter):
                 self._check_allowed_addons(account_info)
 
             i_account = account_info.get("i_master_account", account_info["i_account"])
-            success: int = self._admin_api.create_otp(i_account, self.OTP_DELIVERY_CHANNEL)["success"]
+            success: int = (await self._admin_api.create_otp(i_account, self.OTP_DELIVERY_CHANNEL))["success"]
             if not success:
                 raise external_api_issue_error()
 
@@ -232,9 +258,10 @@ class PortaSwitchAdapter(BSSAdapter):
             # encrypted at rest (key derived from ADMIN_API_TOKEN).
             bss_token = self._admin_api.current_access_token()
             stored_token = encrypt_secret(bss_token, self._portaswitch_settings.ADMIN_API_TOKEN) if bss_token else None
-            self._otp_storage.store(otp_id, i_account, user.user_id, stored_token)
+            # OTP storage may be Firestore-backed (blocking I/O) — keep it off the loop.
+            await asyncio.to_thread(self._otp_storage.store, otp_id, i_account, user.user_id, stored_token)
 
-            env_info = self._admin_api.get_env_info()
+            env_info = await self._admin_api.get_env_info()
 
             return OTPCreateResponse(
                 otp_id=OtpId(otp_id), delivery_channel=self.OTP_DELIVERY_CHANNEL, delivery_from=env_info.get("email")
@@ -247,7 +274,7 @@ class PortaSwitchAdapter(BSSAdapter):
 
             raise error
 
-    def validate_otp(self, otp: OTPVerifyRequest) -> SessionInfo:
+    async def validate_otp(self, otp: OTPVerifyRequest) -> SessionInfo:
         """Validates the OTP code provided by the user and creates a session.
 
         Parameters:
@@ -264,7 +291,7 @@ class PortaSwitchAdapter(BSSAdapter):
             # We need the otp_id only for storing the i_account.
             otp_id = safely_extract_scalar_value(otp.otp_id)
 
-            i_account, user_ref, stored_token = self._otp_storage.retrieve(otp_id)
+            i_account, user_ref, stored_token = await asyncio.to_thread(self._otp_storage.retrieve, otp_id)
             if not i_account:
                 raise not_found_otp_code_error(otp.code)
 
@@ -272,14 +299,14 @@ class PortaSwitchAdapter(BSSAdapter):
             # created the OTP (decrypted from storage), so verification succeeds
             # regardless of which replica handles this request.
             bss_token = decrypt_secret(stored_token, self._portaswitch_settings.ADMIN_API_TOKEN) if stored_token else None
-            data: dict = self._admin_api.verify_otp(otp_token=otp.code, bss_token=bss_token)
+            data: dict = await self._admin_api.verify_otp(otp_token=otp.code, bss_token=bss_token)
             if user_ref not in self._otp_settings.IGNORE_ACCOUNTS and not data["success"]:
                 raise not_found_otp_code_error(otp.code)
 
-            self._otp_storage.delete(otp_id)
+            await asyncio.to_thread(self._otp_storage.delete, otp_id)
 
             i_account = str(i_account)
-            session_data = self._emulate_account_login(i_account)
+            session_data = await self._emulate_account_login(i_account)
 
             return SessionInfo(
                 user_id=UserId(i_account),
@@ -319,7 +346,7 @@ class PortaSwitchAdapter(BSSAdapter):
                 raise session_upgrade_needed_error()
             raise access_token_invalid_error()
 
-    def refresh_session(self, refresh_token: str) -> SessionInfo:
+    async def refresh_session(self, refresh_token: str) -> SessionInfo:
         """Refreshes the PortaSwitch account session.
 
         Parameters:
@@ -335,12 +362,12 @@ class PortaSwitchAdapter(BSSAdapter):
                 # On-demand session migration is enabled. We need to emulate account login to get a new access token
                 i_account = self._hash_dictionary.get(refresh_token, refresh_token)
                 logging.info(f"On-demand session migration is enabled. Trying to emulate {i_account} account login")
-                session_data = self._emulate_account_login(str(i_account))
+                session_data = await self._emulate_account_login(str(i_account))
             else:
-                session_data = self._account_api.refresh(refresh_token)
+                session_data = await self._account_api.refresh(refresh_token)
 
             access_token: str = session_data["access_token"]
-            account_info: dict = self._account_api.get_account_info(access_token=access_token)["account_info"]
+            account_info: dict = (await self._account_api.get_account_info(access_token=access_token))["account_info"]
 
             return SessionInfo(
                 user_id=UserId(str(account_info["i_account"])),
@@ -359,7 +386,7 @@ class PortaSwitchAdapter(BSSAdapter):
 
             raise error
 
-    def close_session(self, access_token: str) -> bool:
+    async def close_session(self, access_token: str) -> bool:
         """Closes the PortaSwitch account session.
 
         Parameters:
@@ -372,7 +399,7 @@ class PortaSwitchAdapter(BSSAdapter):
             WebTritErrorException: If the session is not found or cannot be closed.
         """
         try:
-            return self._account_api.logout(access_token=access_token)["success"] == 1
+            return (await self._account_api.logout(access_token=access_token))["success"] == 1
 
         except WebTritErrorException as error:
             fault_code = extract_fault_code(error)
@@ -381,7 +408,7 @@ class PortaSwitchAdapter(BSSAdapter):
 
             raise error
 
-    def retrieve_user(self, session: SessionInfo, user: UserInfo) -> EndUser:
+    async def retrieve_user(self, session: SessionInfo, user: UserInfo) -> EndUser:
         """Returns information about the PortaSwitch account in WebTrit representation.
 
         Parameters:
@@ -396,13 +423,14 @@ class PortaSwitchAdapter(BSSAdapter):
             WebTritErrorException: If the user is not found or the session is invalid.
         """
         try:
-            account_info: dict = self._account_api.get_account_info(
-                access_token=safely_extract_scalar_value(session.access_token)
-            )["account_info"]
-
-            aliases: list = self._account_api.get_alias_list(
-                access_token=safely_extract_scalar_value(session.access_token)
-            )["alias_list"]
+            access_token = safely_extract_scalar_value(session.access_token)
+            # Two independent read calls — fetch them concurrently on the loop.
+            account_info_resp, alias_resp = await asyncio.gather(
+                self._account_api.get_account_info(access_token=access_token),
+                self._account_api.get_alias_list(access_token=access_token),
+            )
+            account_info: dict = account_info_resp["account_info"]
+            aliases: list = alias_resp["alias_list"]
 
             return Serializer.get_end_user(
                 account_info,
@@ -419,7 +447,7 @@ class PortaSwitchAdapter(BSSAdapter):
 
             raise error
 
-    def retrieve_contacts(self, session: SessionInfo, user: UserInfo) -> list[ContactInfo]:
+    async def retrieve_contacts(self, session: SessionInfo, user: UserInfo) -> list[ContactInfo]:
         """Returns information about contacts based on the configured selection mode.
 
         Supports multiple selection modes: EXTENSIONS, ACCOUNTS, PHONEBOOK, or PHONE_DIRECTORY.
@@ -437,10 +465,10 @@ class PortaSwitchAdapter(BSSAdapter):
         """
         try:
             access_token = safely_extract_scalar_value(session.access_token)
-            account_info = self._account_api.get_account_info(access_token)["account_info"]
+            account_info = (await self._account_api.get_account_info(access_token))["account_info"]
             i_customer = int(account_info["i_customer"])
             i_account = int(account_info["i_account"])
-            main_i_customer, all_i_customers = self._get_office_customer_ids(i_customer)
+            main_i_customer, all_i_customers = await self._get_office_customer_ids(i_customer)
             is_hierarchy = len(all_i_customers) > 1
 
             contacts = []
@@ -450,16 +478,14 @@ class PortaSwitchAdapter(BSSAdapter):
                         type.value for type in
                         self._portaswitch_settings.CONTACTS_SELECTING_EXTENSION_TYPES
                     }
-                    with ThreadPoolExecutor(max_workers=min(10, len(all_i_customers))) as executor:
-                        accounts = [
-                            acc
-                            for accs in executor.map(self._get_all_accounts_by_customer, all_i_customers)
-                            for acc in accs
-                        ]
+                    accounts_per_customer = await _gather_limited(
+                        [self._get_all_accounts_by_customer(c) for c in all_i_customers]
+                    )
+                    accounts = [acc for accs in accounts_per_customer for acc in accs]
                     account_to_aliases = {account["i_account"]: account.get("alias_list", []) for account in accounts}
-                    extensions = self._admin_api.get_extensions_list(
+                    extensions = (await self._admin_api.get_extensions_list(
                         main_i_customer, get_main_office_extensions=is_hierarchy
-                    )["extensions_list"]
+                    ))["extensions_list"]
 
                     for ext in extensions:
                         if ext["type"] in allowed_ext_types and ext.get("i_account") != i_account:
@@ -467,20 +493,18 @@ class PortaSwitchAdapter(BSSAdapter):
                             contacts.append(Serializer.get_contact_info_by_extension(ext, aliases, i_account))
                 case PortaSwitchContactsSelectingMode.ACCOUNTS:
                     # Fetch accounts from all offices in the hierarchy
-                    with ThreadPoolExecutor(max_workers=min(10, len(all_i_customers))) as executor:
-                        accounts = [
-                            acc
-                            for accs in executor.map(self._get_all_accounts_by_customer, all_i_customers)
-                            for acc in accs
-                        ]
+                    accounts_per_customer = await _gather_limited(
+                        [self._get_all_accounts_by_customer(c) for c in all_i_customers]
+                    )
+                    accounts = [acc for accs in accounts_per_customer for acc in accs]
 
                     # When filtering by extension and in a hierarchy, use the unified extensions list
                     # (get_main_office_extensions returns extensions across all offices) as the filter
                     extension_i_accounts: set[int] = set()
                     if self._portaswitch_settings.CONTACTS_SKIP_WITHOUT_EXTENSION and is_hierarchy:
-                        ext_list = self._admin_api.get_extensions_list(
+                        ext_list = (await self._admin_api.get_extensions_list(
                             main_i_customer, get_main_office_extensions=True
-                        )["extensions_list"]
+                        ))["extensions_list"]
                         extension_i_accounts = {ext["i_account"] for ext in ext_list if ext.get("i_account")}
 
                     for account in accounts:
@@ -499,9 +523,9 @@ class PortaSwitchAdapter(BSSAdapter):
                     pb_page = 1
                     PHONEBOOK_BATCH = 1000
                     while True:
-                        batch = self._account_api.get_phonebook_list(
+                        batch = (await self._account_api.get_phonebook_list(
                             access_token, pb_page, PHONEBOOK_BATCH
-                        ).get('phonebook_rec_list', [])
+                        )).get('phonebook_rec_list', [])
                         phonebook.extend(batch)
                         if len(batch) < PHONEBOOK_BATCH:
                             break
@@ -515,7 +539,7 @@ class PortaSwitchAdapter(BSSAdapter):
                             phonebook_numbers.add(phone_number)
 
                     # Get account mapping only for phonebook numbers (on-demand)
-                    number_to_accounts = self._get_number_to_customer_accounts_map_for_numbers(phonebook_numbers)
+                    number_to_accounts = await self._get_number_to_customer_accounts_map_for_numbers(phonebook_numbers)
 
                     for record in phonebook:
                         # Normalize phone number by removing the '+' prefix
@@ -537,19 +561,19 @@ class PortaSwitchAdapter(BSSAdapter):
                             contacts.append(contact)
 
                 case PortaSwitchContactsSelectingMode.PHONE_DIRECTORY:
-                    phone_directories = self._account_api.get_phone_directory_list(access_token, 1, 100)[
+                    phone_directories = (await self._account_api.get_phone_directory_list(access_token, 1, 100))[
                         'phone_directory_list']
 
                     # Fetch each directory once, collect phone numbers and cache results
                     phone_directory_numbers = set()
                     fetched_directory_infos = {}
                     for directory in phone_directories:
-                        directory_info = self._account_api.get_phone_directory_info(
+                        directory_info = (await self._account_api.get_phone_directory_info(
                             access_token,
                             directory['i_ua_config_directory'],
                             1,
                             10_000
-                        )['phone_directory_info']
+                        ))['phone_directory_info']
                         fetched_directory_infos[directory['i_ua_config_directory']] = directory_info
                         for record in directory_info['directory_records']:
                             office_number = record.get("office_number", "").replace("+", "")
@@ -557,7 +581,7 @@ class PortaSwitchAdapter(BSSAdapter):
                                 phone_directory_numbers.add(office_number)
 
                     # Get account mapping only for phone directory numbers (on-demand)
-                    number_to_accounts = self._get_number_to_customer_accounts_map_for_numbers(phone_directory_numbers)
+                    number_to_accounts = await self._get_number_to_customer_accounts_map_for_numbers(phone_directory_numbers)
 
                     for directory in phone_directories:
                         directory_info = fetched_directory_infos[directory['i_ua_config_directory']]
@@ -596,7 +620,7 @@ class PortaSwitchAdapter(BSSAdapter):
 
             raise error
 
-    def retrieve_contacts_v2(
+    async def retrieve_contacts_v2(
             self, session: SessionInfo,
             user: UserInfo,
             search: Optional[str] = None,
@@ -623,10 +647,10 @@ class PortaSwitchAdapter(BSSAdapter):
         """
         try:
             access_token = safely_extract_scalar_value(session.access_token)
-            account_info = self._account_api.get_account_info(access_token)["account_info"]
+            account_info = (await self._account_api.get_account_info(access_token))["account_info"]
             i_customer = int(account_info["i_customer"])
             i_account = int(account_info["i_account"])
-            main_i_customer, all_i_customers = self._get_office_customer_ids(i_customer)
+            main_i_customer, all_i_customers = await self._get_office_customer_ids(i_customer)
             is_hierarchy = len(all_i_customers) > 1
 
             # Normalize and prepare phone numbers if provided
@@ -637,27 +661,27 @@ class PortaSwitchAdapter(BSSAdapter):
                         continue
                     normalized_phone_numbers.add(number.replace("+", "").strip())
 
-            def _enrich_with_aliases(account: dict) -> dict:
+            async def _enrich_with_aliases(account: dict) -> dict:
                 """Re-fetch account via get_account_list to populate alias_list (additional numbers).
                 get_account_info omits alias_list; get_account_list includes it via with_aliases=1."""
                 if account.get("id") and account.get("i_customer"):
                     try:
-                        enriched = self._admin_api.get_account_list(
+                        enriched = (await self._admin_api.get_account_list(
                             int(account["i_customer"]), id=account["id"]
-                        ).get("account_list", [])
+                        )).get("account_list", [])
                         if enriched:
                             return enriched[0]
                     except Exception as e:
                         logging.debug(f"Failed to enrich account {account.get('i_account')} with aliases: {e}")
                 return account
 
-            def _resolve_master(account: dict) -> dict:
+            async def _resolve_master(account: dict) -> dict:
                 """Follow i_master_account to the real owner account, enriched with alias_list."""
                 if master_id := account.get("i_master_account"):
                     try:
-                        master = self._admin_api.get_account_info(i_account=master_id).get("account_info")
+                        master = (await self._admin_api.get_account_info(i_account=master_id)).get("account_info")
                         if master:
-                            return _enrich_with_aliases(master)
+                            return await _enrich_with_aliases(master)
                     except Exception as e:
                         logging.debug(f"Failed to resolve master account {master_id}: {e}")
                 return account
@@ -667,9 +691,9 @@ class PortaSwitchAdapter(BSSAdapter):
                 # Build extension number → i_account index once for all customers
                 ext_number_to_i_account: dict[str, int] = {}
                 try:
-                    extensions = self._admin_api.get_extensions_list(
+                    extensions = (await self._admin_api.get_extensions_list(
                         main_i_customer, get_main_office_extensions=is_hierarchy
-                    )["extensions_list"]
+                    ))["extensions_list"]
                     ext_number_to_i_account = {
                         ext["id"]: int(ext["i_account"])
                         for ext in extensions
@@ -680,14 +704,14 @@ class PortaSwitchAdapter(BSSAdapter):
 
                 found_accounts: dict[int, dict] = {}  # keyed by i_account to deduplicate
 
-                def _lookup_number(number: str) -> dict[int, dict]:
+                async def _lookup_number(number: str) -> dict[int, dict]:
                     result: dict[int, dict] = {}
                     # 1. Search by main number
                     for cust_id in all_i_customers:
                         try:
-                            accounts = self._admin_api.get_account_list(cust_id, id=number)
+                            accounts = await self._admin_api.get_account_list(cust_id, id=number)
                             for account in (accounts.get("account_list", []) or []):
-                                resolved = _resolve_master(account)
+                                resolved = await _resolve_master(account)
                                 result[int(resolved["i_account"])] = resolved
                         except Exception as e:
                             logging.debug(f"Failed to fetch accounts for phone number {number} in customer {cust_id}: {e}")
@@ -696,21 +720,23 @@ class PortaSwitchAdapter(BSSAdapter):
                         ext_i_account = ext_number_to_i_account[number]
                         if ext_i_account not in result:
                             try:
-                                account = self._admin_api.get_account_info(i_account=ext_i_account).get("account_info")
+                                account = (await self._admin_api.get_account_info(i_account=ext_i_account)).get("account_info")
                                 if account:
-                                    account = _enrich_with_aliases(account)
+                                    account = await _enrich_with_aliases(account)
                                     result[int(account["i_account"])] = account
                             except Exception as e:
                                 logging.debug(f"Failed to fetch account for extension number {number}: {e}")
                     return result
 
-                with ThreadPoolExecutor(max_workers=min(10, len(normalized_phone_numbers))) as executor:
-                    futures = {executor.submit(_lookup_number, n): n for n in normalized_phone_numbers}
-                    for future in as_completed(futures):
-                        try:
-                            found_accounts.update(future.result())
-                        except Exception as e:
-                            logging.debug(f"Parallel number lookup error for {futures[future]}: {e}")
+                numbers_list = list(normalized_phone_numbers)
+                lookup_results = await _gather_limited(
+                    [_lookup_number(n) for n in numbers_list], return_exceptions=True
+                )
+                for number, res in zip(numbers_list, lookup_results):
+                    if isinstance(res, Exception):
+                        logging.debug(f"Parallel number lookup error for {number}: {res}")
+                        continue
+                    found_accounts.update(res)
 
                 # 3. For alias/additional numbers not yet matched, try a direct account info lookup
                 found_numbers: set[str] = set()
@@ -719,11 +745,11 @@ class PortaSwitchAdapter(BSSAdapter):
                     for alias in account.get("alias_list", []):
                         found_numbers.add(alias.get("id", ""))
 
-                def _lookup_alias(number: str) -> tuple[int, dict] | None:
+                async def _lookup_alias(number: str) -> tuple[int, dict] | None:
                     try:
-                        account = self._admin_api.get_account_info(id=number).get("account_info")
+                        account = (await self._admin_api.get_account_info(id=number)).get("account_info")
                         if account:
-                            resolved = _resolve_master(account)
+                            resolved = await _resolve_master(account)
                             return int(resolved["i_account"]), resolved
                     except Exception as e:
                         logging.debug(f"Account not found for alias/additional number {number}: {e}")
@@ -731,14 +757,15 @@ class PortaSwitchAdapter(BSSAdapter):
 
                 remaining = normalized_phone_numbers - found_numbers
                 if remaining:
-                    with ThreadPoolExecutor(max_workers=min(10, len(remaining))) as executor:
-                        for res in as_completed({executor.submit(_lookup_alias, n): n for n in remaining}):
-                            try:
-                                pair = res.result()
-                                if pair is not None:
-                                    found_accounts[pair[0]] = pair[1]
-                            except Exception as e:
-                                logging.debug(f"Alias lookup error: {e}")
+                    alias_results = await _gather_limited(
+                        [_lookup_alias(n) for n in remaining], return_exceptions=True
+                    )
+                    for pair in alias_results:
+                        if isinstance(pair, Exception):
+                            logging.debug(f"Alias lookup error: {pair}")
+                            continue
+                        if pair is not None:
+                            found_accounts[pair[0]] = pair[1]
 
                 contacts: list[ContactInfo] = [
                     Serializer.get_contact_info_by_account(account, i_account)
@@ -775,9 +802,9 @@ class PortaSwitchAdapter(BSSAdapter):
                     }
 
                     # For EXTENSIONS mode, we need to get extensions first
-                    extensions = self._admin_api.get_extensions_list(
+                    extensions = (await self._admin_api.get_extensions_list(
                         main_i_customer, get_main_office_extensions=is_hierarchy
-                    )["extensions_list"]
+                    ))["extensions_list"]
 
                     # Filter extensions by allowed types and exclude current user
                     filtered_extensions = [
@@ -795,23 +822,24 @@ class PortaSwitchAdapter(BSSAdapter):
                         ]
 
                     # Fetch aliases only for extensions that survived filtering
-                    def _get_aliases_for_ext(ext):
+                    async def _get_aliases_for_ext(ext):
                         i_acc = ext.get("i_account")
                         if not i_acc:
                             return []
                         try:
-                            account = self._admin_api.get_account_info(
+                            account = (await self._admin_api.get_account_info(
                                 i_account=int(i_acc)
-                            ).get("account_info")
+                            )).get("account_info")
                             if account:
-                                return _enrich_with_aliases(account).get("alias_list", [])
+                                return (await _enrich_with_aliases(account)).get("alias_list", [])
                         except Exception as e:
                             logging.debug(f"Failed to fetch aliases for extension {ext.get('id')}: {e}")
                         return []
 
                     if filtered_extensions:
-                        with ThreadPoolExecutor(max_workers=min(10, len(filtered_extensions))) as executor:
-                            aliases_per_ext = list(executor.map(_get_aliases_for_ext, filtered_extensions))
+                        aliases_per_ext = await _gather_limited(
+                            [_get_aliases_for_ext(ext) for ext in filtered_extensions]
+                        )
                         for ext, aliases in zip(filtered_extensions, aliases_per_ext):
                             contacts.append(Serializer.get_contact_info_by_extension(ext, aliases, i_account))
 
@@ -846,9 +874,9 @@ class PortaSwitchAdapter(BSSAdapter):
                     # (get_main_office_extensions returns extensions across all offices) as the filter
                     extension_i_accounts: set[int] = set()
                     if self._portaswitch_settings.CONTACTS_SKIP_WITHOUT_EXTENSION and is_hierarchy:
-                        ext_list = self._admin_api.get_extensions_list(
+                        ext_list = (await self._admin_api.get_extensions_list(
                             main_i_customer, get_main_office_extensions=True
-                        )["extensions_list"]
+                        ))["extensions_list"]
                         extension_i_accounts = {ext["i_account"] for ext in ext_list if ext.get("i_account")}
 
                     MAX_API_LIMIT = 1000
@@ -892,27 +920,28 @@ class PortaSwitchAdapter(BSSAdapter):
                             ]
                         ]
 
-                        def _fetch_field(task):
+                        async def _fetch_field(task):
                             cust_id, param, value = task
-                            resp = self._admin_api.get_account_list(
+                            resp = await self._admin_api.get_account_list(
                                 cust_id, limit=search_fetch_limit, offset=0, **{param: value}
                             )
                             if isinstance(resp, dict):
                                 return resp.get("account_list") or [], resp.get("total", 0)
                             return [], 0
 
-                        with ThreadPoolExecutor(max_workers=min(10, len(search_tasks))) as executor:
-                            for accs, field_total in executor.map(_fetch_field, search_tasks):
-                                for account in accs:
-                                    accounts_dict[account["i_account"]] = account
-                                if field_total > search_total_from_api:
-                                    search_total_from_api = field_total
+                        for accs, field_total in await _gather_limited(
+                            [_fetch_field(t) for t in search_tasks]
+                        ):
+                            for account in accs:
+                                accounts_dict[account["i_account"]] = account
+                            if field_total > search_total_from_api:
+                                search_total_from_api = field_total
 
                         # Also search by extension number (short dial / extension_id)
                         try:
-                            extensions = self._admin_api.get_extensions_list(
+                            extensions = (await self._admin_api.get_extensions_list(
                                 main_i_customer, get_main_office_extensions=is_hierarchy
-                            )["extensions_list"]
+                            ))["extensions_list"]
                             search_lower = search.lower()
                             missing_ext_i_accounts = [
                                 int(ext["i_account"])
@@ -922,22 +951,23 @@ class PortaSwitchAdapter(BSSAdapter):
                                 and int(ext["i_account"]) not in accounts_dict
                             ]
 
-                            def _fetch_ext_account(i_acc):
+                            async def _fetch_ext_account(i_acc):
                                 try:
-                                    account = self._admin_api.get_account_info(
+                                    account = (await self._admin_api.get_account_info(
                                         i_account=i_acc
-                                    ).get("account_info")
+                                    )).get("account_info")
                                     if account:
-                                        return _enrich_with_aliases(account)
+                                        return await _enrich_with_aliases(account)
                                 except Exception as e:
                                     logging.debug(f"Failed to fetch account for extension i_account={i_acc}: {e}")
                                 return None
 
                             if missing_ext_i_accounts:
-                                with ThreadPoolExecutor(max_workers=min(10, len(missing_ext_i_accounts))) as executor:
-                                    for account in executor.map(_fetch_ext_account, missing_ext_i_accounts):
-                                        if account:
-                                            accounts_dict[int(account["i_account"])] = account
+                                for account in await _gather_limited(
+                                    [_fetch_ext_account(i_acc) for i_acc in missing_ext_i_accounts]
+                                ):
+                                    if account:
+                                        accounts_dict[int(account["i_account"])] = account
                         except Exception as e:
                             logging.debug(f"Failed to fetch extensions for search: {e}")
 
@@ -946,11 +976,11 @@ class PortaSwitchAdapter(BSSAdapter):
                         search_stripped = search.replace("+", "").strip()
                         if search_stripped:
                             try:
-                                alias_account = self._admin_api.get_account_info(
+                                alias_account = (await self._admin_api.get_account_info(
                                     id=search_stripped
-                                ).get("account_info")
+                                )).get("account_info")
                                 if alias_account and alias_account.get("i_master_account"):
-                                    resolved = _resolve_master(alias_account)
+                                    resolved = await _resolve_master(alias_account)
                                     i_acc = int(resolved["i_account"])
                                     if i_acc not in accounts_dict:
                                         accounts_dict[i_acc] = resolved
@@ -960,15 +990,10 @@ class PortaSwitchAdapter(BSSAdapter):
                         accounts = list(accounts_dict.values())
                     elif is_hierarchy:
                         # Multi-customer: fetch all offices in parallel and paginate in-memory
-                        def _fetch_customer_accounts(cust_id):
-                            return self._get_all_accounts_by_customer(cust_id)
-
-                        with ThreadPoolExecutor(max_workers=min(10, len(all_i_customers))) as executor:
-                            accounts = [
-                                acc
-                                for accs in executor.map(_fetch_customer_accounts, all_i_customers)
-                                for acc in accs
-                            ]
+                        accounts_per_customer = await _gather_limited(
+                            [self._get_all_accounts_by_customer(c) for c in all_i_customers]
+                        )
+                        accounts = [acc for accs in accounts_per_customer for acc in accs]
                     else:
                         # Single customer: use API-level pagination for efficiency.
                         # PortaBilling's documented per-call maximum is 1000; requesting more silently
@@ -977,7 +1002,7 @@ class PortaSwitchAdapter(BSSAdapter):
                         if items_per_page >= MAX_API_LIMIT:
                             # Page size at or above PortaBilling's per-request maximum: fetch all accounts
                             # in chunks of 1000 and paginate in-memory.
-                            accounts = self._get_all_accounts_by_customer(main_i_customer)
+                            accounts = await self._get_all_accounts_by_customer(main_i_customer)
                             total_count_from_api = 0
                         else:
                             # Normal page: loop until we have exactly `target` filtered accounts.
@@ -995,7 +1020,7 @@ class PortaSwitchAdapter(BSSAdapter):
                             total_count_from_api = 0
                             while len(accounts) < target:
                                 needed = target - len(accounts)
-                                result = self._admin_api.get_account_list(
+                                result = await self._admin_api.get_account_list(
                                     main_i_customer,
                                     limit=min(needed + FILTER_BUFFER, MAX_API_LIMIT),
                                     offset=fetch_offset,
@@ -1063,12 +1088,12 @@ class PortaSwitchAdapter(BSSAdapter):
                                        self._portaswitch_settings.CONTACTS_CUSTOM]
                     custom_contacts_count = len(custom_contacts)
 
-                    def _build_phonebook_contacts(phonebook_records):
+                    async def _build_phonebook_contacts(phonebook_records):
                         pb_numbers = {
                             r.get("phone_number", "").replace("+", "")
                             for r in phonebook_records if r.get("phone_number")
                         }
-                        num_to_acc = self._get_number_to_customer_accounts_map_for_numbers(pb_numbers)
+                        num_to_acc = await self._get_number_to_customer_accounts_map_for_numbers(pb_numbers)
                         result = []
                         for record in phonebook_records:
                             pb_number = record.get("phone_number").replace("+", "")
@@ -1091,15 +1116,15 @@ class PortaSwitchAdapter(BSSAdapter):
                         pb_page = 1
                         PHONEBOOK_BATCH = 1000
                         while True:
-                            batch = self._account_api.get_phonebook_list(
+                            batch = (await self._account_api.get_phonebook_list(
                                 access_token, pb_page, PHONEBOOK_BATCH
-                            ).get('phonebook_rec_list', [])
+                            )).get('phonebook_rec_list', [])
                             phonebook.extend(batch)
                             if len(batch) < PHONEBOOK_BATCH:
                                 break
                             pb_page += 1
 
-                        contacts = _build_phonebook_contacts(phonebook)
+                        contacts = await _build_phonebook_contacts(phonebook)
                         search_lower = search.lower()
                         filtered_custom = [
                             c for c in custom_contacts
@@ -1130,22 +1155,22 @@ class PortaSwitchAdapter(BSSAdapter):
                             else:
                                 pb_offset = (page - 1) * items_per_page - custom_contacts_count
                                 pb_limit = items_per_page
-                            pb_result = self._account_api.get_phonebook_list(
+                            pb_result = await self._account_api.get_phonebook_list(
                                 access_token, page, items_per_page,
                                 offset=pb_offset, limit=pb_limit,
                             )
                         else:
-                            pb_result = self._account_api.get_phonebook_list(access_token, page, items_per_page)
+                            pb_result = await self._account_api.get_phonebook_list(access_token, page, items_per_page)
                         phonebook = pb_result.get('phonebook_rec_list', [])
                         pb_total = pb_result.get('total', 0)
 
-                        contacts = _build_phonebook_contacts(phonebook)
+                        contacts = await _build_phonebook_contacts(phonebook)
                         if page == 1:
                             contacts = custom_contacts + contacts
                         total_count = pb_total + custom_contacts_count
 
                 case PortaSwitchContactsSelectingMode.PHONE_DIRECTORY:
-                    phone_directories = self._account_api.get_phone_directory_list(access_token, 1, 100)[
+                    phone_directories = (await self._account_api.get_phone_directory_list(access_token, 1, 100))[
                         'phone_directory_list']
 
                     # Single pass: collect numbers and cache directory infos to avoid double-fetching
@@ -1153,9 +1178,9 @@ class PortaSwitchAdapter(BSSAdapter):
                     directory_infos = {}
                     for directory in phone_directories:
                         dir_id = directory['i_ua_config_directory']
-                        directory_info = self._account_api.get_phone_directory_info(
+                        directory_info = (await self._account_api.get_phone_directory_info(
                             access_token, dir_id, 1, 10_000
-                        )['phone_directory_info']
+                        ))['phone_directory_info']
                         directory_infos[dir_id] = directory_info
                         for record in directory_info['directory_records']:
                             office_number = record.get("office_number", "").replace("+", "")
@@ -1163,7 +1188,7 @@ class PortaSwitchAdapter(BSSAdapter):
                                 phone_directory_numbers.add(office_number)
 
                     # Get account mapping only for phone directory numbers (on-demand)
-                    number_to_accounts = self._get_number_to_customer_accounts_map_for_numbers(phone_directory_numbers)
+                    number_to_accounts = await self._get_number_to_customer_accounts_map_for_numbers(phone_directory_numbers)
 
                     # Build contacts using cached directory infos — no second API call
                     for directory in phone_directories:
@@ -1227,7 +1252,7 @@ class PortaSwitchAdapter(BSSAdapter):
 
             raise error
 
-    def retrieve_contact_by_user_id(self, session: SessionInfo, user: UserInfo, user_id: str) -> ContactInfo:
+    async def retrieve_contact_by_user_id(self, session: SessionInfo, user: UserInfo, user_id: str) -> ContactInfo:
         """Retrieve contact information by user ID in the PortaSwitch system.
 
         Parameters:
@@ -1241,13 +1266,13 @@ class PortaSwitchAdapter(BSSAdapter):
         Raises:
             WebTritErrorException: If no account exists with the specified ID.
         """
-        account_info = self._admin_api.get_account_info(i_account=int(user_id)).get("account_info")
+        account_info = (await self._admin_api.get_account_info(i_account=int(user_id))).get("account_info")
         if not account_info:
             raise not_found_contact_error(user_id)
 
         return Serializer.get_contact_info_by_account(account_info, int(user.user_id))
 
-    def retrieve_calls(
+    async def retrieve_calls(
             self,
             session: SessionInfo,
             user: UserInfo,
@@ -1277,7 +1302,7 @@ class PortaSwitchAdapter(BSSAdapter):
             time_from: datetime = time_from if time_from else datetime(1970, 1, 1)
             time_to: datetime = time_to if time_to else datetime(9000, 1, 1)
 
-            result: dict = self._account_api.get_xdr_list(
+            result: dict = await self._account_api.get_xdr_list(
                 access_token=safely_extract_scalar_value(session.access_token),
                 page=page,
                 items_per_page=items_per_page,
@@ -1294,7 +1319,7 @@ class PortaSwitchAdapter(BSSAdapter):
 
             raise error
 
-    def retrieve_call_recording(self, session: SessionInfo, call_recording: CallRecordingId) -> tuple[str, Iterator]:
+    async def retrieve_call_recording(self, session: SessionInfo, call_recording: CallRecordingId) -> tuple[str, AsyncIterator]:
         """Returns the binary representation of a recorded call.
 
         Parameters:
@@ -1310,7 +1335,7 @@ class PortaSwitchAdapter(BSSAdapter):
         """
         recording_id = safely_extract_scalar_value(call_recording)
         try:
-            return self._account_api.get_call_recording(
+            return await self._account_api.get_call_recording(
                 access_token=safely_extract_scalar_value(session.access_token), recording_id=recording_id
             )
 
@@ -1323,7 +1348,7 @@ class PortaSwitchAdapter(BSSAdapter):
 
             raise error
 
-    def retrieve_voicemails(self, session: SessionInfo, user: UserInfo) -> UserVoicemailsResponse:
+    async def retrieve_voicemails(self, session: SessionInfo, user: UserInfo) -> UserVoicemailsResponse:
         """Returns the user's voicemail messages.
 
         Parameters:
@@ -1337,7 +1362,7 @@ class PortaSwitchAdapter(BSSAdapter):
             WebTritErrorException: If the user is not found or the session is invalid.
         """
         try:
-            mailbox_messages = self._account_api.get_mailbox_messages(
+            mailbox_messages = await self._account_api.get_mailbox_messages(
                 safely_extract_scalar_value(session.access_token)
             )
             voicemail_messages = [Serializer.get_voicemail_message(message) for message in mailbox_messages]
@@ -1355,7 +1380,7 @@ class PortaSwitchAdapter(BSSAdapter):
 
             raise error
 
-    def retrieve_voicemail_message_details(
+    async def retrieve_voicemail_message_details(
             self, session: SessionInfo, user: UserInfo, message_id: str
     ) -> VoicemailMessageDetails:
         """Returns detailed information about a specific voicemail message.
@@ -1372,7 +1397,7 @@ class PortaSwitchAdapter(BSSAdapter):
             WebTritErrorException: If the user is not found or the session is invalid.
         """
         try:
-            message_details = self._account_api.get_mailbox_message_details(
+            message_details = await self._account_api.get_mailbox_message_details(
                 safely_extract_scalar_value(session.access_token), message_id
             )
 
@@ -1387,9 +1412,9 @@ class PortaSwitchAdapter(BSSAdapter):
 
             raise error
 
-    def retrieve_voicemail_message_attachment(
+    async def retrieve_voicemail_message_attachment(
             self, session: SessionInfo, message_id: str, file_format: str
-    ) -> tuple[str, Iterator]:
+    ) -> tuple[str, AsyncIterator]:
         """
         Retrieve the binary attachment of a voicemail message.
 
@@ -1407,7 +1432,7 @@ class PortaSwitchAdapter(BSSAdapter):
             raise unsupported_file_format_error()
 
         try:
-            return self._account_api.get_mailbox_message_attachment(
+            return await self._account_api.get_mailbox_message_attachment(
                 safely_extract_scalar_value(session.access_token),
                 message_id,
                 file_format or PortaSwitchMailboxMessageAttachmentFormat.WAV.value,
@@ -1422,7 +1447,7 @@ class PortaSwitchAdapter(BSSAdapter):
 
             raise error
 
-    def patch_voicemail_message(
+    async def patch_voicemail_message(
             self, session: SessionInfo, message_id: str, body: UserVoicemailMessagePatch
     ) -> UserVoicemailMessagePatch:
         """Update attributes for a user's voicemail message.
@@ -1441,7 +1466,7 @@ class PortaSwitchAdapter(BSSAdapter):
         seen = body.seen
 
         try:
-            self._account_api.set_mailbox_message_flag(
+            await self._account_api.set_mailbox_message_flag(
                 safely_extract_scalar_value(session.access_token),
                 message_id,
                 PortaSwitchMailboxMessageFlag.SEEN,
@@ -1459,7 +1484,7 @@ class PortaSwitchAdapter(BSSAdapter):
 
             raise error
 
-    def delete_voicemail_message(self, session: SessionInfo, message_id: str) -> None:
+    async def delete_voicemail_message(self, session: SessionInfo, message_id: str) -> None:
         """Delete an existing voicemail message.
 
         Parameters:
@@ -1470,7 +1495,7 @@ class PortaSwitchAdapter(BSSAdapter):
             WebTritErrorException: If the user is not found or the session is invalid.
         """
         try:
-            self._account_api.delete_mailbox_message(safely_extract_scalar_value(session.access_token), message_id)
+            await self._account_api.delete_mailbox_message(safely_extract_scalar_value(session.access_token), message_id)
 
         except WebTritErrorException as error:
             fault_code = extract_fault_code(error)
@@ -1509,7 +1534,7 @@ class PortaSwitchAdapter(BSSAdapter):
         """
         raise NotImplementedError()
 
-    def signup(self, user_data, tenant_id: str = None) -> SessionResponse:
+    async def signup(self, user_data, tenant_id: str = None) -> SessionResponse:
         """Complete the sign-up process using existing PortaSwitch access tokens.
 
         Parameters:
@@ -1530,7 +1555,7 @@ class PortaSwitchAdapter(BSSAdapter):
             raise missing_tokens_error()
 
         try:
-            account_info = self._account_api.get_account_info(access_token=access_token)["account_info"]
+            account_info = (await self._account_api.get_account_info(access_token=access_token))["account_info"]
 
             return SessionResponse(
                 user_id=UserId(str(account_info["i_account"])),
@@ -1548,7 +1573,7 @@ class PortaSwitchAdapter(BSSAdapter):
         # PortaSwitch accounts cannot be deleted via the Adapter.
         pass
 
-    def custom_method_public(
+    async def custom_method_public(
             self,
             method_name: str,
             data: CustomRequest,
@@ -1560,11 +1585,13 @@ class PortaSwitchAdapter(BSSAdapter):
         if method := getattr(self, attr_name, None):
             logging.debug(f"Processing custom public method {method_name} with {data} request")
 
-            return method(data=data, lang=lang)
+            result = method(data=data, lang=lang)
+            # Handlers are dispatched dynamically and may be sync or async.
+            return await result if isawaitable(result) else result
         else:
             raise method_not_found_error(method_name)
 
-    def custom_method_private(
+    async def custom_method_private(
             self,
             session: SessionInfo,
             user_id: str,
@@ -1578,15 +1605,17 @@ class PortaSwitchAdapter(BSSAdapter):
         if method := getattr(self, attr_name, None):
             logging.debug(f"Processing custom private method {method_name} from user {user_id} with {data} request")
 
-            return method(user_id=user_id, data=data, lang=lang)
+            result = method(user_id=user_id, data=data, lang=lang)
+            # Handlers are dispatched dynamically and may be sync or async.
+            return await result if isawaitable(result) else result
         else:
             raise method_not_found_error(method_name)
 
     # region custom methods handlers
 
-    def _custom_pages(self, user_id: str, data: CustomRequest, lang: str = None) -> CustomResponse:
+    async def _custom_pages(self, user_id: str, data: CustomRequest, lang: str = None) -> CustomResponse:
         _ = get_translation_func(lang)
-        session_data = self._emulate_account_login(user_id)
+        session_data = await self._emulate_account_login(user_id)
 
         pages = []
         if self._portaswitch_settings.SELF_CONFIG_PORTAL_URL:
@@ -1602,8 +1631,8 @@ class PortaSwitchAdapter(BSSAdapter):
 
         return CustomResponse(pages=pages)
 
-    def _external_page_access_token(self, user_id: str, data: CustomRequest, lang: str = None) -> CustomResponse:
-        session_data = self._emulate_account_login(user_id)
+    async def _external_page_access_token(self, user_id: str, data: CustomRequest, lang: str = None) -> CustomResponse:
+        session_data = await self._emulate_account_login(user_id)
 
         return CustomResponse(
             access_token=AccessToken(session_data['access_token']),
@@ -1636,7 +1665,7 @@ class PortaSwitchAdapter(BSSAdapter):
         if not allowed_addons.intersection(assigned_addon_names):
             raise addon_required_error()
 
-    def _get_number_to_customer_accounts_map_for_numbers(self, target_numbers: set[str]) -> dict[str, dict]:
+    async def _get_number_to_customer_accounts_map_for_numbers(self, target_numbers: set[str]) -> dict[str, dict]:
         """Return a mapping of phone numbers to customer accounts, optimized for specific numbers.
         
         This method supports two search modes:
@@ -1670,7 +1699,7 @@ class PortaSwitchAdapter(BSSAdapter):
                     limit = 1000
 
                     while remaining_numbers and offset < 10000:  # Safety limit to prevent infinite loops
-                        accounts = self._admin_api.get_account_list(int(customer_id), limit=limit, offset=offset)
+                        accounts = await self._admin_api.get_account_list(int(customer_id), limit=limit, offset=offset)
                         page = accounts.get("account_list", []) if isinstance(accounts, dict) else []
                         total = accounts.get("total") if isinstance(accounts, dict) else None
 
@@ -1696,7 +1725,7 @@ class PortaSwitchAdapter(BSSAdapter):
             # Use individual search for each number
             for number in target_numbers:
                 try:
-                    account_info = self._admin_api.get_account_info(id=number, detailed_info=1).get("account_info")
+                    account_info = (await self._admin_api.get_account_info(id=number, detailed_info=1)).get("account_info")
                     if account_info:
                         number_to_accounts[number] = account_info
                 except Exception as e:
@@ -1706,7 +1735,7 @@ class PortaSwitchAdapter(BSSAdapter):
         logging.debug(f"Found {len(number_to_accounts)} accounts out of {len(target_numbers)} target numbers")
         return number_to_accounts
 
-    def _get_office_customer_ids(self, i_customer: int) -> tuple[int, list[int]]:
+    async def _get_office_customer_ids(self, i_customer: int) -> tuple[int, list[int]]:
         """Resolves the main office customer ID and the full list of customer IDs in the hierarchy.
 
         PortaSwitch supports a hierarchy where a main office manages extensions for all its branch
@@ -1728,7 +1757,7 @@ class PortaSwitchAdapter(BSSAdapter):
                   accounts from every office. Contains only [i_customer] when not in a hierarchy.
         """
         try:
-            customer_info = self._admin_api.get_customer_info(i_customer).get("customer_info", {})
+            customer_info = (await self._admin_api.get_customer_info(i_customer)).get("customer_info", {})
             i_office_type = customer_info.get("i_office_type")
 
             if i_office_type == 2:  # branch_office: delegate to main office's hierarchy
@@ -1738,16 +1767,16 @@ class PortaSwitchAdapter(BSSAdapter):
                     logging.debug(
                         f"Customer {i_customer} is a branch office; resolving via main office {main_id}"
                     )
-                    return self._get_all_office_customers_for_main(main_id)
+                    return await self._get_all_office_customers_for_main(main_id)
             elif i_office_type == 3:  # main_office: collect main + all branches
                 logging.debug(f"Customer {i_customer} is a main office; collecting all branch customers")
-                return self._get_all_office_customers_for_main(i_customer)
+                return await self._get_all_office_customers_for_main(i_customer)
         except Exception as e:
             logging.warning(f"Failed to resolve office type for i_customer={i_customer}: {e}")
 
         return i_customer, [i_customer]
 
-    def _get_all_office_customers_for_main(self, main_i_customer: int) -> tuple[int, list[int]]:
+    async def _get_all_office_customers_for_main(self, main_i_customer: int) -> tuple[int, list[int]]:
         """Returns (main_i_customer, [main_i_customer] + all branch i_customers).
 
         Parameters:
@@ -1758,7 +1787,7 @@ class PortaSwitchAdapter(BSSAdapter):
                 (main + all branch offices).
         """
         try:
-            result = self._admin_api.get_customer_list(main_i_customer)
+            result = await self._admin_api.get_customer_list(main_i_customer)
             branch_ids = [
                 int(c["i_customer"])
                 for c in result.get("customer_list", [])
@@ -1771,7 +1800,7 @@ class PortaSwitchAdapter(BSSAdapter):
             logging.warning(f"Failed to get branch customers for main office {main_i_customer}: {e}")
             return main_i_customer, [main_i_customer]
 
-    def _get_all_accounts_by_customer(self, i_customer: int, **search_params) -> list[dict]:
+    async def _get_all_accounts_by_customer(self, i_customer: int, **search_params) -> list[dict]:
         """Fetch all accounts for a customer using parallel pagination.
 
         Parameters:
@@ -1784,53 +1813,54 @@ class PortaSwitchAdapter(BSSAdapter):
         """
         limit = 1000
 
-        resp = self._admin_api.get_account_list(i_customer, limit=limit, offset=0, **search_params)
+        resp = await self._admin_api.get_account_list(i_customer, limit=limit, offset=0, **search_params)
         first_page = resp.get("account_list", []) if isinstance(resp, dict) else []
         total = int(resp["total"]) if isinstance(resp, dict) and resp.get("total") else None
 
         if not first_page or len(first_page) < limit or total is None or len(first_page) >= total:
             return first_page
 
-        remaining_offsets = range(limit, total, limit)
+        remaining_offsets = list(range(limit, total, limit))
 
-        def _fetch_page(offset):
-            r = self._admin_api.get_account_list(i_customer, limit=limit, offset=offset, **search_params)
+        async def _fetch_page(offset):
+            r = await self._admin_api.get_account_list(i_customer, limit=limit, offset=offset, **search_params)
             return r.get("account_list", []) if isinstance(r, dict) else []
 
-        with ThreadPoolExecutor(max_workers=min(10, len(remaining_offsets))) as executor:
-            remaining_pages = list(executor.map(_fetch_page, remaining_offsets))
+        # Own semaphore per call (see _gather_limited) so this nested fan-out —
+        # itself invoked concurrently across customers — can't dead-lock.
+        remaining_pages = await _gather_limited([_fetch_page(o) for o in remaining_offsets])
 
         return first_page + [acc for page in remaining_pages for acc in page]
 
-    def _get_or_create_api_token(self, account_info: dict) -> Optional[str]:
+    async def _get_or_create_api_token(self, account_info: dict) -> Optional[str]:
         """Return the account's api_token, creating and persisting one if absent."""
         api_token = account_info.get("api_token")
         if not api_token:
             api_token = str(uuid.uuid4())
             try:
-                self._admin_api.update_account(account_info["i_account"], api_token=api_token)
+                await self._admin_api.update_account(account_info["i_account"], api_token=api_token)
                 logging.info(f"Created new api_token for i_account={account_info['i_account']}")
             except Exception as e:
                 logging.warning(f"Failed to create new api_token for i_account={account_info['i_account']}: {e}")
                 return None
         return api_token
 
-    def _emulate_account_login(self, i_account: str) -> dict:
+    async def _emulate_account_login(self, i_account: str) -> dict:
         """Emulate a login for a PortaSwitch account."""
-        account_info = self._admin_api.get_account_info(i_account=i_account).get("account_info")
+        account_info = (await self._admin_api.get_account_info(i_account=i_account)).get("account_info")
 
-        if self._is_portaswitch_version_with_token():
-            token = self._get_or_create_api_token(account_info)
+        if await self._is_portaswitch_version_with_token():
+            token = await self._get_or_create_api_token(account_info)
             if token:
-                return self._account_api.login(account_info["login"], token=token)
+                return await self._account_api.login(account_info["login"], token=token)
             else:
-                return self._account_api.login(account_info["login"], account_info["password"])
+                return await self._account_api.login(account_info["login"], account_info["password"])
         else:
-            return self._account_api.login(account_info["login"], account_info["password"], token=account_info["password"])
+            return await self._account_api.login(account_info["login"], account_info["password"], token=account_info["password"])
 
-    def _is_portaswitch_version_with_token(self) -> bool:
+    async def _is_portaswitch_version_with_token(self) -> bool:
         """Check if the actual version of PortaSwitch is a version with token support."""
-        version = self._admin_api.get_version()
+        version = await self._admin_api.get_version()
         actual_portaswitch_mr = [int(d) for d in re.findall(r'\d+', version)]
         expected_portaswitch_mr_with_token_support = [int(d) for d in
                                                       re.findall(r'\d+', PORTASWITCH_VERSION_WITH_TOKEN)]

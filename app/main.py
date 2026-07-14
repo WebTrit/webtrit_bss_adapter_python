@@ -1,13 +1,15 @@
 from __future__ import annotations
 
+import asyncio
 import os
 import sys
 from datetime import datetime
-from typing import Optional, Union, List
+from typing import Callable, Optional, Union, List
 
 from fastapi import FastAPI, APIRouter, Depends, Response, Request, Header, Body, Query
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from pydantic import conint
+from starlette.concurrency import run_in_threadpool
 from starlette.responses import StreamingResponse
 from starlette.status import HTTP_204_NO_CONTENT
 
@@ -141,6 +143,47 @@ router_v2 = APIRouter(route_class=RouteWithLogging)
 bss = initialize_bss_adapter(bss.adapters.__name__, config)
 bss_capabilities = bss.get_capabilities()
 
+# Hard per-request deadline (seconds) for async adapter calls (WT-1720). Async
+# adapters (e.g. PortaSwitch) run on the event loop, so a slow/hung backend can
+# no longer pin worker threads — but a single request can still wait forever
+# without a deadline. Configurable via REQUEST_DEADLINE; ~30s by default.
+try:
+    REQUEST_DEADLINE = float(config.get_conf_val("Request", "Deadline", default="30"))
+except (TypeError, ValueError):
+    REQUEST_DEADLINE = 30.0
+
+
+async def call_bss(fn: Callable, *args, **kwargs):
+    """Invoke an adapter method uniformly across sync and async adapters (WT-1720).
+
+    * Async adapter methods (coroutine functions) run on the event loop under a
+      hard ``REQUEST_DEADLINE`` via ``asyncio.wait_for`` — no thread is pinned.
+      For streaming endpoints only the header fetch is bounded here; the body is
+      streamed later, outside this call, so a large download is never truncated.
+    * Sync adapter methods (every other vendor: freepbx/netsapiens/3cx/…) run in
+      Starlette's thread pool exactly as before, so their behavior is unchanged.
+    """
+    if asyncio.iscoroutinefunction(fn):
+        try:
+            return await asyncio.wait_for(fn(*args, **kwargs), REQUEST_DEADLINE)
+        except asyncio.TimeoutError:
+            raise_webtrit_error(
+                500,
+                error_message=f"Request to the BSS/VoIP system exceeded the {REQUEST_DEADLINE:.0f}s deadline",
+            )
+    return await run_in_threadpool(fn, *args, **kwargs)
+
+
+@app.on_event("shutdown")
+async def _close_async_http_clients() -> None:
+    """Release pooled httpx connections held by async connectors on shutdown."""
+    try:
+        from bss.async_http_api import close_shared_async_clients
+        await close_shared_async_clients()
+    except Exception as e:  # best-effort cleanup; never block shutdown
+        import logging
+        logging.debug(f"Error closing async HTTP clients on shutdown: {e}")
+
 
 def is_method_allowed(method: Capabilities) -> Response:
     """Raise error in case if a non-implemented (or disabled)
@@ -174,7 +217,7 @@ async def health_check() -> Health:
     },
     tags=['session'],
 )
-def create_session(
+async def create_session(
         body: SessionCreateRequest,
         # to retrieve user agent from the request
         request: Request,
@@ -213,7 +256,7 @@ def create_session(
                             client_agent=request.headers.get('User-Agent', 'Unknown'),
                             tenant_id=bss.default_id_if_none(x_webtrit_tenant_id),
                             login=user_ref)
-    session = bss.authenticate(user, body.password)
+    session = await call_bss(bss.authenticate, user, body.password)
     return session
 
 
@@ -227,7 +270,7 @@ def create_session(
     },
     tags=['session'],
 )
-def update_session(
+async def update_session(
         body: SessionUpdateRequest,
         x_webtrit_tenant_id: Optional[str] = Header(None, alias=TENANT_ID_HTTP_HEADER),
 ) -> Union[
@@ -241,7 +284,7 @@ def update_session(
     """
     global bss
 
-    return bss.refresh_session(safely_extract_scalar_value(body.refresh_token))
+    return await call_bss(bss.refresh_session, safely_extract_scalar_value(body.refresh_token))
 
 
 @router.delete(
@@ -254,7 +297,7 @@ def update_session(
     },
     tags=['session'],
 )
-def delete_session(
+async def delete_session(
         auth_data: HTTPAuthorizationCredentials = Depends(security),
         x_webtrit_tenant_id: Optional[str] = Header(None, alias=TENANT_ID_HTTP_HEADER),
 ) -> (
@@ -270,7 +313,7 @@ def delete_session(
     """
     global bss
     access_token = auth_data.credentials
-    result = bss.close_session(access_token)
+    result = await call_bss(bss.close_session, access_token)
     if not result:
         # we were unable to delete the session - perhaps wrong
         # or expired access token was provided
@@ -290,7 +333,7 @@ def delete_session(
     },
     tags=['session'],
 )
-def autoprovision_session(
+async def autoprovision_session(
         body: SessionAutoProvisionRequest,
         x_webtrit_tenant_id: Optional[str] = Header(None, alias=TENANT_ID_HTTP_HEADER),
 
@@ -312,8 +355,9 @@ def autoprovision_session(
 
     is_method_allowed(Capabilities.autoProvision)
 
-    return bss.autoprovision_session(config_token=body.config_token,
-                                     tenant_id=bss.default_id_if_none(x_webtrit_tenant_id))
+    return await call_bss(bss.autoprovision_session,
+                          config_token=body.config_token,
+                          tenant_id=bss.default_id_if_none(x_webtrit_tenant_id))
 
 
 @router.post(
@@ -326,7 +370,7 @@ def autoprovision_session(
     },
     tags=['session'],
 )
-def create_session_otp(
+async def create_session_otp(
         body: SessionOtpCreateRequest,
         x_webtrit_tenant_id: Optional[str] = Header(None, alias=TENANT_ID_HTTP_HEADER),
 ) -> Union[
@@ -347,7 +391,7 @@ def create_session_otp(
     else:
         raise_webtrit_error(500, "Cannot find user_ref in the request")
 
-    otp_request = bss.generate_otp(ExtendedUserInfo(
+    otp_request = await call_bss(bss.generate_otp, ExtendedUserInfo(
         user_id=user_ref,
         tenant_id=bss.default_id_if_none(x_webtrit_tenant_id)))
     return otp_request
@@ -363,7 +407,7 @@ def create_session_otp(
     },
     tags=['session'],
 )
-def verify_session_otp(
+async def verify_session_otp(
         body: SessionOtpVerifyRequest,
         x_webtrit_tenant_id: Optional[str] = Header(None, alias=TENANT_ID_HTTP_HEADER),
 ) -> Union[
@@ -383,7 +427,7 @@ def verify_session_otp(
         # we may need OTP validation for signup
         is_method_allowed(Capabilities.signup)
 
-    otp_response = bss.validate_otp(body)
+    otp_response = await call_bss(bss.validate_otp, body)
     return otp_response
 
 
@@ -423,7 +467,7 @@ async def get_system_info(
     },
     tags=['user'],
 )
-def get_user_info(
+async def get_user_info(
         auth_data: HTTPAuthorizationCredentials = Depends(security),
         x_webtrit_tenant_id: Optional[str] = Header(None, alias=TENANT_ID_HTTP_HEADER),
 ) -> (
@@ -440,9 +484,9 @@ def get_user_info(
     """
     global bss
     access_token = auth_data.credentials
-    session = bss.validate_session(access_token)
+    session = await call_bss(bss.validate_session, access_token)
 
-    user = bss.retrieve_user(session, ExtendedUserInfo(
+    user = await call_bss(bss.retrieve_user, session, ExtendedUserInfo(
         user_id=safely_extract_scalar_value(session.user_id),
         tenant_id=bss.default_id_if_none(x_webtrit_tenant_id)
     ))
@@ -460,7 +504,7 @@ def get_user_info(
     },
     tags=['user'],
 )
-def signup(
+async def signup(
         body: UserCreateRequest,
         #    auth_data: HTTPAuthorizationCredentials = Depends(security),
         x_webtrit_tenant_id: Optional[str] = Header(None, alias=TENANT_ID_HTTP_HEADER),
@@ -495,7 +539,7 @@ def signup(
     is_method_allowed(Capabilities.signup)
 
     # TODO: think about extra authentification measures
-    return bss.signup(body, tenant_id=bss.default_id_if_none(x_webtrit_tenant_id))
+    return await call_bss(bss.signup, body, tenant_id=bss.default_id_if_none(x_webtrit_tenant_id))
 
 
 # temporary version of the method definition - added manually and not
@@ -510,7 +554,7 @@ def signup(
     },
     tags=['user'],
 )
-def delete_user(
+async def delete_user(
         auth_data: HTTPAuthorizationCredentials = Depends(security),
         x_webtrit_tenant_id: Optional[str] = Header(None, alias=TENANT_ID_HTTP_HEADER),
 ):
@@ -520,13 +564,13 @@ def delete_user(
     global bss
 
     access_token = auth_data.credentials
-    session = bss.validate_session(access_token)
+    session = await call_bss(bss.validate_session, access_token)
     user = ExtendedUserInfo(
         user_id=safely_extract_scalar_value(session.user_id),
         tenant_id=bss.default_id_if_none(x_webtrit_tenant_id)
     )
-    bss.delete_user(user)
-    result = bss.close_session(access_token)
+    await call_bss(bss.delete_user, user)
+    result = await call_bss(bss.close_session, access_token)
     return Response(status_code=HTTP_204_NO_CONTENT, headers={'content-type': 'application/json'})
 
 
@@ -541,7 +585,7 @@ def delete_user(
     },
     tags=['user'],
 )
-def get_user_contact_list(
+async def get_user_contact_list(
         auth_data: HTTPAuthorizationCredentials = Depends(security),
         x_webtrit_tenant_id: Optional[str] = Header(None, alias=TENANT_ID_HTTP_HEADER),
 ) -> (
@@ -563,13 +607,13 @@ def get_user_contact_list(
     # is_method_allowed(Capabilities.extensions)
 
     access_token = auth_data.credentials
-    session = bss.validate_session(access_token)
+    session = await call_bss(bss.validate_session, access_token)
 
     if Capabilities.extensions in bss_capabilities:
-        contacts = bss.retrieve_contacts(session,
-                                         ExtendedUserInfo(
-                                             user_id=safely_extract_scalar_value(session.user_id),
-                                             tenant_id=bss.default_id_if_none(x_webtrit_tenant_id)))
+        contacts = await call_bss(bss.retrieve_contacts, session,
+                                  ExtendedUserInfo(
+                                      user_id=safely_extract_scalar_value(session.user_id),
+                                      tenant_id=bss.default_id_if_none(x_webtrit_tenant_id)))
         return Contacts(items=contacts)
 
     # not supported by hosted PBX / BSS, return empty list
@@ -587,7 +631,7 @@ def get_user_contact_list(
     },
     tags=['user'],
 )
-def get_user_contact_list_v2(
+async def get_user_contact_list_v2(
         search: str = None,
         phone_numbers: List[str] = Query(default=[]),
         auth_data: HTTPAuthorizationCredentials = Depends(security),
@@ -609,12 +653,12 @@ def get_user_contact_list_v2(
     global bss, bss_capabilities
 
     access_token = auth_data.credentials
-    session = bss.validate_session(access_token)
+    session = await call_bss(bss.validate_session, access_token)
     user = ExtendedUserInfo(user_id=safely_extract_scalar_value(session.user_id),
                             tenant_id=bss.default_id_if_none(x_webtrit_tenant_id))
 
     if Capabilities.extensions in bss_capabilities:
-        contacts, total = bss.retrieve_contacts_v2(session, user, search, phone_numbers, page, items_per_page)
+        contacts, total = await call_bss(bss.retrieve_contacts_v2, session, user, search, phone_numbers, page, items_per_page)
 
         return Contacts(items=contacts,
                         pagination=Pagination(
@@ -637,7 +681,7 @@ def get_user_contact_list_v2(
     },
     tags=['user'],
 )
-def get_user_contact_by_id(
+async def get_user_contact_by_id(
         user_id: str,
         auth_data: HTTPAuthorizationCredentials = Depends(security),
         x_webtrit_tenant_id: Optional[str] = Header(None, alias=TENANT_ID_HTTP_HEADER),
@@ -656,9 +700,10 @@ def get_user_contact_by_id(
     global bss
 
     access_token = auth_data.credentials
-    session = bss.validate_session(access_token)
+    session = await call_bss(bss.validate_session, access_token)
 
-    contact = bss.retrieve_contact_by_user_id(
+    contact = await call_bss(
+        bss.retrieve_contact_by_user_id,
         session,
         ExtendedUserInfo(
             user_id=safely_extract_scalar_value(session.user_id),
@@ -680,7 +725,7 @@ def get_user_contact_by_id(
     },
     tags=['user'],
 )
-def get_user_history_list(
+async def get_user_history_list(
         page: Optional[conint(ge=1)] = 1,
         items_per_page: Optional[conint(ge=1)] = 100,
         time_from: Optional[datetime] = None,
@@ -700,10 +745,11 @@ def get_user_history_list(
     global bss, bss_capabilities
 
     access_token = auth_data.credentials
-    session = bss.validate_session(access_token)
+    session = await call_bss(bss.validate_session, access_token)
 
     if Capabilities.callHistory in bss_capabilities:
-        calls, total = bss.retrieve_calls(
+        calls, total = await call_bss(
+            bss.retrieve_calls,
             session,
             ExtendedUserInfo(user_id=safely_extract_scalar_value(session.user_id),
                              tenant_id=bss.default_id_if_none(x_webtrit_tenant_id)),
@@ -741,7 +787,7 @@ def get_user_history_list(
     },
     tags=['user'],
 )
-def get_user_recording(
+async def get_user_recording(
         recording_id: str,
         auth_data: HTTPAuthorizationCredentials = Depends(security),
         x_webtrit_tenant_id: Optional[str] = Header(None, alias=TENANT_ID_HTTP_HEADER),
@@ -757,8 +803,11 @@ def get_user_recording(
     is_method_allowed(Capabilities.recordings)
 
     access_token = auth_data.credentials
-    session = bss.validate_session(access_token)
-    content_type, content_iterator = bss.retrieve_call_recording(session, CallRecordingId(recording_id))
+    session = await call_bss(bss.validate_session, access_token)
+    # Only the header fetch is bounded by the deadline; the body streams below.
+    content_type, content_iterator = await call_bss(
+        bss.retrieve_call_recording, session, CallRecordingId(recording_id)
+    )
 
     return StreamingResponse(content_iterator, media_type=content_type if content_type else "application/octet-stream")
 
@@ -773,7 +822,7 @@ def get_user_recording(
     },
     tags=['user'],
 )
-def get_user_voicemails(
+async def get_user_voicemails(
         auth_data: HTTPAuthorizationCredentials = Depends(security),
         x_webtrit_tenant_id: Optional[str] = Header(None, alias=TENANT_ID_HTTP_HEADER),
 ) -> Union[
@@ -785,11 +834,11 @@ def get_user_voicemails(
     global bss, bss_capabilities
 
     access_token = auth_data.credentials
-    session = bss.validate_session(access_token)
+    session = await call_bss(bss.validate_session, access_token)
 
     is_method_allowed(Capabilities.voicemail)
 
-    voicemail = bss.retrieve_voicemails(session, ExtendedUserInfo(
+    voicemail = await call_bss(bss.retrieve_voicemails, session, ExtendedUserInfo(
         user_id=safely_extract_scalar_value(session.user_id),
         tenant_id=bss.default_id_if_none(x_webtrit_tenant_id)
     ))
@@ -807,7 +856,7 @@ def get_user_voicemails(
     },
     tags=['user'],
 )
-def get_user_voicemail_message_details(
+async def get_user_voicemail_message_details(
         message_id: str,
         auth_data: HTTPAuthorizationCredentials = Depends(security),
         x_webtrit_tenant_id: Optional[str] = Header(None, alias=TENANT_ID_HTTP_HEADER),
@@ -820,11 +869,12 @@ def get_user_voicemail_message_details(
     global bss, bss_capabilities
 
     access_token = auth_data.credentials
-    session = bss.validate_session(access_token)
+    session = await call_bss(bss.validate_session, access_token)
 
     is_method_allowed(Capabilities.voicemail)
 
-    return bss.retrieve_voicemail_message_details(
+    return await call_bss(
+        bss.retrieve_voicemail_message_details,
         session,
         ExtendedUserInfo(
             user_id=safely_extract_scalar_value(session.user_id),
@@ -844,7 +894,7 @@ def get_user_voicemail_message_details(
     },
     tags=['user'],
 )
-def patch_user_voicemail_message(
+async def patch_user_voicemail_message(
         message_id: str,
         body: UserVoicemailMessagePatch,
         auth_data: HTTPAuthorizationCredentials = Depends(security),
@@ -858,11 +908,11 @@ def patch_user_voicemail_message(
     global bss, bss_capabilities
 
     access_token = auth_data.credentials
-    session = bss.validate_session(access_token)
+    session = await call_bss(bss.validate_session, access_token)
 
     is_method_allowed(Capabilities.voicemail)
 
-    return bss.patch_voicemail_message(session, message_id, body)
+    return await call_bss(bss.patch_voicemail_message, session, message_id, body)
 
 
 @router.delete(
@@ -875,7 +925,7 @@ def patch_user_voicemail_message(
     },
     tags=['user'],
 )
-def delete_user_voicemail_message(
+async def delete_user_voicemail_message(
         message_id: str,
         auth_data: HTTPAuthorizationCredentials = Depends(security),
         _x_webtrit_tenant_id: Optional[str] = Header(None, alias=TENANT_ID_HTTP_HEADER),
@@ -888,10 +938,10 @@ def delete_user_voicemail_message(
     global bss, bss_capabilities
 
     access_token = auth_data.credentials
-    session = bss.validate_session(access_token)
+    session = await call_bss(bss.validate_session, access_token)
 
     is_method_allowed(Capabilities.voicemail)
-    bss.delete_voicemail_message(session, message_id)
+    await call_bss(bss.delete_voicemail_message, session, message_id)
 
     return Response(status_code=204)
 
@@ -907,7 +957,7 @@ def delete_user_voicemail_message(
     },
     tags=['user'],
 )
-def get_user_voicemail_message_attachment(
+async def get_user_voicemail_message_attachment(
         message_id: str,
         file_format: str = None,
         auth_data: HTTPAuthorizationCredentials = Depends(security),
@@ -924,8 +974,11 @@ def get_user_voicemail_message_attachment(
     is_method_allowed(Capabilities.voicemail)
 
     access_token = auth_data.credentials
-    session = bss.validate_session(access_token)
-    content_type, content_iterator = bss.retrieve_voicemail_message_attachment(session, message_id, file_format)
+    session = await call_bss(bss.validate_session, access_token)
+    # Only the header fetch is bounded by the deadline; the body streams below.
+    content_type, content_iterator = await call_bss(
+        bss.retrieve_voicemail_message_attachment, session, message_id, file_format
+    )
 
     return StreamingResponse(content_iterator, media_type=content_type if content_type else "application/octet-stream")
 
@@ -940,7 +993,7 @@ def get_user_voicemail_message_attachment(
         '500': {'model': CustomInternalServerErrorResponse},
     },
     tags=['custom'])
-def custom_method_public(
+async def custom_method_public(
         request: Request,
         method_name: str,
         body: CustomRequest = Body(default=None),
@@ -962,7 +1015,8 @@ def custom_method_public(
 
     is_method_allowed(Capabilities.customMethods)
 
-    return bss.custom_method_public(
+    return await call_bss(
+        bss.custom_method_public,
         method_name,
         data=body,
         headers=dict(request.headers),
@@ -983,7 +1037,7 @@ def custom_method_public(
     },
     tags=['custom'],
 )
-def custom_method_private(
+async def custom_method_private(
         request: Request,
         method_name: str,
         body: CustomRequest = Body(default=None),
@@ -1009,9 +1063,10 @@ def custom_method_private(
 
     access_token = auth_data.credentials
     # ensure the user is authenticated
-    session = bss.validate_session(access_token)
+    session = await call_bss(bss.validate_session, access_token)
 
-    return bss.custom_method_private(
+    return await call_bss(
+        bss.custom_method_private,
         session=session,
         user_id=safely_extract_scalar_value(session.user_id),
         method_name=method_name,
@@ -1032,7 +1087,7 @@ def custom_method_private(
     },
     tags=['user'],
 )
-def create_user_event(
+async def create_user_event(
         body: CreateUserEventRequest,
         auth_data: HTTPAuthorizationCredentials = Depends(security),
         x_webtrit_tenant_id: Optional[str] = Header(None, alias=TENANT_ID_HTTP_HEADER),
@@ -1050,14 +1105,14 @@ def create_user_event(
     is_method_allowed(Capabilities.user_events)
 
     access_token = auth_data.credentials
-    session = bss.validate_session(access_token)
+    session = await call_bss(bss.validate_session, access_token)
 
     user = ExtendedUserInfo(
         user_id=safely_extract_scalar_value(session.user_id),
         tenant_id=bss.default_id_if_none(x_webtrit_tenant_id)
     )
 
-    bss.create_user_event(user, body.timestamp, body.group, body.type, body.data)
+    await call_bss(bss.create_user_event, user, body.timestamp, body.group, body.type, body.data)
 
     return Response(status_code=HTTP_204_NO_CONTENT, headers={'content-type': 'application/json'})
 
