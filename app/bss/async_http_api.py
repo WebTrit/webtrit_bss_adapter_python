@@ -77,16 +77,25 @@ _shared_clients: dict[bool, httpx.AsyncClient] = {}
 _shared_clients_lock = asyncio.Lock()
 
 
-async def get_shared_async_client(verify: bool) -> httpx.AsyncClient:
+async def get_shared_async_client(verify: bool, limits: Optional[httpx.Limits] = None) -> httpx.AsyncClient:
     """Return the process-wide :class:`httpx.AsyncClient` for the given TLS
-    verify setting, creating it lazily inside the running event loop."""
+    verify setting, creating it lazily inside the running event loop.
+
+    ``limits`` (connection-pool sizing) is applied only when the client is first
+    created for a given verify key; a later caller with different limits reuses
+    the existing client. In practice all connectors in one deployment pass the
+    same limits, so this is not a concern.
+    """
     client = _shared_clients.get(verify)
     if client is not None and not client.is_closed:
         return client
     async with _shared_clients_lock:
         client = _shared_clients.get(verify)
         if client is None or client.is_closed:
-            client = httpx.AsyncClient(verify=verify)
+            kwargs = {"verify": verify}
+            if limits is not None:
+                kwargs["limits"] = limits
+            client = httpx.AsyncClient(**kwargs)
             _shared_clients[verify] = client
         return client
 
@@ -119,8 +128,17 @@ class AsyncHTTPAPIConnector(ABC):
     def _request_timeout(self) -> httpx.Timeout:
         return build_httpx_timeout(self.DEFAULT_REQUEST_TIMEOUT)
 
+    def _limits(self) -> Optional[httpx.Limits]:
+        # Subclasses set _max_connections / _max_keepalive_connections after
+        # super().__init__(); returns None to keep httpx's own defaults.
+        mc = getattr(self, "_max_connections", None)
+        mk = getattr(self, "_max_keepalive_connections", None)
+        if mc is None and mk is None:
+            return None
+        return httpx.Limits(max_connections=mc, max_keepalive_connections=mk)
+
     async def _client(self) -> httpx.AsyncClient:
-        return await get_shared_async_client(self._verify())
+        return await get_shared_async_client(self._verify(), self._limits())
 
     def add_auth_info(self, url: str, request_params: dict,
                       auth_session: AuthSessionData) -> dict:

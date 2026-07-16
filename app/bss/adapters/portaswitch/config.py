@@ -35,6 +35,16 @@ class PortaSwitchSettings(BaseSettings):
     # slow/unresponsive switch can't pin worker threads indefinitely (WT-1717).
     # Configurable via PORTASWITCH_API_TIMEOUT; set empty to keep the base default.
     API_TIMEOUT: Optional[float] = 25
+    # httpx connection-pool limits for the async client (WT-1720). This pool — not
+    # the old ~40 Starlette thread-pool tokens — is now the real per-pod ceiling on
+    # concurrent requests toward the switch. Defaults match httpx's own (100/20):
+    # an order of magnitude above the former thread cap, while staying polite to the
+    # switch. Raise MAX_CONNECTIONS for a large switch / high Cloud Run concurrency;
+    # lower it to protect a small or shared one. Keep MAX_KEEPALIVE_CONNECTIONS
+    # <= MAX_CONNECTIONS. Configurable via PORTASWITCH_MAX_CONNECTIONS /
+    # PORTASWITCH_MAX_KEEPALIVE_CONNECTIONS.
+    MAX_CONNECTIONS: int = 100
+    MAX_KEEPALIVE_CONNECTIONS: int = 20
     SIGNIN_CREDENTIALS: PortaSwitchSignInCredentialsType = PortaSwitchSignInCredentialsType.SELF_CARE
     CONTACTS_SELECTING: PortaSwitchContactsSelectingMode = PortaSwitchContactsSelectingMode.ACCOUNTS
     CONTACTS_SELECTING_EXTENSION_TYPES: Union[List[PortaSwitchExtensionType], str] = list(PortaSwitchExtensionType)
@@ -59,6 +69,28 @@ class PortaSwitchSettings(BaseSettings):
         except (TypeError, ValueError):
             return None
         return v if v > 0 else None
+
+    @staticmethod
+    def _positive_int_or(v: Union[str, int, None], default: int) -> int:
+        # Treat blank/invalid/non-positive as "unset" so a stray empty env var
+        # (e.g. PORTASWITCH_MAX_CONNECTIONS="") falls back to the safe default.
+        if v is None or (isinstance(v, str) and not v.strip()):
+            return default
+        try:
+            iv = int(v)
+        except (TypeError, ValueError):
+            return default
+        return iv if iv > 0 else default
+
+    @field_validator("MAX_CONNECTIONS", mode='before')
+    @classmethod
+    def decode_max_connections(cls, v: Union[str, int, None]) -> int:
+        return cls._positive_int_or(v, 100)
+
+    @field_validator("MAX_KEEPALIVE_CONNECTIONS", mode='before')
+    @classmethod
+    def decode_max_keepalive_connections(cls, v: Union[str, int, None]) -> int:
+        return cls._positive_int_or(v, 20)
 
     @field_validator("CONTACTS_SELECTING_EXTENSION_TYPES", mode='before')
     @classmethod

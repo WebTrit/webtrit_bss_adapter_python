@@ -31,6 +31,9 @@ class AdminAPI(AsyncHTTPAPIConnectorWithLogin):
         self._verify_https = portaswitch_settings.VERIFY_HTTPS
         if portaswitch_settings.API_TIMEOUT is not None:
             self.DEFAULT_REQUEST_TIMEOUT = portaswitch_settings.API_TIMEOUT
+        # httpx connection-pool limits for the shared async client (WT-1720).
+        self._max_connections = portaswitch_settings.MAX_CONNECTIONS
+        self._max_keepalive_connections = portaswitch_settings.MAX_KEEPALIVE_CONNECTIONS
         self._api_user = PortaSwitchAdminUser(
             user_id=portaswitch_settings.ADMIN_API_LOGIN, token=portaswitch_settings.ADMIN_API_TOKEN
         )
