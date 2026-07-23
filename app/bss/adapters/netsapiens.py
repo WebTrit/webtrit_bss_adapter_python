@@ -10,6 +10,7 @@ from pydantic import BaseModel, Field, ValidationError
 from app_config import AppConfig
 from bss.adapters import BSSAdapter
 from bss.http_api import HTTPAPIConnectorWithLogin, OAuthSessionData, APIUser
+from request_trace import sanitize_data
 from bss.sessions import configure_session_storage
 from bss.types import (Capabilities, UserInfo, EndUser, ContactInfo,
                        CDRInfo, ConnectStatus, SessionInfo,
@@ -157,7 +158,7 @@ class NetsapiensAPI(HTTPAPIConnectorWithLogin):
             self.store_auth_session(session, user)
             return session
 
-        logging.debug(f"Could not find an access token in the response {res}")
+        logging.debug(f"Could not find an access token in the response {sanitize_data(res)}")
         raise ValueError("Could not find an access token in the response")
 
     def refresh(self, user: NetsapiensUser, auth_session: OAuthSessionData):

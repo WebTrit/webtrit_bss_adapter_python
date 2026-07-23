@@ -88,8 +88,9 @@ class SampleOTPHandler(OTPHandler):
             # same OTP as configured in the test suite. make sure
             # this env var is NOT set in production!
             code = int(code_for_tests)
-        # so we can see it and use during debug
-        logging.info(f"OTP code {code}")
+        # so we can see it and use during debug (debug-only: must never leak the
+        # OTP at INFO in production) (WT-526)
+        logging.debug(f"OTP code {code}")
 
         otp_id = str(uuid.uuid1())
         otp_validity = int(self.config.get_conf_val("OTP", "Validity",

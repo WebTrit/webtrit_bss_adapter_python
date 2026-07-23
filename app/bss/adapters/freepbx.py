@@ -10,6 +10,7 @@ from bss.sessions import configure_session_storage
 from report_error import WebTritErrorException
 from app_config import AppConfig
 from bss.http_api import HTTPAPIConnectorWithLogin, OAuthSessionData
+from request_trace import sanitize_data, mask_token
 from typing import Union, List, Dict
 from datetime import datetime, timedelta
 import logging
@@ -43,8 +44,8 @@ class FreePBXAPI(HTTPAPIConnectorWithLogin):
         else:
             self.access_token_expires_at = None
         self.refresh_token = response.get("refresh_token", None)
-        logging.debug(f"Got access token {self.access_token} expires at " + \
-                      f"{self.access_token_expires_at} refresh token {self.refresh_token}")
+        logging.debug(f"Got access token {mask_token(self.access_token)} expires at " + \
+                      f"{self.access_token_expires_at} refresh token {mask_token(self.refresh_token)}")
         return True if self.access_token else False
 
     def login(self, data: dict = None):
@@ -69,7 +70,7 @@ class FreePBXAPI(HTTPAPIConnectorWithLogin):
 
             return True
 
-        logging.debug(f"Could not find an access token in the response {res}")
+        logging.debug(f"Could not find an access token in the response {sanitize_data(res)}")
         raise ValueError("Could not find an access token in the response")
 
     def refresh(self, user: str, auth_session: OAuthSessionData):

@@ -1,5 +1,7 @@
+import json
 import logging
 import os
+import re
 import contextvars
 import uuid
 from typing import Callable, Optional
@@ -26,6 +28,103 @@ def truncate_log_message(message: str, max_length: int = MAX_LOG_MESSAGE_LENGTH)
     if len(message) <= max_length:
         return message
     return f"{message[:max_length]}... [truncated {len(message) - max_length} chars]"
+
+
+# --- Sensitive-data masking for logs (WT-526) --------------------------------
+#
+# Debug/trace logging used to emit auth tokens and user passwords verbatim:
+# Authorization headers, login request bodies, and backend response bodies
+# carrying sip.password / access & refresh tokens. These helpers mask such
+# values before they reach the log. Passwords and secrets are fully redacted;
+# tokens keep a short head/tail so log lines stay correlatable during debugging.
+
+#: JSON/form keys whose value is a password or secret -> fully redacted.
+SECRET_KEYS = {
+    "password", "client_secret", "api_password", "secret",
+}
+#: JSON/form keys whose value is a token/credential -> partially masked.
+TOKEN_KEYS = {
+    "access_token", "refresh_token", "token", "authorization",
+    "api_key", "session_id",
+}
+_ALL_SENSITIVE_KEYS = SECRET_KEYS | TOKEN_KEYS
+
+
+def mask_secret(value):
+    """Fully redact a password/secret value (reveals nothing, not even length)."""
+    if value is None or value == "":
+        return value
+    return "***"
+
+
+def mask_token(value):
+    """Partially mask a token: keep a short head/tail for correlation, or fully
+    redact if it is too short to reveal safely."""
+    if value is None or value == "":
+        return value
+    s = str(value)
+    if len(s) <= 13:
+        return "***"
+    return s[:6] + "***" + s[-4:]
+
+
+def sanitize_data(obj):
+    """Return a copy of ``obj`` with the values of sensitive keys masked.
+
+    Recurses into dicts/lists and never mutates the input, so the caller may
+    still send the original structure in a real request after logging it."""
+    if isinstance(obj, dict):
+        result = {}
+        for k, v in obj.items():
+            if isinstance(k, str) and k.lower() in SECRET_KEYS:
+                result[k] = mask_secret(v)
+            elif isinstance(k, str) and k.lower() in TOKEN_KEYS:
+                result[k] = mask_token(v)
+            else:
+                result[k] = sanitize_data(v)
+        return result
+    if isinstance(obj, (list, tuple)):
+        return [sanitize_data(v) for v in obj]
+    return obj
+
+
+_SENSITIVE_TEXT_RE = re.compile(
+    r'(?i)("?(?:' + "|".join(sorted(_ALL_SENSITIVE_KEYS, key=len, reverse=True)) +
+    r')"?\s*[:=]\s*)("(?:[^"\\]|\\.)*"|[^&\s,}]+)'
+)
+
+
+def _mask_text_fallback(text: str) -> str:
+    """Mask sensitive values in a non-JSON string (form-encoded / plain text)."""
+    return _SENSITIVE_TEXT_RE.sub(lambda m: f'{m.group(1)}"***"', text)
+
+
+def sanitize_text(text):
+    """Mask sensitive values in a request/response body before logging.
+
+    Accepts a JSON string, a form-encoded string, bytes, or an already-parsed
+    dict/list. Never raises: on unparseable input it falls back to regex masking
+    and returns the (masked) original text."""
+    if text is None:
+        return text
+    if isinstance(text, bytes):
+        try:
+            text = text.decode("utf-8", "replace")
+        except Exception:
+            return text
+    if not isinstance(text, str):
+        try:
+            return sanitize_data(text)
+        except Exception:
+            return text
+    stripped = text.lstrip()
+    if stripped[:1] in ("{", "["):
+        try:
+            return json.dumps(sanitize_data(json.loads(text)))
+        except (ValueError, TypeError):
+            pass
+    return _mask_text_fallback(text)
+
 
 class AddRequestID(logging.Filter):
     """Logging filter that adds request_id to log records"""
@@ -159,7 +258,7 @@ class RouteWithLogging(APIRoute):
             
 
             req_body = await request.body()
-            req_body = req_body.decode("utf-8").replace("\n", " ")
+            req_body = sanitize_text(req_body.decode("utf-8").replace("\n", " "))
 
             if len(req_body) == 0:
                     req_body = "<empty>"
@@ -195,7 +294,7 @@ class RouteWithLogging(APIRoute):
                     )
                 logging.error(f"HTTP exception {http_exc.status_code} {http_exc.detail}")
                 err_response.background = BackgroundTask(log_with_label,
-                            "Reply", err_response.body.decode("utf-8").replace("\n", " "))
+                            "Reply", sanitize_text(err_response.body.decode("utf-8").replace("\n", " ")))
                 return err_response
             except Exception as e:
                 trace_str = traceback.format_exc()
@@ -224,7 +323,7 @@ class RouteWithLogging(APIRoute):
             else:
                 res_body = response.body
                 response.background = BackgroundTask(log_with_label,
-                            "Reply", res_body.decode("utf-8").replace("\n", " "))
+                            "Reply", sanitize_text(res_body.decode("utf-8").replace("\n", " ")))
                 return response
 
         return custom_route_handler

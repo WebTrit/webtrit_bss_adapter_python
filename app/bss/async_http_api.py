@@ -35,7 +35,8 @@ from typing import Final, Optional
 import httpx
 
 from report_error import raise_webtrit_error
-from request_trace import get_request_id, truncate_log_message
+from request_trace import (get_request_id, truncate_log_message,
+                           sanitize_data, sanitize_text, mask_token)
 
 # Re-exported so the PortaSwitch API classes can keep importing the auth models
 # from a single place; the models themselves live in the sync module (unchanged).
@@ -201,7 +202,7 @@ class AsyncHTTPAPIConnector(ABC):
             params_final = self.add_trace_info(params_with_auth)
 
             try:
-                logging.debug(f"Sending {method} request to {url} with parameters {params_final}")
+                logging.debug(f"Sending {method} request to {url} with parameters {sanitize_data(params_final)}")
                 if stream:
                     # Build + send with stream=True so the body is not pulled into
                     # memory: it is consumed lazily by decode_response/caller.
@@ -212,7 +213,7 @@ class AsyncHTTPAPIConnector(ABC):
                     return await self.decode_response(response)
 
                 response = await client.request(method, url, timeout=timeout, **params_final)
-                clean_text = truncate_log_message(response.text.replace("\n", " "))
+                clean_text = truncate_log_message(sanitize_text(response.text.replace("\n", " ")))
                 logging.debug(f"Received {response.status_code} {clean_text}")
                 response.raise_for_status()
                 return await self.decode_response(response)
@@ -441,8 +442,8 @@ class AsyncHTTPAPIConnectorWithLogin(AsyncHTTPAPIConnector):
         session = OAuthSessionData(access_token=response.get("access_token", None),
                                    access_token_expires_at=access_token_expires_at,
                                    refresh_token=response.get("refresh_token", None))
-        logging.debug(f"Got access token {session.access_token} expires at " +
-                      f"{session.access_token_expires_at} refresh token {session.refresh_token}")
+        logging.debug(f"Got access token {mask_token(session.access_token)} expires at " +
+                      f"{session.access_token_expires_at} refresh token {mask_token(session.refresh_token)}")
         return session
 
     @abstractmethod

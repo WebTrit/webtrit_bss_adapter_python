@@ -9,6 +9,7 @@ from bss.adapters.portaswitch.utils import extract_fault_code
 from bss.async_http_api import AsyncHTTPAPIConnector, AsyncHTTPAPIConnectorWithLogin, OAuthSessionData
 from bss.models import DeliveryChannel
 from report_error import WebTritErrorException
+from request_trace import sanitize_data
 
 
 class AdminAPI(AsyncHTTPAPIConnectorWithLogin):
@@ -66,7 +67,7 @@ class AdminAPI(AsyncHTTPAPIConnectorWithLogin):
         if response and (session := self.extract_access_token(response)) and session.access_token is not None:
             return session
 
-        logging.debug(f"Could not find an access token in the response {response}")
+        logging.debug(f"Could not find an access token in the response {sanitize_data(response)}")
         raise ValueError("Could not find an access token in the response")
 
     async def refresh(self, user=None, auth_session=None):

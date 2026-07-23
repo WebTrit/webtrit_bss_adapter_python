@@ -3,6 +3,7 @@ from abc import ABC, abstractmethod
 from bss.types import (UserInfo, safely_extract_scalar_value)
 from bss.sessions import SessionStorage, SessionInfo
 from report_error import raise_webtrit_error
+from request_trace import mask_token
 
 class SessionManagement(ABC):
     """Basic session management on our side."""
@@ -57,8 +58,8 @@ class SessionManagement(ABC):
                 access_token=access_token,
                 refresh_token=refresh_token
             )
-            raise_webtrit_error(401, 
-                    error_message = f"Refresh token {refresh_token} expired",
+            raise_webtrit_error(401,
+                    error_message = f"Refresh token {mask_token(refresh_token)} expired",
                     extra_error_code = "refresh_token_expired")
 
         # everything is in order, create a new session
@@ -67,7 +68,7 @@ class SessionManagement(ABC):
         self.sessions.store_session(new_session)
         logging.debug(f"Authenticated user {safely_extract_scalar_value(new_session.user_id)}" +
                       " via refresh token " +
-                      f"{refresh_token}, session {safely_extract_scalar_value(new_session.access_token)} created")
+                      f"{mask_token(refresh_token)}, session {mask_token(safely_extract_scalar_value(new_session.access_token))} created")
         # remove the old session and old refresh token
         self.sessions.delete_session(access_token, refresh_token=refresh_token)
         return new_session

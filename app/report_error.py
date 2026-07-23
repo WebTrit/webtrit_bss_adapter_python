@@ -5,6 +5,8 @@ import logging
 import inspect
 import traceback
 
+from request_trace import sanitize_data
+
 # for now we decided to protect the "initial" API calls
 # such as login with username&password or creation
 # of OTP by IP address filtering or other methods
@@ -100,7 +102,7 @@ class WebTritErrorException(HTTPException):
         if self.code:
             data["code"] = self.code
         logging.info(f"Application error {self.error_message} {self.code}" +
-            f"traces: {traces} HTTP code: {self.status_code}")
+            f"traces: {sanitize_data(traces)} HTTP code: {self.status_code}")
         
         return JSONResponse(content=data, status_code=self.status_code)
 

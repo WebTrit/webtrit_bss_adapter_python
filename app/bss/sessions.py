@@ -8,6 +8,7 @@ from bss.dbs.firestore import FirestoreKeyValue
 from bss.types import SessionInfo, UserInfo, safely_extract_scalar_value
 from abc import ABC, abstractmethod
 from app_config import AppConfig
+from request_trace import mask_token
 
 config = AppConfig()
 
@@ -114,7 +115,7 @@ class SessionStorage:
             expires_at=expiration,
             document_ttl=expiration + timedelta(minutes=5)
         )
-        logging.debug(f"Created new session with token {token} expiring at " +
+        logging.debug(f"Created new session with token {mask_token(token)} expiring at " +
                       expiration.isoformat())
         return session
 
@@ -144,9 +145,9 @@ class SessionStorage:
         """Remove a session from the database"""
         
         if refresh_token:
-            logging.debug(f"Removing session with refresh token {refresh_token}")
+            logging.debug(f"Removing session with refresh token {mask_token(refresh_token)}")
             self.__delete_session(self.__refresh_token_index(refresh_token))
-        logging.debug(f"Removing session with token {access_token}")
+        logging.debug(f"Removing session with token {mask_token(access_token)}")
         return self.__delete_session(access_token)
 
 def configure_session_storage(config):
