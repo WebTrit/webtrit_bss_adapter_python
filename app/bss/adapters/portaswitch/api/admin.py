@@ -2,6 +2,8 @@ import logging
 from typing import Optional
 
 from bss.adapters.portaswitch.config import PortaSwitchSettings
+from bss.adapters.portaswitch.exceptions import service_read_only_error
+from bss.adapters.portaswitch.failover import READ_ONLY_FAULTS
 from bss.adapters.portaswitch.types import PortaSwitchAdminUser
 from bss.adapters.portaswitch.utils import extract_fault_code
 from bss.async_http_api import AsyncHTTPAPIConnector, AsyncHTTPAPIConnectorWithLogin, OAuthSessionData
@@ -18,13 +20,18 @@ class AdminAPI(AsyncHTTPAPIConnectorWithLogin):
     # session_in_progress() and the auth_failed retry in _send_request().
     REFRESH_TOKEN_IN_ADVANCE = 0
 
-    def __init__(self, portaswitch_settings: PortaSwitchSettings) -> None:
+    def __init__(self, portaswitch_settings: PortaSwitchSettings, site_state=None) -> None:
         """The class constructor.
 
         Parameters:
             :config (app_config.AppConfig): The instance with all the service config options.
+            :site_state: Optional shared active-site tracker enabling DR failover.
         """
-        super().__init__(portaswitch_settings.ADMIN_API_URL)
+        super().__init__(
+            portaswitch_settings.ADMIN_API_URL,
+            site_state=site_state,
+            standby_server=portaswitch_settings.ADMIN_API_URL_STANDBY,
+        )
 
         # TLS verification is applied at shared-client construction (httpx
         # verify is client-level, not per-request); see AsyncHTTPAPIConnector.
@@ -288,6 +295,47 @@ class AdminAPI(AsyncHTTPAPIConnectorWithLogin):
 
         return response.get("version")
 
+    async def get_operating_mode(self, server: str) -> Optional[str]:
+        """Out-of-band probe of a specific site's operating mode (BA-47641).
+
+        Logs in against ``server`` and reads ``operating_mode`` from
+        ``generic.get_session_data`` — the authoritative signal for the current
+        mode of the site that served the request ('normal', 'secondary',
+        'standalone', 'read_only'). Used to decide when it is safe to switch API
+        traffic back to the main site.
+
+        Runs as a throwaway session against the given URL, bypassing the login
+        flow and the shared token cache (SHARED_TOKENS is not touched), so it can
+        probe the main site while normal traffic is served from the standby.
+
+        Returns:
+            The operating_mode string, or None if the site is unreachable or the
+            field is absent (older PortaSwitch without BA-47641).
+        """
+        try:
+            login = await AsyncHTTPAPIConnector.send_rest_request(
+                self,
+                method="POST",
+                path="/rest/Session/login",
+                server=server,
+                json={"params": {"login": self._api_user.user_id, "token": self._api_user.token}},
+            )
+            token = login.get("access_token") if isinstance(login, dict) else None
+            if not token:
+                return None
+
+            response = await AsyncHTTPAPIConnector.send_rest_request(
+                self,
+                method="POST",
+                path="/rest/Generic/get_session_data",
+                server=server,
+                json={"params": {}},
+                auth_session=OAuthSessionData(access_token=token),
+            )
+            return response.get("operating_mode") if isinstance(response, dict) else None
+        except WebTritErrorException:
+            return None
+
     async def _send_request(self, module: str, method: str, params: dict, turn_off_login: bool = False):
         """Sends the Porta-Billing API method by means of HTTP POST request.
 
@@ -327,6 +375,12 @@ class AdminAPI(AsyncHTTPAPIConnectorWithLogin):
                     turn_off_login=turn_off_login,
                     user=self._api_user,
                 )
+            elif fault_code in READ_ONLY_FAULTS:
+                # The (secondary/standalone) site cannot service this write/update
+                # in its current read-only mode. Surface a clear domain error
+                # instead of a generic 500.
+                logging.warning(f"PortaSwitch site is read-only ({fault_code}); method {module}/{method} unavailable")
+                raise service_read_only_error()
             else:
                 raise error
 

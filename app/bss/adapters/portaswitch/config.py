@@ -45,6 +45,16 @@ class PortaSwitchSettings(BaseSettings):
     # PORTASWITCH_MAX_KEEPALIVE_CONNECTIONS.
     MAX_CONNECTIONS: int = 100
     MAX_KEEPALIVE_CONNECTIONS: int = 20
+    # Disaster-recovery failover for a geographically dispersed installation
+    # (WT-1654). When a standby URL is unset, failover is disabled and behavior
+    # is unchanged. On a main-site outage, API traffic fails over to the standby;
+    # switch-back uses the operating_mode signal (BA-47641).
+    ADMIN_API_URL_STANDBY: Optional[str] = None
+    ACCOUNT_API_URL_STANDBY: Optional[str] = None
+    # Seconds between out-of-band main-site probes while running on standby.
+    SITE_RECHECK_INTERVAL: int = 60
+    # Consecutive main-site 'normal' probes required to switch back (hysteresis).
+    SITE_SWITCH_BACK_THRESHOLD: int = 2
     SIGNIN_CREDENTIALS: PortaSwitchSignInCredentialsType = PortaSwitchSignInCredentialsType.SELF_CARE
     CONTACTS_SELECTING: PortaSwitchContactsSelectingMode = PortaSwitchContactsSelectingMode.ACCOUNTS
     CONTACTS_SELECTING_EXTENSION_TYPES: Union[List[PortaSwitchExtensionType], str] = list(PortaSwitchExtensionType)

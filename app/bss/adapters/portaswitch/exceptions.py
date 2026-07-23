@@ -41,6 +41,14 @@ def external_api_issue_error():
     return WebTritErrorException(500, "Unknown error", "external_api_issue")
 
 
+def service_read_only_error():
+    return WebTritErrorException(
+        503,
+        "The service is temporarily in read-only (disaster-recovery) mode; this operation is unavailable",
+        "service_read_only",
+    )
+
+
 def incorrect_credentials_error():
     return WebTritErrorException(401, "User authentication error", "incorrect_credentials")
 

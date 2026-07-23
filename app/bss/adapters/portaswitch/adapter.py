@@ -42,6 +42,7 @@ from localization import get_translation_func
 from report_error import WebTritErrorException
 from .api import AccountAPI, AdminAPI
 from .config import Settings
+from .failover import SiteState
 from .exceptions import (
     method_not_found_error,
     external_api_issue_error,
@@ -143,8 +144,34 @@ class PortaSwitchAdapter(BSSAdapter):
             # cert); silence urllib3's per-request InsecureRequestWarning to avoid log spam.
             urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
-        self._admin_api = AdminAPI(self._portaswitch_settings)
-        self._account_api = AccountAPI(self._portaswitch_settings)
+        # Disaster-recovery failover (WT-1654): a single active-site tracker shared
+        # by both connectors (both sites fail and recover together). Enabled only
+        # when BOTH standby URLs are set — a partial config would flip the shared
+        # state to standby while the un-configured realm kept hitting the dead
+        # main, reintroducing the very timeouts this feature removes.
+        admin_standby = self._portaswitch_settings.ADMIN_API_URL_STANDBY
+        account_standby = self._portaswitch_settings.ACCOUNT_API_URL_STANDBY
+        site_state = None
+        if admin_standby and account_standby:
+            site_state = SiteState(
+                recheck_interval=self._portaswitch_settings.SITE_RECHECK_INTERVAL,
+                switch_back_threshold=self._portaswitch_settings.SITE_SWITCH_BACK_THRESHOLD,
+            )
+        elif admin_standby or account_standby:
+            logging.warning(
+                "PortaSwitch DR: only one of ADMIN_API_URL_STANDBY / ACCOUNT_API_URL_STANDBY "
+                "is set; DR failover is disabled. Set both (same secondary site) to enable it."
+            )
+
+        self._admin_api = AdminAPI(self._portaswitch_settings, site_state=site_state)
+        self._account_api = AccountAPI(self._portaswitch_settings, site_state=site_state)
+
+        if site_state is not None:
+            # Out-of-band switch-back probe: read the main site's operating_mode
+            # (BA-47641) via the admin connector, without touching live traffic.
+            site_state.set_probe(
+                lambda: self._admin_api.get_operating_mode(self._portaswitch_settings.ADMIN_API_URL)
+            )
         self._sip_server = SipServer(
             host=self._portaswitch_settings.SIP_SERVER_HOST, port=self._portaswitch_settings.SIP_SERVER_PORT
         )

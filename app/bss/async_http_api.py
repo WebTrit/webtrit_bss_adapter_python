@@ -117,8 +117,14 @@ class AsyncHTTPAPIConnector(ABC):
     #: subclass may override it with a single float (see PortaSwitch API_TIMEOUT).
     DEFAULT_REQUEST_TIMEOUT = (5, 25)
 
-    def __init__(self, api_server: str):
+    def __init__(self, api_server: str, site_state=None, standby_server: str = None):
         self.api_server = api_server
+        # DR failover (opt-in): when a duck-typed ``site_state`` and a
+        # ``standby_server`` are set, requests are routed to the active site and
+        # retried once against the standby on a main-site outage. Both None ->
+        # behavior unchanged.
+        self.site_state = site_state
+        self._standby_server = standby_server
 
     def _verify(self) -> bool:
         # Subclasses set self._verify_https after super().__init__(); the client
@@ -169,82 +175,122 @@ class AsyncHTTPAPIConnector(ABC):
                                 stream=None,
                                 headers={'Content-Type': 'application/json'},
                                 auth_session: AuthSessionData = None) -> dict:
-        """Send an HTTP request and return the decoded response."""
-        url = (server if server else self.api_server) + path
+        """Send an HTTP request and return the decoded response.
+
+        When DR failover is configured (``site_state`` + ``standby_server``) and
+        no explicit ``server`` is given, the request is routed to the active site
+        and, on a main-site timeout / connection error, retried once against the
+        standby. An explicit ``server`` is honored as-is and disables failover.
+        """
         # Note: no 'verify' and no 'stream' key here — verify is client-level in
         # httpx, and streaming is handled via client.send(stream=True) below.
-        params = {
-            'headers': headers.copy() if headers else None,
-            'data': data if data else None,
-            'params': query_params if query_params else None,
-            'json': json if json else None,
-        }
-        params_with_auth = self.add_auth_info(url, params, auth_session)
-        params_final = self.add_trace_info(params_with_auth)
-
         client = await self._client()
         timeout = self._request_timeout()
 
-        try:
-            logging.debug(f"Sending {method} request to {url} with parameters {params_final}")
-            if stream:
-                # Build + send with stream=True so the body is not pulled into
-                # memory: it is consumed lazily by decode_response/caller.
-                request = client.build_request(method, url, timeout=timeout, **params_final)
-                response = await client.send(request, stream=True)
+        targets = self._request_targets(server)
+        last = len(targets) - 1
+        for index, base_server in enumerate(targets):
+            url = base_server + path
+            params = {
+                'headers': headers.copy() if headers else None,
+                'data': data if data else None,
+                'params': query_params if query_params else None,
+                'json': json if json else None,
+            }
+            params_with_auth = self.add_auth_info(url, params, auth_session)
+            params_final = self.add_trace_info(params_with_auth)
+
+            try:
+                logging.debug(f"Sending {method} request to {url} with parameters {params_final}")
+                if stream:
+                    # Build + send with stream=True so the body is not pulled into
+                    # memory: it is consumed lazily by decode_response/caller.
+                    request = client.build_request(method, url, timeout=timeout, **params_final)
+                    response = await client.send(request, stream=True)
+                    response.raise_for_status()
+                    logging.debug(f"Received {response.status_code} (streamed, body not logged)")
+                    return await self.decode_response(response)
+
+                response = await client.request(method, url, timeout=timeout, **params_final)
+                clean_text = truncate_log_message(response.text.replace("\n", " "))
+                logging.debug(f"Received {response.status_code} {clean_text}")
                 response.raise_for_status()
-                logging.debug(f"Received {response.status_code} (streamed, body not logged)")
                 return await self.decode_response(response)
 
-            response = await client.request(method, url, timeout=timeout, **params_final)
-            clean_text = truncate_log_message(response.text.replace("\n", " "))
-            logging.debug(f"Received {response.status_code} {clean_text}")
-            response.raise_for_status()
-            return await self.decode_response(response)
+            except httpx.HTTPError as e:
+                # A timeout / connection error means the site is unreachable; an
+                # HTTP status error (raise_for_status) means the site answered and
+                # is NOT a failover trigger. PoolTimeout is excluded: it is a local
+                # connection-pool exhaustion event, not a main-site outage, so it
+                # must not flip the active site (it still yields the 408 trace below).
+                connectivity = (
+                    isinstance(e, (httpx.TimeoutException, httpx.ConnectError))
+                    and not isinstance(e, httpx.PoolTimeout)
+                )
+                if connectivity:
+                    self._note_site_unreachable(base_server)
+                    if index < last:
+                        logging.warning(
+                            f"{base_server} unreachable ({e}); failing over to {targets[index + 1]}"
+                        )
+                        continue
 
-        except httpx.TimeoutException:
-            logging.debug(f"Connection to {self.api_server} timed out")
-            raise_webtrit_error(500,
-                                error_message="Request execution error on the other side",
-                                bss_request_trace={
-                                    'method': method,
-                                    'url': url,
-                                    **params
-                                },
-                                bss_response_trace={
-                                    'status_code': 408,
-                                    'text': 'Timed out',
-                                    'response_content': {}
-                                }
-                                )
-        except httpx.HTTPError as e:
-            logging.debug(f"Request error: {e}")
+                if isinstance(e, httpx.TimeoutException):
+                    logging.debug(f"Connection to {url} timed out")
+                    raise_webtrit_error(500,
+                                        error_message="Request execution error on the other side",
+                                        bss_request_trace={
+                                            'method': method,
+                                            'url': url,
+                                            **params
+                                        },
+                                        bss_response_trace={
+                                            'status_code': 408,
+                                            'text': 'Timed out',
+                                            'response_content': {}
+                                        }
+                                        )
 
-            response_content = {}
-            response = getattr(e, "response", None)
-            if response is not None:
-                try:
-                    # Streamed error responses are not read yet; read before json().
-                    await response.aread()
-                except Exception:
-                    pass
-                try:
-                    response_content = response.json()
-                except ValueError:
-                    pass
+                logging.debug(f"Request error: {e}")
 
-            raise_webtrit_error(500,
-                                error_message="Request execution error on the BSS/VoIP system side",
-                                bss_request_trace={
-                                                      'method': method,
-                                                      'url': url,
-                                                  } | params,
-                                bss_response_trace={
-                                    'status_code': 500,
-                                    'text': f"{e}",
-                                    'response_content': response_content
-                                }
-                                )
+                response_content = {}
+                response = getattr(e, "response", None)
+                if response is not None:
+                    try:
+                        # Streamed error responses are not read yet; read before json().
+                        await response.aread()
+                    except Exception:
+                        pass
+                    try:
+                        response_content = response.json()
+                    except ValueError:
+                        pass
+
+                raise_webtrit_error(500,
+                                    error_message="Request execution error on the BSS/VoIP system side",
+                                    bss_request_trace={
+                                                          'method': method,
+                                                          'url': url,
+                                                      } | params,
+                                    bss_response_trace={
+                                        'status_code': 500,
+                                        'text': f"{e}",
+                                        'response_content': response_content
+                                    }
+                                    )
+
+    def _request_targets(self, server: str) -> list:
+        """Ordered base server URLs for a request. An explicit ``server`` disables
+        failover; otherwise the active-site tracker decides (or just api_server)."""
+        if server:
+            return [server]
+        if self.site_state is not None and self._standby_server:
+            return self.site_state.next_targets(self.api_server, self._standby_server)
+        return [self.api_server]
+
+    def _note_site_unreachable(self, base_server: str) -> None:
+        if self.site_state is not None and base_server == self.api_server:
+            self.site_state.report_unreachable()
 
     async def decode_response(self, response) -> dict:
         """Decode the JSON response. Override for custom parsing."""
@@ -272,8 +318,10 @@ class AsyncHTTPAPIConnectorWithLogin(AsyncHTTPAPIConnector):
                  api_user: str = None,
                  api_password: str = None,
                  api_token: str = None,
-                 api_token_expires_at: datetime = None):
-        super().__init__(api_server)
+                 api_token_expires_at: datetime = None,
+                 site_state=None,
+                 standby_server: str = None):
+        super().__init__(api_server, site_state=site_state, standby_server=standby_server)
 
         self.api_user = api_user
         self.api_password = api_password
