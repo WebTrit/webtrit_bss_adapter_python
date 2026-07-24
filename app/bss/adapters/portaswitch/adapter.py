@@ -1375,12 +1375,20 @@ class PortaSwitchAdapter(BSSAdapter):
 
             raise error
 
-    async def retrieve_voicemails(self, session: SessionInfo, user: UserInfo) -> UserVoicemailsResponse:
+    async def retrieve_voicemails(
+        self,
+        session: SessionInfo,
+        user: UserInfo,
+        from_date: Optional[str] = None,
+        to_date: Optional[str] = None,
+    ) -> UserVoicemailsResponse:
         """Returns the user's voicemail messages.
 
         Parameters:
             session (SessionInfo): The session of the PortaSwitch account.
             user (UserInfo): The information about the PortaSwitch account.
+            from_date (Optional[str]): Return messages delivered on or after this date ("YYYY-MM-DD").
+            to_date (Optional[str]): Return messages delivered before this date ("YYYY-MM-DD").
 
         Returns:
             UserVoicemailsResponse: Structure containing voicemail messages and a new message flag.
@@ -1390,7 +1398,9 @@ class PortaSwitchAdapter(BSSAdapter):
         """
         try:
             mailbox_messages = await self._account_api.get_mailbox_messages(
-                safely_extract_scalar_value(session.access_token)
+                safely_extract_scalar_value(session.access_token),
+                from_date=from_date,
+                to_date=to_date,
             )
             voicemail_messages = [Serializer.get_voicemail_message(message) for message in mailbox_messages]
 

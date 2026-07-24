@@ -216,8 +216,14 @@ class BSSAdapter(SessionManagement, OTPHandler,
         """Obtain user's information - most importantly, his/her SIP credentials."""
         raise NotImplementedError("Override this method in your sub-class")
 
-    def retrieve_voicemails(self, session: SessionInfo, user: UserInfo) -> UserVoicemailsResponse:
-        """Obtain user's voicemails"""
+    def retrieve_voicemails(
+        self,
+        session: SessionInfo,
+        user: UserInfo,
+        from_date: Optional[str] = None,
+        to_date: Optional[str] = None,
+    ) -> UserVoicemailsResponse:
+        """Obtain user's voicemails, optionally filtered by delivery date range"""
         raise NotImplementedError("Override this method in your sub-class")
 
     def retrieve_voicemail_message_details(self, session: SessionInfo, user: UserInfo,

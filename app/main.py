@@ -823,6 +823,14 @@ async def get_user_recording(
     tags=['user'],
 )
 async def get_user_voicemails(
+        from_date: Optional[str] = Query(
+            default=None,
+            description='Return voicemail messages delivered on or after this date ("YYYY-MM-DD").',
+        ),
+        to_date: Optional[str] = Query(
+            default=None,
+            description='Return voicemail messages delivered before this date ("YYYY-MM-DD").',
+        ),
         auth_data: HTTPAuthorizationCredentials = Depends(security),
         x_webtrit_tenant_id: Optional[str] = Header(None, alias=TENANT_ID_HTTP_HEADER),
 ) -> Union[
@@ -841,7 +849,7 @@ async def get_user_voicemails(
     voicemail = await call_bss(bss.retrieve_voicemails, session, ExtendedUserInfo(
         user_id=safely_extract_scalar_value(session.user_id),
         tenant_id=bss.default_id_if_none(x_webtrit_tenant_id)
-    ))
+    ), from_date, to_date)
 
     return voicemail
 

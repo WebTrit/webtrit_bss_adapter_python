@@ -1,5 +1,5 @@
 from datetime import datetime
-from typing import AsyncIterator, Final, List, Union
+from typing import AsyncIterator, Final, List, Optional, Union
 
 import httpx
 from jose import jwt
@@ -357,20 +357,30 @@ class AccountAPI(AsyncHTTPAPIConnector):
             access_token=access_token,
         )
 
-    async def get_mailbox_messages(self, access_token: str) -> List[dict]:
+    async def get_mailbox_messages(
+        self, access_token: str, from_date: Optional[str] = None, to_date: Optional[str] = None
+    ) -> List[dict]:
         """
         Returns the mailbox of the account, which created a session related to the access_token.
             Parameters:
                 access_token :str: The token that enables the API user to be authenticated in the PortaBilling API using the account realm.
+                from_date :Optional[str]: The date in the "YYYY-MM-DD" format. Messages delivered on or after this date are returned.
+                to_date :Optional[str]: The date in the "YYYY-MM-DD" format. Messages delivered before this date are returned.
 
             Returns:
                 Response :dict: The API method execution result that contains a list of mailbox messages.
         """
 
+        params = {}
+        if from_date is not None:
+            params["from_date"] = from_date
+        if to_date is not None:
+            params["to_date"] = to_date
+
         return (await self.__send_request(
             module="Account",
             method="get_mailbox_message_list",
-            params={},
+            params=params,
             access_token=access_token,
         ))["messages"]
 
