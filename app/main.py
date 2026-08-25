@@ -117,6 +117,7 @@ from bss.types import (
     CreateUserEventUnprocessableEntityErrorResponse,
 )
 from bss.types import Capabilities, ExtendedUserInfo, Health, safely_extract_scalar_value
+from metrics import instrument_app, record_deadline_expired, start_metrics_server
 from report_error import WebTritErrorException
 from report_error import raise_webtrit_error
 from request_trace import RouteWithLogging
@@ -135,6 +136,9 @@ app = FastAPI(
     title="Sample adapter for connecting WebTrit to a BSS",
     version=VERSION,
 )
+# Records request rate, latency, status and requests in flight (WT-1718).
+instrument_app(app)
+
 security = HTTPBearer()
 
 router = APIRouter(route_class=RouteWithLogging)
@@ -167,11 +171,18 @@ async def call_bss(fn: Callable, *args, **kwargs):
         try:
             return await asyncio.wait_for(fn(*args, **kwargs), REQUEST_DEADLINE)
         except asyncio.TimeoutError:
+            record_deadline_expired(getattr(fn, "__name__", ""))
             raise_webtrit_error(
                 500,
                 error_message=f"Request to the BSS/VoIP system exceeded the {REQUEST_DEADLINE:.0f}s deadline",
             )
     return await run_in_threadpool(fn, *args, **kwargs)
+
+
+@app.on_event("startup")
+async def _start_metrics_server() -> None:
+    """Expose /metrics on its own port, away from the public ingress."""
+    start_metrics_server(config)
 
 
 @app.on_event("shutdown")

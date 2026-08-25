@@ -19,6 +19,10 @@ python-jose==3.3.0
 cryptography
 disposable-email-domains==0.0.104
 phonenumbers==9.0.0
+# Prometheus metrics (WT-1718). The instrumentator is capped at 7.1.* because
+# 8.x requires a starlette newer than the one FastAPI is pinned to here.
+prometheus-client==0.26.*
+prometheus-fastapi-instrumentator==7.1.*
 # for 3CX module
 # google-cloud==0.34.0
 # google-auth==2.17.2

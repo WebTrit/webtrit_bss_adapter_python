@@ -1022,50 +1022,14 @@ class PortaSwitchAdapter(BSSAdapter):
                         )
                         accounts = [acc for accs in accounts_per_customer for acc in accs]
                     else:
-                        # Single customer: use API-level pagination for efficiency.
-                        # PortaBilling's documented per-call maximum is 1000; requesting more silently
-                        # returns at most 1000 records. When items_per_page >= 1000, use chunked
-                        # fetching to guarantee correct in-memory pagination across the full dataset.
-                        if items_per_page >= MAX_API_LIMIT:
-                            # Page size at or above PortaBilling's per-request maximum: fetch all accounts
-                            # in chunks of 1000 and paginate in-memory.
-                            accounts = await self._get_all_accounts_by_customer(main_i_customer)
-                            total_count_from_api = 0
-                        else:
-                            # Normal page: loop until we have exactly `target` filtered accounts.
-                            # A single fetch with a fixed buffer is insufficient when many accounts
-                            # are filtered (blocked, current user, no extension): the buffer may be
-                            # exhausted before we reach `target` filtered results.
-                            if page == 1 and custom_contacts_count > 0:
-                                target = items_per_page - custom_contacts_count
-                                fetch_offset = 0
-                            else:
-                                target = items_per_page
-                                fetch_offset = max(0, (page - 1) * items_per_page - custom_contacts_count)
+                        # Single customer: fetch the whole account list and paginate in memory.
+                        # PortaBilling's offset counts raw accounts, while page and items_per_page
+                        # count accounts that survive _passes_filter, so a raw offset derived from
+                        # the page number lags by the number of accounts filtered out before it:
+                        # consecutive pages overlap and the tail pages come back empty (WT-1774).
+                        accounts = await self._get_all_accounts_by_customer(main_i_customer)
 
-                            accounts = []
-                            total_count_from_api = 0
-                            while len(accounts) < target:
-                                needed = target - len(accounts)
-                                result = await self._admin_api.get_account_list(
-                                    main_i_customer,
-                                    limit=min(needed + FILTER_BUFFER, MAX_API_LIMIT),
-                                    offset=fetch_offset,
-                                )
-                                total_count_from_api = result.get("total", 0)
-                                batch = result.get("account_list") or []
-                                if not batch:
-                                    break
-                                for account in batch:
-                                    if _passes_filter(account):
-                                        accounts.append(account)
-                                        if len(accounts) >= target:
-                                            break
-                                if len(batch) < needed + FILTER_BUFFER:
-                                    break  # PortaBilling has no more records
-                                fetch_offset += len(batch)
-
-                    # Filter accounts (for search/hierarchy paths; single-customer loop pre-filters)
+                    # Filter accounts
                     filtered_accounts = [a for a in accounts if _passes_filter(a)]
 
                     # Build contacts from accounts
@@ -1085,30 +1049,27 @@ class PortaSwitchAdapter(BSSAdapter):
                                 search_lower in (contact.numbers.main or "").lower())
                         ]
 
-                    # Add custom contacts (only on first page for non-search / hierarchy modes)
-                    if search or is_hierarchy or page == 1:
-                        account_contacts.extend(custom_contacts)
-
                     # Apply pagination
-                    if search or is_hierarchy or items_per_page > MAX_API_LIMIT:
-                        # In-memory pagination for search, multi-customer hierarchy, and large pages.
-                        # In search mode: use the API-reported total (max across fields) as total_count
-                        # rather than len(account_contacts), because the bounded fetch only retrieves
-                        # enough records for the current page — len() would severely undercount.
-                        if search:
-                            total_count = max(search_total_from_api, len(account_contacts))
-                        else:
-                            total_count = len(account_contacts)
+                    if search or is_hierarchy:
+                        account_contacts.extend(custom_contacts)
+                        # In search mode the bounded per-field fetch retrieves only enough records
+                        # for the current page, so len() would severely undercount the match total.
+                        total_count = (
+                            max(search_total_from_api, len(account_contacts)) if search
+                            else len(account_contacts)
+                        )
                         start_idx = (page - 1) * items_per_page
-                        end_idx = start_idx + items_per_page
-                        contacts = account_contacts[start_idx:end_idx]
+                        contacts = account_contacts[start_idx:start_idx + items_per_page]
                     else:
-                        # For single-customer non-search mode, pagination is applied via API.
-                        # items_total comes from PortaBilling and may be slightly higher than the
-                        # actual retrievable count (e.g. current user and blocked accounts are
-                        # filtered out adapter-side but counted by PortaBilling).
-                        contacts = account_contacts[:items_per_page]
-                        total_count = total_count_from_api + (len(custom_contacts) if page == 1 else 0)
+                        # Custom contacts fill the last slots of page 1, so account indices shift
+                        # by custom_contacts_count from page 2 onward.
+                        total_count = len(account_contacts) + custom_contacts_count
+                        if page == 1:
+                            contacts = account_contacts[:max(0, items_per_page - custom_contacts_count)]
+                            contacts.extend(custom_contacts)
+                        else:
+                            start_idx = (page - 1) * items_per_page - custom_contacts_count
+                            contacts = account_contacts[start_idx:start_idx + items_per_page]
 
                 case PortaSwitchContactsSelectingMode.PHONEBOOK:
                     custom_contacts = [Serializer.get_contact_info_by_custom_entry(entry) for entry in

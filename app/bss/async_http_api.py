@@ -111,6 +111,21 @@ async def close_shared_async_clients() -> None:
         _shared_clients.clear()
 
 
+def _record_pool_timeout(server: str) -> None:
+    """Count a pool timeout (WT-1718).
+
+    Imported here rather than at module scope so that this connector keeps
+    working — and stays importable on its own — when the metrics stack is
+    unavailable. Pool timeouts are rare, so the import cost does not matter.
+    """
+    try:
+        from metrics import record_pool_timeout
+
+        record_pool_timeout(server)
+    except Exception as e:
+        logging.debug(f"Could not record a pool timeout: {e}")
+
+
 class AsyncHTTPAPIConnector(ABC):
     """Extract data from a remote server via REST/HTTP using httpx (async)."""
 
@@ -228,6 +243,9 @@ class AsyncHTTPAPIConnector(ABC):
                     isinstance(e, (httpx.TimeoutException, httpx.ConnectError))
                     and not isinstance(e, httpx.PoolTimeout)
                 )
+                if isinstance(e, httpx.PoolTimeout):
+                    _record_pool_timeout(base_server)
+
                 if connectivity:
                     self._note_site_unreachable(base_server)
                     if index < last:
