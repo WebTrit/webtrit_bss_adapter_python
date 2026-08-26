@@ -895,7 +895,6 @@ class PortaSwitchAdapter(BSSAdapter):
                     # Get custom contacts (needed for both search and non-search modes)
                     custom_contacts = [Serializer.get_contact_info_by_custom_entry(entry) for entry in
                                        self._portaswitch_settings.CONTACTS_CUSTOM]
-                    custom_contacts_count = len(custom_contacts)
 
                     # When filtering by extension and in a hierarchy, use the unified extensions list
                     # (get_main_office_extensions returns extensions across all offices) as the filter
@@ -1015,19 +1014,27 @@ class PortaSwitchAdapter(BSSAdapter):
                                 logging.debug(f"Failed to search by alias DID {search_stripped}: {e}")
 
                         accounts = list(accounts_dict.values())
-                    elif is_hierarchy:
-                        # Multi-customer: fetch all offices in parallel and paginate in-memory
+                    else:
+                        # Non-search: fetch every account of every office in parallel chunks of
+                        # 1000 and paginate in-memory. API-level LIMIT/OFFSET cannot be used here
+                        # (WT-1774): the offset would have to be expressed in raw PortaBilling
+                        # rows, while pages are counted in post-`_passes_filter` contacts. Mixing
+                        # the two made consecutive pages overlap by a margin that grew with the
+                        # page number. For a customer outside an office hierarchy
+                        # all_i_customers == [main_i_customer], so this is a single fan-out.
                         accounts_per_customer = await _gather_limited(
                             [self._get_all_accounts_by_customer(c) for c in all_i_customers]
                         )
-                        accounts = [acc for accs in accounts_per_customer for acc in accs]
-                    else:
-                        # Single customer: fetch the whole account list and paginate in memory.
-                        # PortaBilling's offset counts raw accounts, while page and items_per_page
-                        # count accounts that survive _passes_filter, so a raw offset derived from
-                        # the page number lags by the number of accounts filtered out before it:
-                        # consecutive pages overlap and the tail pages come back empty (WT-1774).
-                        accounts = await self._get_all_accounts_by_customer(main_i_customer)
+                        # Order deterministically: get_account_list is never sent an ORDER BY,
+                        # so the row order of separate calls — the parallel chunks here, and the
+                        # next page's own request — is unspecified. Sorting on i_account makes
+                        # page boundaries reproducible across requests. Search results are left
+                        # alone: their order is relevance, the fields being probed in priority
+                        # order (id, firstname, lastname, extension_name, email).
+                        accounts = sorted(
+                            (acc for accs in accounts_per_customer for acc in accs),
+                            key=lambda a: int(a["i_account"]),
+                        )
 
                     # Filter accounts
                     filtered_accounts = [a for a in accounts if _passes_filter(a)]
@@ -1049,27 +1056,23 @@ class PortaSwitchAdapter(BSSAdapter):
                                 search_lower in (contact.numbers.main or "").lower())
                         ]
 
-                    # Apply pagination
-                    if search or is_hierarchy:
-                        account_contacts.extend(custom_contacts)
-                        # In search mode the bounded per-field fetch retrieves only enough records
-                        # for the current page, so len() would severely undercount the match total.
-                        total_count = (
-                            max(search_total_from_api, len(account_contacts)) if search
-                            else len(account_contacts)
-                        )
-                        start_idx = (page - 1) * items_per_page
-                        contacts = account_contacts[start_idx:start_idx + items_per_page]
+                    # Add custom contacts; they tail the directory on the last page
+                    account_contacts.extend(custom_contacts)
+
+                    # Apply pagination. One code path for every sub-mode so that the slice offset
+                    # and items_total always describe the same row set (WT-1774): reporting
+                    # PortaBilling's unfiltered total made the client build pages that do not
+                    # exist, hence the empty last page.
+                    # In search mode: use the API-reported total (max across fields) as total_count
+                    # rather than len(account_contacts), because the bounded fetch only retrieves
+                    # enough records for the current page — len() would severely undercount.
+                    if search:
+                        total_count = max(search_total_from_api, len(account_contacts))
                     else:
-                        # Custom contacts fill the last slots of page 1, so account indices shift
-                        # by custom_contacts_count from page 2 onward.
-                        total_count = len(account_contacts) + custom_contacts_count
-                        if page == 1:
-                            contacts = account_contacts[:max(0, items_per_page - custom_contacts_count)]
-                            contacts.extend(custom_contacts)
-                        else:
-                            start_idx = (page - 1) * items_per_page - custom_contacts_count
-                            contacts = account_contacts[start_idx:start_idx + items_per_page]
+                        total_count = len(account_contacts)
+                    start_idx = (page - 1) * items_per_page
+                    end_idx = start_idx + items_per_page
+                    contacts = account_contacts[start_idx:end_idx]
 
                 case PortaSwitchContactsSelectingMode.PHONEBOOK:
                     custom_contacts = [Serializer.get_contact_info_by_custom_entry(entry) for entry in
@@ -1828,7 +1831,16 @@ class PortaSwitchAdapter(BSSAdapter):
         # itself invoked concurrently across customers — can't dead-lock.
         remaining_pages = await _gather_limited([_fetch_page(o) for o in remaining_offsets])
 
-        return first_page + [acc for page in remaining_pages for acc in page]
+        # De-duplicate by i_account: the chunks are separate LIMIT/OFFSET queries and
+        # get_account_list is never sent an ORDER BY, so an unstable row order between
+        # them could otherwise repeat a record in the assembled list (WT-1774). This
+        # bounds the damage but is not a cure — a row that lands in no chunk at all
+        # would still be missed; that needs a server-side ORDER BY.
+        by_i_account: dict[int, dict] = {}
+        for account in first_page + [acc for page in remaining_pages for acc in page]:
+            by_i_account[int(account["i_account"])] = account
+
+        return list(by_i_account.values())
 
     async def _get_or_create_api_token(self, account_info: dict) -> Optional[str]:
         """Return the account's api_token, creating and persisting one if absent."""
