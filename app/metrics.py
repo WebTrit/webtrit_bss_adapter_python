@@ -180,9 +180,10 @@ def _collect_pool(
     if isinstance(max_connections, int):
         limit.add_metric([verify], max_connections)
 
-    waiting = getattr(pool, "_requests", None)
-    if waiting is not None:
-        queued.add_metric([verify], len(waiting))
+    requests = getattr(pool, "_requests", None)
+    if requests is not None:
+        waiting = sum(1 for request in list(requests) if _is_queued(request))
+        queued.add_metric([verify], waiting)
 
     counted: dict = {}
     for connection in getattr(pool, "connections", []):
@@ -224,6 +225,20 @@ def _is_idle(connection: Any) -> bool:
     is_idle = getattr(connection, "is_idle", None)
     try:
         return bool(is_idle())
+    except Exception:
+        return False
+
+
+def _is_queued(request: Any) -> bool:
+    """Whether a request is still waiting for a connection to be assigned.
+
+    Mirrors httpcore's `PoolRequest.is_queued()`. A request that cannot answer
+    counts as not waiting, so a rename upstream understates the queue instead of
+    inventing one — and the saturation signal stays conservative.
+    """
+    is_queued = getattr(request, "is_queued", None)
+    try:
+        return bool(is_queued())
     except Exception:
         return False
 

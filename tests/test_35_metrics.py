@@ -9,10 +9,26 @@ import os
 import sys
 
 import pytest
+from httpcore._async.connection_pool import AsyncPoolRequest
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "app"))
 
 import metrics  # noqa: E402
+
+
+def pool_request(queued: bool) -> AsyncPoolRequest:
+    """Build a real httpcore request so that `is_queued()` is httpcore's own.
+
+    A request counts as waiting only until a connection is assigned to it, so a
+    stand-in of our own would test our assumption rather than httpcore's
+    behaviour. The connection is set directly instead of through
+    `assign_to_connection`, which also fires an anyio event and would need a
+    running loop; `is_queued` reads the attribute and nothing else.
+    """
+    request = AsyncPoolRequest(object())
+    if not queued:
+        request.connection = object()
+    return request
 
 
 class FakeConnection:
@@ -27,9 +43,12 @@ class FakeConnection:
 
 
 class FakePool:
-    def __init__(self, connections, queued=0, max_connections=100):
+    def __init__(self, connections, queued=0, active=0, max_connections=100):
         self.connections = connections
-        self._requests = [object()] * queued
+        # `_requests` mixes both, exactly as httpcore keeps it.
+        self._requests = [pool_request(queued=True) for _ in range(queued)] + [
+            pool_request(queued=False) for _ in range(active)
+        ]
         self._max_connections = max_connections
 
 
@@ -76,6 +95,20 @@ def test_reports_the_limit_the_queue_and_the_connections(collected) -> None:
     assert samples[
         ("httpx_pool_connections", (("host", "ps.example.com"), ("state", "idle"), ("verify", "false")))
     ] == 1
+
+
+def test_does_not_count_requests_that_already_hold_a_connection(collected) -> None:
+    """Only the waiting requests are queued, though `_requests` carries both.
+
+    Counting the whole list would report a queue whenever anything is in flight
+    at all — most of the time under load — and the saturation signal, which is
+    the pool at its limit *and* a queue behind it, would then never go quiet.
+    """
+    pool = FakePool(connections=[], queued=2, active=9, max_connections=100)
+
+    samples = collected({False: pool})
+
+    assert samples[("httpx_pool_queued_requests", (("verify", "false"),))] == 2
 
 
 def test_reports_each_shared_client_separately(collected) -> None:
