@@ -129,7 +129,8 @@ class PortaSwitchAdapter(BSSAdapter):
         Capabilities.notifications,
         Capabilities.notifications_push,
         Capabilities.sip_presence,
-        Capabilities.sip_dialogs
+        Capabilities.sip_dialogs,
+        Capabilities.direct_presence
     ]
 
     def __init__(self, config: AppConfig):
