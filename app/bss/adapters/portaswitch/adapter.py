@@ -349,7 +349,7 @@ class PortaSwitchAdapter(BSSAdapter):
 
             raise error
 
-    def validate_session(self, access_token: str) -> SessionInfo:
+    async def validate_session(self, access_token: str) -> SessionInfo:
         """Validates whether the provided access token is still valid.
 
         Parameters:
@@ -363,15 +363,32 @@ class PortaSwitchAdapter(BSSAdapter):
         """
         try:
             data = self._account_api.decode_and_verify_access_token_expiration(access_token)
-            user_id = str(data["i_account"])
-
-            return SessionInfo(user_id=UserId(user_id), access_token=AccessToken(access_token))
         except ExpiredSignatureError:
             raise access_token_expired_error()
         except JWTError:
             if self._settings.ENABLE_ON_DEMAND_SESSION_MIGRATION:
                 raise session_upgrade_needed_error()
             raise access_token_invalid_error()
+
+        user_id = data.get("i_account")
+        if user_id is None:
+            # Tokens minted via Session/login_to_realm (e.g. an embedded page
+            # logging the account in through the admin realm) carry no i_account
+            # claim, so the JWT alone cannot identify the session owner. Resolve
+            # it server-side via Session/ping, as pre-1.x versions did (WT-1900).
+            try:
+                session_data = await self._account_api.ping(access_token=access_token)
+            except WebTritErrorException as error:
+                if extract_fault_code(error) == "Client.Session.ping.failed_to_process_access_token":
+                    raise access_token_invalid_error()
+
+                raise error
+
+            user_id = session_data.get("user_id")
+            if not user_id:
+                raise access_token_invalid_error()
+
+        return SessionInfo(user_id=UserId(str(user_id)), access_token=AccessToken(access_token))
 
     async def refresh_session(self, refresh_token: str) -> SessionInfo:
         """Refreshes the PortaSwitch account session.
