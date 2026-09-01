@@ -129,7 +129,11 @@ class PortaSwitchAdapter(BSSAdapter):
         Capabilities.notifications,
         Capabilities.notifications_push,
         Capabilities.sip_presence,
-        Capabilities.sip_dialogs
+        Capabilities.sip_dialogs,
+        # Merging calls into a conference happens entirely in Core and Janus -
+        # nothing is signalled to PortaSwitch - so this only tells the client
+        # whether the deployment offers it (WT-783).
+        Capabilities.conference
     ]
 
     def __init__(self, config: AppConfig):

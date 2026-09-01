@@ -590,6 +590,7 @@ class SupportedEnum(Enum):
     notifications_push = "notificationsPush"
     sip_presence = "sipPresence"
     sip_dialogs = "sipDialogs"
+    conference = "conference"
 
 
 class SystemInfoShowResponse(BaseModel):
@@ -600,7 +601,7 @@ class SystemInfoShowResponse(BaseModel):
     name: str
     supported: List[SupportedEnum] = Field(
         ...,
-        description="A list of supported functionalities by the **Adaptee**.\n\nPossible functionalities values:\n* `signup` - supports the creation of new customer accounts\n* `otpSignin` - allows user authorization via One-Time Password (OTP)\n* `passwordSignin` - allows user authorization using login and password\n* `autoProvision` - allows user authorization using config token\n* `recordings` - provides access to call recordings\n* `callHistory` - provides access to call history\n* `extensions` - retrieves the list of other users (contacts)\n",
+        description="A list of supported functionalities by the **Adaptee**.\n\nPossible functionalities values:\n* `signup` - supports the creation of new customer accounts\n* `otpSignin` - allows user authorization via One-Time Password (OTP)\n* `passwordSignin` - allows user authorization using login and password\n* `autoProvision` - allows user authorization using config token\n* `recordings` - provides access to call recordings\n* `callHistory` - provides access to call history\n* `extensions` - retrieves the list of other users (contacts)\n* `conference` - allows merging the calls on two or more lines into an audio conference\n",
     )
     version: str
 
