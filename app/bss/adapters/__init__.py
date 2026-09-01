@@ -149,6 +149,7 @@ class BSSAdapter(SessionManagement, OTPHandler,
         SIP_PRESENCE=dict(default=True, option=Capabilities.sip_presence),
         SIP_DIALOGS=dict(default=True, option=Capabilities.sip_dialogs),
         CONFERENCE=dict(default=False, option=Capabilities.conference),
+        CONVERSATION_MUTE=dict(default=True, option=Capabilities.conversation_mute),
     )
     # what our adapter can do in general (what is coded)
     # should be overridden in the sub-class

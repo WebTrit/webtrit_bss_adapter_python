@@ -133,7 +133,11 @@ class PortaSwitchAdapter(BSSAdapter):
         # Merging calls into a conference happens entirely in Core and Janus -
         # nothing is signalled to PortaSwitch - so this only tells the client
         # whether the deployment offers it (WT-783).
-        Capabilities.conference
+        Capabilities.conference,
+        # Muting one conversation is stored and enforced by Core alone - PortaSwitch
+        # knows nothing about it - so this only tells the client whether the deployment
+        # is new enough to offer it (WT-1880).
+        Capabilities.conversation_mute
     ]
 
     def __init__(self, config: AppConfig):
