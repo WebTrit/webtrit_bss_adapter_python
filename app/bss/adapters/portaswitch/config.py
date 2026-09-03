@@ -64,6 +64,17 @@ class PortaSwitchSettings(BaseSettings):
     HIDE_BALANCE_IN_USER_INFO: Optional[bool] = False
     SELF_CONFIG_PORTAL_URL: Optional[str] = None
     ALLOWED_ADDONS: Union[List[str], str] = []
+    # "My Queues" call center screen (WT-1881).
+    # Live "callers waiting" comes from the Call Control API, which is reachable only
+    # from the admin realm and only after CallControl.enable_api_notifications has been
+    # called for the scope. Off by default: on installations without Call Control access
+    # every poll would cost two failing requests. When off, the queue list is still
+    # served - callers_waiting is simply reported as null.
+    CALL_CENTER_LIVE_COUNTERS: bool = False
+    # Seconds to reuse the live counters before asking the switch again. The clients
+    # poll this endpoint while the screen is open, so without a cache a room full of
+    # agents would multiply the load on the switch by the number of open screens.
+    CALL_CENTER_COUNTERS_TTL: int = 5
 
     @field_validator("API_TIMEOUT", mode='before')
     @classmethod
@@ -101,6 +112,19 @@ class PortaSwitchSettings(BaseSettings):
     @classmethod
     def decode_max_keepalive_connections(cls, v: Union[str, int, None]) -> int:
         return cls._positive_int_or(v, 20)
+
+    @field_validator("CALL_CENTER_COUNTERS_TTL", mode='before')
+    @classmethod
+    def decode_call_center_counters_ttl(cls, v: Union[str, int, None]) -> int:
+        # A blank/invalid value falls back to the default; 0 is allowed and means
+        # "no caching", so this cannot use _positive_int_or.
+        if v is None or (isinstance(v, str) and not v.strip()):
+            return 5
+        try:
+            iv = int(v)
+        except (TypeError, ValueError):
+            return 5
+        return iv if iv >= 0 else 5
 
     @field_validator("CONTACTS_SELECTING_EXTENSION_TYPES", mode='before')
     @classmethod

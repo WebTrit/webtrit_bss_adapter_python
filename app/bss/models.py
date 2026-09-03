@@ -592,6 +592,7 @@ class SupportedEnum(Enum):
     sip_dialogs = "sipDialogs"
     conference = "conference"
     conversation_mute = "conversationMute"
+    call_center = "callCenter"
 
 
 class SystemInfoShowResponse(BaseModel):
@@ -963,6 +964,93 @@ class UserVoicemailMessageDeleteInternalServerErrorResponse(ErrorResponse):
     code: Optional[str] = Field(
         None,
         description="`code` field values that are defined (but can be expanded) are:\n- `external_api_issue`",
+    )
+
+
+class CallQueue(BaseModel):
+    """A call queue (PortaSwitch hunt group with a call queue) the agent belongs to."""
+
+    id: str = Field(
+        description="The hunt group number identifying the queue. Used to log in to / out of it.",
+        example="0111",
+    )
+    name: str = Field(
+        description="The display name of the queue.",
+        example="First line support",
+    )
+    logged_in: bool = Field(
+        description="Indicates whether the current agent is logged in to this queue.",
+        example=True,
+    )
+    agents_total: int = Field(
+        description="The number of agents assigned to this queue.",
+        example=3,
+    )
+    agents_logged_in: int = Field(
+        description="The number of agents currently logged in to this queue.",
+        example=2,
+    )
+    callers_waiting: Optional[int] = Field(
+        None,
+        description=(
+            "The number of callers currently waiting in this queue.\n\n"
+            "`null` means the figure is unavailable - live counters are either disabled "
+            "for this deployment or could not be retrieved; clients should render it as unknown "
+            "rather than as zero."
+        ),
+        example=3,
+    )
+
+
+class UserCallQueuesResponse(BaseModel):
+    items: List[CallQueue]
+
+
+class UserCallQueuePatch(BaseModel):
+    logged_in: bool = Field(
+        description="Set to `true` to log the agent in to the queue, `false` to log them out.",
+    )
+
+
+class UserCallQueuesUnauthorizedErrorResponse(ErrorResponse):
+    code: Optional[str] = Field(
+        None,
+        description="`code` field values that are defined (but can be expanded) are:\n- `authorization_header_missing`\n- `bearer_credentials_missing`\n- `access_token_invalid`\n- `access_token_expired`\n- `unknown`",
+    )
+
+
+class UserCallQueuesNotFoundErrorResponse(ErrorResponse):
+    code: Optional[str] = Field(
+        None,
+        description="`code` field values that are defined (but can be expanded) are:\n- `session_not_found`\n- `user_not_found`",
+    )
+
+
+class UserCallQueuesInternalServerErrorResponse(ErrorResponse):
+    code: Optional[str] = Field(
+        None,
+        description="`code` field values that are defined (but can be expanded) are:\n- `external_api_issue`",
+    )
+
+
+class UserCallQueuePatchUnauthorizedErrorResponse(ErrorResponse):
+    code: Optional[str] = Field(
+        None,
+        description="`code` field values that are defined (but can be expanded) are:\n- `authorization_header_missing`\n- `bearer_credentials_missing`\n- `access_token_invalid`\n- `access_token_expired`\n- `unknown`",
+    )
+
+
+class UserCallQueuePatchNotFoundErrorResponse(ErrorResponse):
+    code: Optional[str] = Field(
+        None,
+        description="`code` field values that are defined (but can be expanded) are:\n- `session_not_found`\n- `user_not_found`\n- `call_queue_not_found`",
+    )
+
+
+class UserCallQueuePatchInternalServerErrorResponse(ErrorResponse):
+    code: Optional[str] = Field(
+        None,
+        description="`code` field values that are defined (but can be expanded) are:\n- `external_api_issue`\n- `service_is_read_only`",
     )
 
 

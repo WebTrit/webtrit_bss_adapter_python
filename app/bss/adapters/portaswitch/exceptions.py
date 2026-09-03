@@ -37,6 +37,12 @@ def not_found_recording_error(recording_id: str):
     return WebTritErrorException(404, f"There is no a recording with such id: {recording_id}")
 
 
+def not_found_call_queue_error(queue_id: str):
+    return WebTritErrorException(
+        404, f"The user is not an agent of a call queue with such id: {queue_id}", "call_queue_not_found"
+    )
+
+
 def external_api_issue_error():
     return WebTritErrorException(500, "Unknown error", "external_api_issue")
 

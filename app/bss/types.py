@@ -133,6 +133,16 @@ from bss.models import (
     UserVoicemailMessageDeleteNotFoundErrorResponse as UserVoicemailMessageDeleteNotFoundErrorResponse,
     UserVoicemailMessageDeleteInternalServerErrorResponse as UserVoicemailMessageDeleteInternalServerErrorResponse,
 
+    CallQueue as CallQueue,
+    UserCallQueuesResponse as UserCallQueuesResponse,
+    UserCallQueuePatch as UserCallQueuePatch,
+    UserCallQueuesUnauthorizedErrorResponse as UserCallQueuesUnauthorizedErrorResponse,
+    UserCallQueuesNotFoundErrorResponse as UserCallQueuesNotFoundErrorResponse,
+    UserCallQueuesInternalServerErrorResponse as UserCallQueuesInternalServerErrorResponse,
+    UserCallQueuePatchUnauthorizedErrorResponse as UserCallQueuePatchUnauthorizedErrorResponse,
+    UserCallQueuePatchNotFoundErrorResponse as UserCallQueuePatchNotFoundErrorResponse,
+    UserCallQueuePatchInternalServerErrorResponse as UserCallQueuePatchInternalServerErrorResponse,
+
     # registration status
     CreateUserEventRequest as CreateUserEventRequest,
     CreateUserEventUnauthorizedErrorResponse as CreateUserEventUnauthorizedErrorResponse,

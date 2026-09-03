@@ -14,6 +14,7 @@ from bss.types import (UserInfo, EndUser, ContactInfo, CDRInfo,
                        UserCreateResponse,
                        CustomResponse, CustomRequest, UserVoicemailsResponse, UserVoicemailMessagePatch,
                        VoicemailMessageDetails,
+                       CallQueue, UserCallQueuesResponse,
                        UserEventGroup,
                        UserEventType,
                        eval_as_bool)
@@ -150,6 +151,7 @@ class BSSAdapter(SessionManagement, OTPHandler,
         SIP_DIALOGS=dict(default=True, option=Capabilities.sip_dialogs),
         CONFERENCE=dict(default=False, option=Capabilities.conference),
         CONVERSATION_MUTE=dict(default=True, option=Capabilities.conversation_mute),
+        CALL_CENTER=dict(default=False, option=Capabilities.call_center),
     )
     # what our adapter can do in general (what is coded)
     # should be overridden in the sub-class
@@ -249,6 +251,20 @@ class BSSAdapter(SessionManagement, OTPHandler,
 
     def delete_voicemail_message(self, session: SessionInfo, message_id: str) -> None:
         """Delete an existing user's voicemail message"""
+        raise NotImplementedError("Override this method in your sub-class")
+
+    def retrieve_call_queues(self, session: SessionInfo, user: UserInfo) -> UserCallQueuesResponse:
+        """Obtain the call queues the user is assigned to, with their live load."""
+        raise NotImplementedError("Override this method in your sub-class")
+
+    def set_call_queue_login(self, session: SessionInfo, user: UserInfo,
+                             queue_id: str, logged_in: bool) -> CallQueue:
+        """Log the user in to / out of a single call queue."""
+        raise NotImplementedError("Override this method in your sub-class")
+
+    def set_all_call_queues_login(self, session: SessionInfo, user: UserInfo,
+                                  logged_in: bool) -> UserCallQueuesResponse:
+        """Log the user in to / out of every call queue they are assigned to."""
         raise NotImplementedError("Override this method in your sub-class")
 
     def create_user_event(

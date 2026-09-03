@@ -20,8 +20,9 @@ from bss.types import (
     VoicemailMessageDetails,
     VoicemailMessageAttachment,
     Direction,
+    CallQueue,
 )
-from .types import PortaSwitchMailboxMessageFlag
+from .types import PortaSwitchExtensionType, PortaSwitchMailboxMessageFlag
 
 #: dict: Contains a map between a PortaSwitch AccountInfo.billing_model and BalanceType.
 BILLING_MODEL_MAP: dict = {
@@ -211,6 +212,85 @@ class Serializer:
             numbers=Numbers(
                 main=custom_entry.get("number"),
             ),
+        )
+
+    @staticmethod
+    def is_call_queue(huntgroup: dict) -> bool:
+        """Tells whether a PortaSwitch hunt group actually has a call queue attached.
+
+        This is the only reliable test: `activity_monitoring` is a separate per-group
+        toggle that is commonly left off even on queue-backed groups (WT-1881).
+        `assigned_callqueue` has no required fields, so an empty object is schema-valid -
+        check for the queue identifier rather than for the key.
+        """
+        return bool((huntgroup.get("assigned_callqueue") or {}).get("i_c_queue"))
+
+    @staticmethod
+    def _huntgroup_account_members(huntgroup: dict) -> list[dict]:
+        """Members of a hunt group that are real accounts (agents).
+
+        A hunt group can also hold Group and Unassigned extensions, which are not agents.
+        PortaSwitch reports those without an `account_id`, so keying on `account_id`
+        rather than on `type` also fails safe: were `type` ever missing or renamed, a
+        `type`-based filter would silently report "not an agent" for every user.
+        """
+        return [
+            ext for ext in (huntgroup.get("assigned_extensions") or [])
+            if ext.get("account_id")
+            and ext.get("type", PortaSwitchExtensionType.ACCOUNT.value)
+            == PortaSwitchExtensionType.ACCOUNT.value
+        ]
+
+    @staticmethod
+    def is_huntgroup_member(huntgroup: dict, agent_account_id: str) -> bool:
+        """Tells whether the given account is an agent of this hunt group."""
+        return any(
+            ext.get("account_id") == agent_account_id
+            for ext in Serializer._huntgroup_account_members(huntgroup)
+        )
+
+    @staticmethod
+    def count_callers_waiting(calls_list: list) -> dict[str, int]:
+        """Maps a hunt group number to the number of callers waiting in its queue.
+
+        Built from CallControl.get_sip_calls_list: a caller sitting in a queue is a call
+        in the "queued" state that carries queue_info. The hunt group is taken from the
+        callee side, which is the queue the call was placed into.
+        """
+        waiting: dict[str, int] = {}
+        for call in calls_list or []:
+            if call.get("state") != "queued" or not call.get("queue_info"):
+                continue
+            huntgroup_id = (call.get("callee") or {}).get("huntgroup_id")
+            if huntgroup_id:
+                waiting[huntgroup_id] = waiting.get(huntgroup_id, 0) + 1
+        return waiting
+
+    @staticmethod
+    def get_call_queue(huntgroup: dict, agent_account_id: str,
+                       callers_waiting: Optional[int] = None) -> CallQueue:
+        """Forms a CallQueue out of a PortaSwitch hunt group.
+
+        Parameters:
+            huntgroup: dict: A hunt group as returned by Customer/get_huntgroup_list.
+            agent_account_id: str: The `id` of the account whose view this is.
+            callers_waiting: Optional[int]: Live queue depth, None when unavailable.
+
+        Returns:
+            CallQueue: The filled structure of CallQueue.
+        """
+        members = Serializer._huntgroup_account_members(huntgroup)
+        own = next((ext for ext in members if ext.get("account_id") == agent_account_id), None)
+
+        return CallQueue(
+            id=huntgroup["id"],
+            name=huntgroup.get("name") or huntgroup["id"],
+            # hunt_active is the agent's per-queue login state: *41/*42 and
+            # Account/update_huntgroups_subscription both toggle exactly this flag.
+            logged_in=(own or {}).get("hunt_active") == "Y",
+            agents_total=len(members),
+            agents_logged_in=sum(1 for ext in members if ext.get("hunt_active") == "Y"),
+            callers_waiting=callers_waiting,
         )
 
     @staticmethod

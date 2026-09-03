@@ -168,6 +168,102 @@ class AdminAPI(AsyncHTTPAPIConnectorWithLogin):
             params=params,
         )
 
+    async def get_huntgroup_list(self, i_customer: int, limit: int = None, offset: int = None) -> dict:
+        """Returns a customer's hunt groups, with full member details.
+
+        The account realm returns only the caller's own membership row, stripped of
+        account_id/id/name, so the per-queue agent counters can only be built here
+        (WT-1881).
+
+        Parameters:
+            i_customer (int): The identifier of the customer that owns the hunt groups.
+            limit (int): Maximum number of hunt groups to return.
+            offset (int): Number of hunt groups to skip. PortaBilling requires limit
+                whenever offset is given.
+
+        Returns:
+            dict: The API method execution result containing huntgroup_list and total.
+        """
+        params = {"i_customer": i_customer, "get_total": 1}
+        if limit is not None:
+            params["limit"] = limit
+        if offset:
+            params["offset"] = offset
+
+        return await self._send_request(
+            module="Customer",
+            method="get_huntgroup_list",
+            params=params,
+        )
+
+    async def update_huntgroups_subscription(
+            self,
+            i_account: int,
+            subscribe: Optional[list[str]] = None,
+            unsubscribe: Optional[list[str]] = None,
+    ) -> dict:
+        """Logs an account in to / out of hunt groups.
+
+        Hunt groups are addressed by their string number (the "Hunt Group Number"
+        column), not by i_c_group. PortaSwitch gives 'unsubscribe' precedence when the
+        same id appears in both lists.
+
+        Parameters:
+            i_account (int): The identifier of the account to subscribe/unsubscribe.
+            subscribe (list[str]): Hunt group numbers to log in to.
+            unsubscribe (list[str]): Hunt group numbers to log out from.
+
+        Returns:
+            dict: The API method execution result, {"success": 1} on success.
+        """
+        params: dict = {"i_account": i_account}
+        if subscribe:
+            params["subscribe_to_huntgroups"] = [{"id": hg_id} for hg_id in subscribe]
+        if unsubscribe:
+            params["unsubscribe_from_huntgroups"] = [{"id": hg_id} for hg_id in unsubscribe]
+
+        return await self._send_request(
+            module="Account",
+            method="update_huntgroups_subscription",
+            params=params,
+        )
+
+    async def enable_api_notifications(self, i_customer: int) -> dict:
+        """Subscribes the admin API session to call state notifications for a customer.
+
+        Required before get_sip_calls_list returns anything for that scope; the
+        subscription is bound to the API session.
+
+        Parameters:
+            i_customer (int): The identifier of the customer to subscribe to.
+
+        Returns:
+            dict: The API method execution result.
+        """
+        return await self._send_request(
+            module="CallControl",
+            method="enable_api_notifications",
+            params={"i_customer": i_customer},
+        )
+
+    async def get_sip_calls_list(self, i_customer: int) -> dict:
+        """Returns the calls in progress for a customer, including call queue state.
+
+        Fails with Server.CallControl.sip.disabled_api_notifications until
+        enable_api_notifications has been called for this scope.
+
+        Parameters:
+            i_customer (int): The identifier of the customer whose calls to return.
+
+        Returns:
+            dict: The API method execution result containing calls_list.
+        """
+        return await self._send_request(
+            module="CallControl",
+            method="get_sip_calls_list",
+            params={"i_customer": i_customer},
+        )
+
     async def create_otp(self, user_ref: str, delivery_channel: DeliveryChannel) -> dict:
         """Requests PortaSwitch to generate an OTP token.
 
