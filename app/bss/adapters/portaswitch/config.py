@@ -65,13 +65,11 @@ class PortaSwitchSettings(BaseSettings):
     SELF_CONFIG_PORTAL_URL: Optional[str] = None
     ALLOWED_ADDONS: Union[List[str], str] = []
     # "My Queues" call center screen (WT-1881).
-    # Live "callers waiting" comes from the Call Control API, which is reachable only
-    # from the admin realm and only after CallControl.enable_api_notifications has been
-    # called for the scope. Off by default: on installations without Call Control access
-    # every poll would cost two failing requests. When off, the queue list is still
-    # served - callers_waiting is simply reported as null.
-    CALL_CENTER_LIVE_COUNTERS: bool = False
-    # Seconds to reuse the live counters before asking the switch again. The clients
+    # Seconds to reuse the live "callers waiting" counters before asking the switch
+    # again. They come from the Call Control API, which is admin-realm only and needs
+    # CallControl.enable_api_notifications for the scope; where that is unavailable the
+    # lookup fails, the failure is cached for this TTL and callers_waiting is reported
+    # as null. The clients
     # poll this endpoint while the screen is open, so without a cache a room full of
     # agents would multiply the load on the switch by the number of open screens.
     CALL_CENTER_COUNTERS_TTL: int = 5

@@ -1707,14 +1707,11 @@ class PortaSwitchAdapter(BSSAdapter):
     async def _fetch_callers_waiting(self, i_customer: int) -> Optional[Dict[str, int]]:
         """Returns hunt group number -> callers waiting, or None when unavailable.
 
-        None and an empty dict mean different things: None is "we do not know" (live
-        counters disabled, Call Control unreachable, or the call state subscription was
-        only just created and has not caught up), and surfaces as a null in the API;
-        an empty dict means the switch answered and nobody is queued.
+        None and an empty dict mean different things: None is "we do not know" (Call
+        Control unreachable, or the call state subscription was only just created and
+        has not caught up), and surfaces as a null in the API; an empty dict means the
+        switch answered and nobody is queued.
         """
-        if not self._portaswitch_settings.CALL_CENTER_LIVE_COUNTERS:
-            return None
-
         cached = self._cached_callers_waiting(i_customer)
         if cached is not _COUNTERS_CACHE_MISS:
             return cached
