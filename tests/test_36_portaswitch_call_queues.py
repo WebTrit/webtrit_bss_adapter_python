@@ -270,14 +270,13 @@ class FakeAdminAPI:
         return {"success": 1}
 
 
-def make_adapter(huntgroups, calls=None, calls_fault=None, subscribed=True, ttl=5):
+def make_adapter(huntgroups, calls=None, calls_fault=None, subscribed=True):
     settings = PortaSwitchSettings(
         ADMIN_API_URL='https://pbx.example.com',
         ACCOUNT_API_URL='https://pbx.example.com',
         ADMIN_API_LOGIN='admin',
         ADMIN_API_TOKEN='token',
         SIP_SERVER_HOST='1.2.3.4',
-        CALL_CENTER_COUNTERS_TTL=ttl,
     )
     # Bypass __init__: it builds HTTP connectors, OTP storage and failover state,
     # none of which the call center path touches.
@@ -337,7 +336,7 @@ class TestRetrieveCallQueues:
 
     @pytest.mark.asyncio
     async def test_subscription_is_created_on_demand(self):
-        adapter = make_adapter(mixed_huntgroups(), subscribed=False, ttl=0,
+        adapter = make_adapter(mixed_huntgroups(), subscribed=False,
                                calls=[{"state": "queued", "queue_info": {"i_c_queue": 1},
                                        "callee": {"huntgroup_id": "340"}}])
         result = await adapter.retrieve_call_queues(SESSION, USER)
@@ -350,10 +349,12 @@ class TestRetrieveCallQueues:
 
     @pytest.mark.asyncio
     async def test_counters_are_trusted_once_the_subscription_exists(self):
-        adapter = make_adapter(mixed_huntgroups(), subscribed=False, ttl=0,
+        adapter = make_adapter(mixed_huntgroups(), subscribed=False,
                                calls=[{"state": "queued", "queue_info": {"i_c_queue": 1},
                                        "callee": {"huntgroup_id": "340"}}])
         await adapter.retrieve_call_queues(SESSION, USER)
+        # Stand in for the TTL expiring between two polls.
+        adapter._call_queue_counters_cache.clear()
         result = await adapter.retrieve_call_queues(SESSION, USER)
 
         assert adapter._admin_api.enable_calls == [I_CUSTOMER]
@@ -361,7 +362,7 @@ class TestRetrieveCallQueues:
 
     @pytest.mark.asyncio
     async def test_subscription_that_keeps_failing_is_not_retried_in_a_loop(self):
-        adapter = make_adapter(mixed_huntgroups(), subscribed=False, ttl=0)
+        adapter = make_adapter(mixed_huntgroups(), subscribed=False)
         # enable_api_notifications "succeeds" but the scope stays unsubscribed.
         adapter._admin_api.enable_api_notifications = _failing_enable(adapter._admin_api)
 
@@ -382,19 +383,11 @@ class TestRetrieveCallQueues:
 
     @pytest.mark.asyncio
     async def test_counters_are_cached_within_the_ttl(self):
-        adapter = make_adapter(mixed_huntgroups(), calls=[], ttl=60)
+        adapter = make_adapter(mixed_huntgroups(), calls=[])
         await adapter.retrieve_call_queues(SESSION, USER)
         await adapter.retrieve_call_queues(SESSION, USER)
 
         assert adapter._admin_api.sip_calls_requests == 1
-
-    @pytest.mark.asyncio
-    async def test_zero_ttl_disables_caching(self):
-        adapter = make_adapter(mixed_huntgroups(), calls=[], ttl=0)
-        await adapter.retrieve_call_queues(SESSION, USER)
-        await adapter.retrieve_call_queues(SESSION, USER)
-
-        assert adapter._admin_api.sip_calls_requests == 2
 
     @pytest.mark.asyncio
     async def test_expired_token_is_reported_as_such(self):
@@ -452,7 +445,7 @@ class TestHuntgroupPaging:
 class TestCountersCache:
     @pytest.mark.asyncio
     async def test_failed_lookups_are_cached_too(self):
-        adapter = make_adapter(mixed_huntgroups(), ttl=60,
+        adapter = make_adapter(mixed_huntgroups(),
                                calls_fault=fault("Server.CallControl.get_sip_calls_list.access_denied"))
         await adapter.retrieve_call_queues(SESSION, USER)
         await adapter.retrieve_call_queues(SESSION, USER)
@@ -463,7 +456,7 @@ class TestCountersCache:
 
     @pytest.mark.asyncio
     async def test_customers_do_not_share_counters(self):
-        adapter = make_adapter(mixed_huntgroups(), ttl=60, calls=[
+        adapter = make_adapter(mixed_huntgroups(), calls=[
             {"state": "queued", "queue_info": {"i_c_queue": 1}, "callee": {"huntgroup_id": "340"}},
         ])
         await adapter.retrieve_call_queues(SESSION, USER)
@@ -480,44 +473,18 @@ class TestCountersCache:
 
     @pytest.mark.asyncio
     async def test_a_burst_of_polls_costs_one_switch_request(self):
-        adapter = make_adapter(mixed_huntgroups(), ttl=60, calls=[])
+        adapter = make_adapter(mixed_huntgroups(), calls=[])
         await asyncio.gather(*(adapter.retrieve_call_queues(SESSION, USER) for _ in range(10)))
 
         assert adapter._admin_api.sip_calls_requests == 1
 
     @pytest.mark.asyncio
     async def test_cache_is_bounded(self):
-        adapter = make_adapter(mixed_huntgroups(), ttl=600, calls=[])
+        adapter = make_adapter(mixed_huntgroups(), calls=[])
         for n in range(CALL_QUEUE_COUNTERS_CACHE_MAX + 25):
             adapter._store_callers_waiting(n, {})
 
         assert len(adapter._call_queue_counters_cache) == CALL_QUEUE_COUNTERS_CACHE_MAX
-
-
-def _settings_with_ttl(raw):
-    return PortaSwitchSettings(
-        ADMIN_API_URL='https://pbx.example.com',
-        ACCOUNT_API_URL='https://pbx.example.com',
-        ADMIN_API_LOGIN='admin',
-        ADMIN_API_TOKEN='token',
-        SIP_SERVER_HOST='1.2.3.4',
-        CALL_CENTER_COUNTERS_TTL=raw,
-    )
-
-
-class TestCountersTtlSetting:
-    def test_blank_or_invalid_falls_back_to_the_default(self):
-        for raw in (None, "", "   ", "nonsense", -1, "-3"):
-            assert _settings_with_ttl(raw).CALL_CENTER_COUNTERS_TTL == 5, raw
-
-    def test_zero_is_honoured_as_no_caching(self):
-        # 0 is a valid choice, so this cannot reuse the "positive int or default" helper.
-        for raw in (0, "0"):
-            assert _settings_with_ttl(raw).CALL_CENTER_COUNTERS_TTL == 0, raw
-
-    def test_explicit_value_is_kept(self):
-        for raw in (30, "30"):
-            assert _settings_with_ttl(raw).CALL_CENTER_COUNTERS_TTL == 30, raw
 
 
 class TestSetCallQueueLogin:

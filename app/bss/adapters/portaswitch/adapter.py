@@ -101,6 +101,12 @@ HUNTGROUP_PAGE_LIMIT: Final[int] = 500
 #: int: Safety bound on hunt group paging, so a switch answering oddly cannot spin here.
 HUNTGROUP_MAX_PAGES: Final[int] = 20
 
+#: int: Seconds to reuse the live "callers waiting" counters before asking the switch
+#: again. The clients poll the queue list while the screen is open, so without this a
+#: room full of agents would multiply the load on the switch by the number of open
+#: screens. Sized to cover the 5-10s client poll interval.
+CALL_QUEUE_COUNTERS_TTL: Final[int] = 5
+
 #: object: Sentinel telling "nothing usable in the cache" apart from a cached None,
 #: which legitimately means "the counters are unknown for this customer right now".
 _COUNTERS_CACHE_MISS: Final = object()
@@ -1749,22 +1755,14 @@ class PortaSwitchAdapter(BSSAdapter):
 
     def _cached_callers_waiting(self, i_customer: int):
         """Returns the cached counters, or _COUNTERS_CACHE_MISS when there are none."""
-        ttl = self._portaswitch_settings.CALL_CENTER_COUNTERS_TTL
-        if not ttl:
-            return _COUNTERS_CACHE_MISS
-
         entry = self._call_queue_counters_cache.get(i_customer)
-        if entry and (time.monotonic() - entry[0]) < ttl:
+        if entry and (time.monotonic() - entry[0]) < CALL_QUEUE_COUNTERS_TTL:
             return entry[1]
 
         return _COUNTERS_CACHE_MISS
 
     def _store_callers_waiting(self, i_customer: int, waiting: Optional[Dict[str, int]]) -> None:
         """Caches the counters (including a failed lookup) for the configured TTL."""
-        ttl = self._portaswitch_settings.CALL_CENTER_COUNTERS_TTL
-        if not ttl:
-            return
-
         cache = self._call_queue_counters_cache
         cache[i_customer] = (time.monotonic(), waiting)
 

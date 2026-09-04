@@ -64,15 +64,6 @@ class PortaSwitchSettings(BaseSettings):
     HIDE_BALANCE_IN_USER_INFO: Optional[bool] = False
     SELF_CONFIG_PORTAL_URL: Optional[str] = None
     ALLOWED_ADDONS: Union[List[str], str] = []
-    # "My Queues" call center screen (WT-1881).
-    # Seconds to reuse the live "callers waiting" counters before asking the switch
-    # again. They come from the Call Control API, which is admin-realm only and needs
-    # CallControl.enable_api_notifications for the scope; where that is unavailable the
-    # lookup fails, the failure is cached for this TTL and callers_waiting is reported
-    # as null. The clients
-    # poll this endpoint while the screen is open, so without a cache a room full of
-    # agents would multiply the load on the switch by the number of open screens.
-    CALL_CENTER_COUNTERS_TTL: int = 5
 
     @field_validator("API_TIMEOUT", mode='before')
     @classmethod
@@ -110,19 +101,6 @@ class PortaSwitchSettings(BaseSettings):
     @classmethod
     def decode_max_keepalive_connections(cls, v: Union[str, int, None]) -> int:
         return cls._positive_int_or(v, 20)
-
-    @field_validator("CALL_CENTER_COUNTERS_TTL", mode='before')
-    @classmethod
-    def decode_call_center_counters_ttl(cls, v: Union[str, int, None]) -> int:
-        # A blank/invalid value falls back to the default; 0 is allowed and means
-        # "no caching", so this cannot use _positive_int_or.
-        if v is None or (isinstance(v, str) and not v.strip()):
-            return 5
-        try:
-            iv = int(v)
-        except (TypeError, ValueError):
-            return 5
-        return iv if iv >= 0 else 5
 
     @field_validator("CONTACTS_SELECTING_EXTENSION_TYPES", mode='before')
     @classmethod
