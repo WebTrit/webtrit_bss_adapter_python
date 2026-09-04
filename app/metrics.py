@@ -41,6 +41,25 @@ HTTPX_POOL_TIMEOUTS = Counter(
     ["host"],
 )
 
+#: Account-list cache outcomes (WT-1922). `miss` counts only the requests that
+#: actually waited on a read of the switch — a burst coalesced behind one read
+#: reports a single `miss` and the rest as `coalesced` — so `miss` against the
+#: other outcomes is what says whether the configured TTL is doing its job.
+CONTACTS_CACHE_EVENTS = Counter(
+    "portaswitch_contacts_cache_events_total",
+    "Account-list cache outcomes: hit, coalesced, stale, miss, refresh, "
+    "refresh_failed, evicted.",
+    ["event"],
+)
+
+
+def record_contacts_cache(event: str) -> None:
+    """Count one account-list cache outcome (WT-1922)."""
+    try:
+        CONTACTS_CACHE_EVENTS.labels(event=event).inc()
+    except Exception as e:
+        logging.debug(f"Could not record a contacts cache event: {e}")
+
 
 def record_deadline_expired(method: str) -> None:
     """Count an adapter call killed by the per-request deadline (WT-1720)."""
@@ -131,8 +150,13 @@ class HttpxPoolCollector:
     This is the resource that failed in WT-1717: the pool is bounded
     (`PORTASWITCH_MAX_CONNECTIONS`, 100 by default) and once every connection is
     in use, further calls queue instead of failing, so the instance stops
-    answering while still looking healthy. `queued_requests` above zero means
-    that is happening right now.
+    answering while still looking healthy.
+
+    Since WT-1922 capped in-flight requests below that limit, the pool itself is
+    no longer where a backlog collects: `queued_requests` stays at zero and the
+    waiting is on the admission semaphore instead, reported as
+    `httpx_admission_waiting_requests`. Read that one for saturation, and
+    `queued_requests` as the assertion that the cap is holding.
 
     Values are read when Prometheus scrapes rather than on a timer, so they are
     never stale. `connections` hands out a copy of the list and `len()` on a
@@ -160,13 +184,22 @@ class HttpxPoolCollector:
             "Connections currently held, by destination and state.",
             labels=["verify", "host", "state"],
         )
+        admission = GaugeMetricFamily(
+            "httpx_admission_waiting_requests",
+            "Requests waiting for an admission permit; this is where saturation "
+            "shows now that in-flight requests are capped below the pool.",
+            labels=["verify"],
+        )
 
         for verify, pool in _shared_pools():
             _collect_pool(pool, str(verify).lower(), limit, queued, connections)
+        for verify, waiting in _admission_waiters():
+            admission.add_metric([str(verify).lower()], waiting)
 
         yield limit
         yield queued
         yield connections
+        yield admission
 
 
 def _collect_pool(
@@ -188,7 +221,7 @@ def _collect_pool(
     counted: dict = {}
     for connection in getattr(pool, "connections", []):
         host = _connection_host(connection)
-        state = "idle" if _is_idle(connection) else "active"
+        state = _connection_state(connection)
         counted[(host, state)] = counted.get((host, state), 0) + 1
 
     for (host, state), count in counted.items():
@@ -213,12 +246,55 @@ def _shared_pools():
             yield verify, pool
 
 
+def _admission_waiters():
+    """Yield (verify, waiting) for every shared client's admission semaphore.
+
+    `_waiters` is private to asyncio, so it is read defensively: a rename costs
+    the metric, not the scrape. A semaphore with no waiters reports zero rather
+    than being skipped, so the series exists before saturation starts.
+    """
+    try:
+        from bss.async_http_api import _shared_inflight
+    except Exception as e:
+        logging.debug(f"admission metrics unavailable: {e}")
+        return
+
+    for verify, semaphore in list(_shared_inflight.items()):
+        waiters = getattr(semaphore, "_waiters", None)
+        try:
+            yield verify, sum(1 for waiter in waiters if not waiter.done()) if waiters else 0
+        except Exception:
+            yield verify, 0
+
+
 def _connection_host(connection: Any) -> str:
     origin = getattr(connection, "_origin", None)
     host = getattr(origin, "host", None)
     if isinstance(host, bytes):
         return host.decode("ascii", "replace")
     return str(host) if host else "unknown"
+
+
+def _connection_state(connection: Any) -> str:
+    """Classify a pooled connection as idle, connecting or active.
+
+    `connecting` is reported separately because of WT-1922: a connection the
+    pool assigned to a request that was then cancelled before it ever ran stays
+    in exactly this shape — no underlying connection, no connect failure — and
+    the pool can neither reuse it nor reap it. One or two of these at a time is
+    just a handshake in progress; a count that grows and never falls back is a
+    pod on its way to a dead pool, which is the state that stayed invisible
+    throughout WT-1922.
+    """
+    if _is_idle(connection):
+        return "idle"
+    # httpcore's AsyncHTTPConnection: `_connection` is the protocol object, set
+    # once the socket is up; `_connect_failed` marks a checkout that gave up.
+    if getattr(connection, "_connection", False) is None and not getattr(
+        connection, "_connect_failed", True
+    ):
+        return "connecting"
+    return "active"
 
 
 def _is_idle(connection: Any) -> bool:

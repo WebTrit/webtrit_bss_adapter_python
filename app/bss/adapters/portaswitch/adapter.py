@@ -115,6 +115,69 @@ _COUNTERS_CACHE_MISS: Final = object()
 #: former ThreadPoolExecutor(max_workers=10) pools). WT-1720.
 FANOUT_LIMIT: Final[int] = 10
 
+#: Fields of a PortaBilling account record that the contacts path reads — the
+#: local filter, the serializer, and the alias/master lookups. The full record
+#: has 57 fields and costs ~2.9 KB per account as Python objects against ~0.5 KB
+#: for this projection, and the lists being cached run to thousands of rows
+#: (WT-1922). Anything added to Serializer.get_contact_info_by_account has to be
+#: added here too; test_37 fails if the two drift apart.
+ACCOUNT_CACHE_FIELDS: Final[tuple] = (
+    "i_account", "i_customer", "id", "firstname", "lastname", "companyname",
+    "email", "extension_id", "extension_name", "sip_status", "status",
+    "dual_version_system", "did_number", "i_master_account",
+)
+
+#: Nested lists worth keeping, trimmed to the single key each consumer reads.
+ACCOUNT_CACHE_LIST_FIELDS: Final[dict] = {
+    "alias_list": "id",
+    "alias_did_number_list": "did_number",
+}
+
+#: Past this multiple of CONTACTS_CACHE_TTL an entry is too old to serve at all,
+#: so the caller waits for a fresh read rather than being handed stale contacts.
+ACCOUNTS_CACHE_STALE_FACTOR: Final[int] = 10
+
+#: Ceiling on cached rows across all customers, ~0.5 KB each after projection.
+#: Deliberately not configurable — the `evicted` counter says if it ever bites.
+ACCOUNTS_CACHE_MAX_ROWS: Final[int] = 100_000
+
+
+def _record_cache_event(event: str) -> None:
+    """Count one account-list cache outcome (WT-1922).
+
+    Imported lazily, like the pool-timeout counter, so this adapter keeps working
+    and stays importable on its own when the metrics stack is unavailable.
+    """
+    try:
+        from metrics import record_contacts_cache
+
+        record_contacts_cache(event)
+    except Exception as e:
+        logging.debug(f"Could not record a contacts cache event: {e}")
+
+
+def _project_account(account: dict) -> dict:
+    """Reduce an account record to the fields the contacts path consumes.
+
+    Absent fields stay absent, and the two nested lists are always present as
+    lists: every consumer reads them through ``.get(..., [])``, so an empty list
+    and a missing key are the same to them.
+
+    One deliberate difference from the uncached path: a nested row missing the
+    key that is kept is dropped here, where the serializer would have indexed it
+    and raised. A malformed row therefore costs one number instead of the whole
+    request — better, but it does mean the cached and live answers are not
+    identical for that input.
+    """
+    projected = {key: account[key] for key in ACCOUNT_CACHE_FIELDS if key in account}
+    for field, kept in ACCOUNT_CACHE_LIST_FIELDS.items():
+        projected[field] = [
+            {kept: row[kept]}
+            for row in account.get(field) or []
+            if isinstance(row, dict) and kept in row
+        ]
+    return projected
+
 
 async def _gather_limited(coros: List[Awaitable], limit: int = FANOUT_LIMIT,
                           return_exceptions: bool = False) -> list:
@@ -220,6 +283,7 @@ class PortaSwitchAdapter(BSSAdapter):
         )
 
         self._init_call_queue_state()
+        self._init_contacts_cache_state()
 
         self._otp_storage = configure_otp_storage(self._otp_settings)
         self._cached_capabilities = self.calculate_capabilities()
@@ -236,6 +300,20 @@ class PortaSwitchAdapter(BSSAdapter):
         self._call_queue_counters_cache: Dict[int, tuple] = {}
         # One lock per customer so a burst of polls costs one switch request, not N.
         self._call_queue_counters_locks: Dict[int, asyncio.Lock] = {}
+
+    def _init_contacts_cache_state(self) -> None:
+        """Sets up the account-list cache behind contacts (WT-1922).
+
+        Its own method for the same reason as _init_call_queue_state: tests that
+        bypass __init__ still get the real attributes.
+        """
+        # i_customer -> (monotonic ts, projected account list).
+        self._accounts_cache: Dict[int, tuple] = {}
+        # One lock per customer, so a burst of contacts requests costs one read.
+        self._accounts_cache_locks: Dict[int, asyncio.Lock] = {}
+        # In-flight background refreshes, kept referenced: the event loop only
+        # holds a weak reference to a task.
+        self._accounts_refresh_tasks: Dict[int, asyncio.Task] = {}
 
     @classmethod
     def name(cls) -> str:
@@ -2183,6 +2261,148 @@ class PortaSwitchAdapter(BSSAdapter):
             return main_i_customer, [main_i_customer]
 
     async def _get_all_accounts_by_customer(self, i_customer: int, **search_params) -> list[dict]:
+        """All accounts of a customer, served from the cache when one is enabled.
+
+        Without a cache every contacts request re-reads the whole list from the
+        switch, which is what saturated the connection pool in WT-1922. With
+        CONTACTS_CACHE_TTL set, that read happens once per TTL per customer no
+        matter how many requests arrive.
+
+        Search results are never cached: they are already bounded to the page
+        being asked for, and their key space (field x pattern) is unbounded.
+        """
+        ttl = self._portaswitch_settings.CONTACTS_CACHE_TTL
+        if ttl <= 0 or search_params:
+            return await self._fetch_accounts_by_customer(i_customer, **search_params)
+
+        entry = self._accounts_cache.get(i_customer)
+        if entry is not None:
+            age = time.monotonic() - entry[0]
+            if age < ttl:
+                _record_cache_event("hit")
+                return entry[1]
+            if age < ttl * ACCOUNTS_CACHE_STALE_FACTOR:
+                # Hand back what we have and re-read behind the request: making a
+                # burst of clients wait on one slow read of the whole list is how
+                # the deadline cancellations of WT-1922 got started.
+                _record_cache_event("stale")
+                self._schedule_accounts_refresh(i_customer)
+                return entry[1]
+
+        return await self._read_accounts_into_cache(i_customer)
+
+    async def _read_accounts_into_cache(self, i_customer: int) -> list[dict]:
+        """Read one customer's accounts under a per-customer lock and cache them.
+
+        The lock is the single-flight: concurrent callers wait for the first read
+        instead of each starting their own, and re-check the cache afterwards.
+        """
+        lock = self._accounts_cache_locks.setdefault(i_customer, asyncio.Lock())
+        async with lock:
+            ttl = self._portaswitch_settings.CONTACTS_CACHE_TTL
+            entry = self._accounts_cache.get(i_customer)
+            if entry is not None and (time.monotonic() - entry[0]) < ttl:
+                # Someone read it while we waited: counted apart from `hit` so
+                # that `miss` stays "requests that actually waited on a read".
+                _record_cache_event("coalesced")
+                return entry[1]
+
+            _record_cache_event("miss")
+            accounts = [
+                _project_account(account)
+                for account in await self._fetch_accounts_by_customer(i_customer)
+            ]
+            self._store_accounts(i_customer, accounts)
+            return accounts
+
+    def _schedule_accounts_refresh(self, i_customer: int) -> None:
+        """Start a background re-read of one customer's accounts, at most one.
+
+        A detached task on purpose: ``asyncio.wait_for`` in ``call_bss`` cancels
+        the request's own task tree, and a task started with ``create_task`` is
+        not part of it — so the refresh survives the deadline of whichever
+        request happened to trigger it.
+        """
+        task = self._accounts_refresh_tasks.get(i_customer)
+        if task is not None and not task.done():
+            return
+        try:
+            loop = asyncio.get_running_loop()
+        except RuntimeError:  # no loop: nothing to schedule onto
+            return
+        task = loop.create_task(self._refresh_accounts(i_customer))
+        self._accounts_refresh_tasks[i_customer] = task
+        task.add_done_callback(
+            lambda finished, customer=i_customer: self._forget_refresh_task(customer, finished)
+        )
+
+    def _forget_refresh_task(self, i_customer: int, finished: asyncio.Task) -> None:
+        """Drop a finished refresh task, but only if it is still the current one.
+
+        A callback on an already-finished task runs via call_soon, so another
+        coroutine can schedule a replacement first; popping blindly would delete
+        that replacement and drop the strong reference the loop does not hold.
+        """
+        if self._accounts_refresh_tasks.get(i_customer) is finished:
+            del self._accounts_refresh_tasks[i_customer]
+
+    async def _refresh_accounts(self, i_customer: int) -> None:
+        """Re-read one customer's accounts in the background.
+
+        Every failure keeps the existing entry: a switch hiccup must not turn a
+        list we could still serve into an error for every client. Exceptions are
+        swallowed here rather than left on the task, which would only surface as
+        "Task exception was never retrieved".
+        """
+        try:
+            await self._read_accounts_into_cache(i_customer)
+            _record_cache_event("refresh")
+        except Exception as e:
+            _record_cache_event("refresh_failed")
+            logging.warning(
+                f"Failed to refresh the cached account list for i_customer={i_customer}: {e}"
+            )
+
+    def _store_accounts(self, i_customer: int, accounts: list[dict]) -> None:
+        self._accounts_cache[i_customer] = (time.monotonic(), accounts)
+        self._evict_accounts_over_limit(i_customer)
+
+    def _evict_accounts_over_limit(self, just_stored: int) -> None:
+        """Drop the oldest entries until the cached row count is back in bounds.
+
+        The entry just stored is never the one dropped: a customer larger than
+        the whole budget is served rather than re-read on every request, which
+        would be the exact behaviour the cache exists to remove.
+        """
+        total = sum(len(cached) for _, cached in self._accounts_cache.values())
+        while total > ACCOUNTS_CACHE_MAX_ROWS and len(self._accounts_cache) > 1:
+            oldest = min(
+                (customer for customer in self._accounts_cache if customer != just_stored),
+                key=lambda customer: self._accounts_cache[customer][0],
+                default=None,
+            )
+            if oldest is None:
+                break
+            freed = len(self._accounts_cache[oldest][1])
+            if not freed:
+                # An empty entry frees nothing; carrying on would delete every
+                # other customer to no effect.
+                break
+            total -= freed
+            del self._accounts_cache[oldest]
+            lock = self._accounts_cache_locks.get(oldest)
+            if lock is not None and not lock.locked():
+                # Bounded alongside the entry it guarded; a held lock is left to
+                # its holder, which will simply repopulate the entry.
+                del self._accounts_cache_locks[oldest]
+            _record_cache_event("evicted")
+        if total > ACCOUNTS_CACHE_MAX_ROWS:
+            logging.warning(
+                f"Cached account rows ({total}) exceed the {ACCOUNTS_CACHE_MAX_ROWS} budget "
+                f"with i_customer={just_stored} alone; lower CONTACTS_CACHE_TTL or the fan-out"
+            )
+
+    async def _fetch_accounts_by_customer(self, i_customer: int, **search_params) -> list[dict]:
         """Fetch all accounts for a customer using parallel pagination.
 
         Parameters:

@@ -60,6 +60,16 @@ class PortaSwitchSettings(BaseSettings):
     CONTACTS_SELECTING_EXTENSION_TYPES: Union[List[PortaSwitchExtensionType], str] = list(PortaSwitchExtensionType)
     CONTACTS_SELECTING_CUSTOMER_IDS: Union[List[str], str] = []
     CONTACTS_SKIP_WITHOUT_EXTENSION: bool = False
+    # Seconds to reuse a customer's account list before refetching it (WT-1922).
+    # 0 disables the cache, which is the default: enable it per installation.
+    # Every contacts request otherwise re-reads the whole account list from the
+    # switch — at the tenant of WT-1922 a median of 68 and up to 349 API calls
+    # per request against a pool of MAX_CONNECTIONS — so a burst of clients
+    # saturates the pool. With a TTL set, that cost is paid once per TTL per
+    # customer no matter how many requests arrive. Pick a TTL comfortably above
+    # the time one full read takes, or the entry expires as soon as it lands and
+    # the switch is queried continuously.
+    CONTACTS_CACHE_TTL: int = 0
     CONTACTS_CUSTOM: Union[List[dict], str] = []
     HIDE_BALANCE_IN_USER_INFO: Optional[bool] = False
     SELF_CONFIG_PORTAL_URL: Optional[str] = None
@@ -91,6 +101,20 @@ class PortaSwitchSettings(BaseSettings):
         except (TypeError, ValueError):
             return default
         return iv if iv > 0 else default
+
+    @field_validator("CONTACTS_CACHE_TTL", mode='before')
+    @classmethod
+    def decode_contacts_cache_ttl(cls, v: Union[str, int, None]) -> int:
+        # Unlike the pool limits, 0 is a meaningful value here — it means "no
+        # caching" — so blank/invalid/negative all collapse to disabled rather
+        # than to a non-zero default.
+        if v is None or (isinstance(v, str) and not v.strip()):
+            return 0
+        try:
+            iv = int(v)
+        except (TypeError, ValueError):
+            return 0
+        return iv if iv > 0 else 0
 
     @field_validator("MAX_CONNECTIONS", mode='before')
     @classmethod

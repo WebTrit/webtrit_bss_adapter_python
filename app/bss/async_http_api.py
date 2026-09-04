@@ -19,6 +19,15 @@ Design notes:
   per-request params — the shared client is built with it instead.
 * The full :class:`httpx.Timeout` is specified (connect/read/write/pool) so a
   stalled send or a pool wait is bounded too, not just connect+read.
+* In-flight requests are capped strictly below the pool size (WT-1922). Once a
+  checkout has to queue behind a full pool, a request cancelled while queued
+  leaves the connection the pool already assigned to it in a state that is
+  neither usable nor reclaimable, and the pod loses that slot for good. Keeping
+  fewer non-streamed requests in flight than the pool can hold means such a
+  checkout never queues. Streamed downloads are the exception: they give their
+  permit back once the headers are in but keep the connection until the body is
+  consumed, so more than `headroom` of them held at once can still push a
+  checkout into the queue. The headroom is sized for that, not proof against it.
 * Errors are caught as :class:`httpx.HTTPError` — its subclass
   ``HTTPStatusError`` (raised by ``raise_for_status``) is NOT a ``RequestError``,
   so catching only ``RequestError`` would silently drop every non-2xx fault. The
@@ -77,6 +86,27 @@ def build_httpx_timeout(value) -> httpx.Timeout:
 _shared_clients: dict[bool, httpx.AsyncClient] = {}
 _shared_clients_lock = asyncio.Lock()
 
+#: One semaphore per shared client, sized from the same limits, admitting fewer
+#: requests than the pool can hold (see the module docstring).
+_shared_inflight: dict[bool, asyncio.Semaphore] = {}
+
+#: Free slots to keep between the admission limit and the pool size: 10% of the
+#: pool, and never fewer than two, so that a burst arriving while a connection is
+#: being replaced still cannot push a checkout into the queue.
+INFLIGHT_HEADROOM_RATIO: Final[float] = 0.1
+INFLIGHT_MIN_HEADROOM: Final[int] = 2
+
+#: httpx's own default, used when a connector sets no explicit limit.
+DEFAULT_MAX_CONNECTIONS: Final[int] = 100
+
+
+def inflight_limit(max_connections: Optional[int]) -> int:
+    """How many requests may be in flight against a pool of ``max_connections``."""
+    total = max_connections if isinstance(max_connections, int) and max_connections > 0 \
+        else DEFAULT_MAX_CONNECTIONS
+    headroom = max(INFLIGHT_MIN_HEADROOM, int(total * INFLIGHT_HEADROOM_RATIO))
+    return max(1, total - headroom)
+
 
 async def get_shared_async_client(verify: bool, limits: Optional[httpx.Limits] = None) -> httpx.AsyncClient:
     """Return the process-wide :class:`httpx.AsyncClient` for the given TLS
@@ -98,6 +128,9 @@ async def get_shared_async_client(verify: bool, limits: Optional[httpx.Limits] =
                 kwargs["limits"] = limits
             client = httpx.AsyncClient(**kwargs)
             _shared_clients[verify] = client
+            _shared_inflight[verify] = asyncio.Semaphore(
+                inflight_limit(getattr(limits, "max_connections", None))
+            )
         return client
 
 
@@ -109,6 +142,7 @@ async def close_shared_async_clients() -> None:
             if not client.is_closed:
                 await client.aclose()
         _shared_clients.clear()
+        _shared_inflight.clear()
 
 
 def _record_pool_timeout(server: str) -> None:
@@ -181,6 +215,16 @@ class AsyncHTTPAPIConnector(ABC):
         request_params["headers"]["X-B3-SpanId"] = uuid.uuid4().hex[:16]
         return request_params
 
+    async def _inflight(self) -> Optional[asyncio.Semaphore]:
+        """The admission semaphore of the shared client this connector uses.
+
+        None when the client was created before this registry existed (e.g. a
+        unit test building its own client), in which case admission control is
+        simply not applied rather than the request being refused.
+        """
+        await self._client()  # ensures the client — and its semaphore — exist
+        return _shared_inflight.get(self._verify())
+
     async def send_rest_request(self,
                                 method: str,
                                 path: str,
@@ -191,6 +235,38 @@ class AsyncHTTPAPIConnector(ABC):
                                 stream=None,
                                 headers={'Content-Type': 'application/json'},
                                 auth_session: AuthSessionData = None) -> dict:
+        """Send an HTTP request under admission control (WT-1922).
+
+        The permit is taken here, around the HTTP exchange itself, and never in
+        :class:`AsyncHTTPAPIConnectorWithLogin` — that subclass logs in *first*
+        and only then delegates here, so the login's own request can never wait
+        for a permit its caller is already holding.
+
+        For a streamed request the permit covers the header fetch only; the body
+        is consumed by the caller afterwards and keeps its pool connection while
+        the permit is already back. Downloads are few and the headroom absorbs
+        them, so bounding the burst is worth more than tracking the stream.
+        """
+        semaphore = await self._inflight()
+        if semaphore is None:
+            return await self._send_rest_request(
+                method, path, server, data, json, query_params, stream,
+                headers, auth_session)
+        async with semaphore:
+            return await self._send_rest_request(
+                method, path, server, data, json, query_params, stream,
+                headers, auth_session)
+
+    async def _send_rest_request(self,
+                                 method: str,
+                                 path: str,
+                                 server=None,
+                                 data=None,
+                                 json=None,
+                                 query_params=None,
+                                 stream=None,
+                                 headers={'Content-Type': 'application/json'},
+                                 auth_session: AuthSessionData = None) -> dict:
         """Send an HTTP request and return the decoded response.
 
         When DR failover is configured (``site_state`` + ``standby_server``) and
